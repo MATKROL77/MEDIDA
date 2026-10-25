@@ -127,6 +127,11 @@ máquinas sin placa de video.
 Es un sitio estático: `npm run build` genera `out/`, que se sube tal cual a
 Cloudflare Pages, Cloudflare Workers (assets) o GitHub Pages.
 
+Para probarlo sin dominio, `npm run artifact` arma una versión de un solo
+archivo (`artifact-out/index.html` y `app.js`) que se publica como página
+privada de Claude. Ahí todo funciona salvo bajar y compartir el PDF, que esos
+marcos bloquean: en esa versión los botones no aparecen.
+
 ## Lo que falta para un taller real
 
 - Panel para que el taller edite sus precios sin tocar código.

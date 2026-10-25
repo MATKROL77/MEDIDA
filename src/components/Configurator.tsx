@@ -45,6 +45,7 @@ import {
   type Shape,
   type WardrobeConfig,
 } from "@/lib/model";
+import { EMBEDDED, currentQuery, rememberQuery } from "@/lib/embed";
 import { buildOrderPdf, type OrderPdf } from "@/lib/orderPdf";
 import { money, quote, summaryByTitle } from "@/lib/quote";
 import { decodeConfig, encodeConfig, orderMessage, whatsappLink } from "@/lib/share";
@@ -86,13 +87,13 @@ export default function Configurator() {
 
   // un link compartido abre el placard que armó el cliente
   useEffect(() => {
-    const fromUrl = decodeConfig(new URLSearchParams(window.location.search).get("c"));
+    const fromUrl = decodeConfig(new URLSearchParams(currentQuery()).get("c"));
     if (fromUrl) setConfig(fromUrl);
   }, []);
 
   // la barra de direcciones siempre reproduce lo que se ve, por si la copian
   useEffect(() => {
-    const id = setTimeout(() => window.history.replaceState(null, "", `?c=${encodeConfig(config)}`), 300);
+    const id = setTimeout(() => rememberQuery(`?c=${encodeConfig(config)}`), 300);
     return () => clearTimeout(id);
   }, [config]);
 
@@ -697,6 +698,7 @@ function SendSheet({ pdf, failed, rows, message, orderHref, onClose }: {
   onClose: () => void;
 }) {
   const [canShare] = useState(() => {
+    if (EMBEDDED) return false;
     try {
       return typeof navigator !== "undefined" && !!navigator.canShare?.({ files: [new File([""], "x.pdf", { type: "application/pdf" })] });
     } catch {
@@ -778,11 +780,19 @@ function SendSheet({ pdf, failed, rows, message, orderHref, onClose }: {
           <a href={orderHref} target="_blank" rel="noopener noreferrer" className={`btn ${canShare ? "btn-ghost" : "btn-whatsapp"}`}>
             {canShare ? "Mandar solo el resumen" : "Abrir WhatsApp con el resumen"}
           </a>
-          <button type="button" onClick={download} disabled={!file} className="btn btn-ghost disabled:opacity-60">
-            Descargar el PDF
-          </button>
+          {!EMBEDDED && (
+            <button type="button" onClick={download} disabled={!file} className="btn btn-ghost disabled:opacity-60">
+              Descargar el PDF
+            </button>
+          )}
         </div>
-        {!canShare && (
+        {EMBEDDED && (
+          <p className="mt-3 text-xs leading-relaxed text-ink-2">
+            En esta vista de prueba el PDF no se puede bajar ni compartir. En la versión publicada en el sitio del taller, este botón lo
+            manda directo por WhatsApp.
+          </p>
+        )}
+        {!canShare && !EMBEDDED && (
           <p className="mt-3 text-xs leading-relaxed text-ink-2">
             El resumen lleva el link al despiece con los dibujos. Si querés, adjuntá también el PDF en el chat.
           </p>

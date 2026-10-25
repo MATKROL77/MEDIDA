@@ -8,6 +8,7 @@ import { catalog } from "@/lib/catalog";
 import { pieceDrawing } from "@/lib/drawings";
 import { DEFAULT_CONFIG, LAYOUT_LABELS, totalHeight, type WardrobeConfig } from "@/lib/model";
 import { money, quote, type BoardUse, type CutRow } from "@/lib/quote";
+import { EMBEDDED, currentQuery } from "@/lib/embed";
 import { buildOrderPdf } from "@/lib/orderPdf";
 import { decodeConfig, encodeConfig } from "@/lib/share";
 
@@ -19,7 +20,7 @@ import { decodeConfig, encodeConfig } from "@/lib/share";
 export default function Workshop() {
   const [config, setConfig] = useState<WardrobeConfig>(DEFAULT_CONFIG);
   useEffect(() => {
-    const fromUrl = decodeConfig(new URLSearchParams(window.location.search).get("c"));
+    const fromUrl = decodeConfig(new URLSearchParams(currentQuery()).get("c"));
     if (fromUrl) setConfig(fromUrl);
   }, []);
 
@@ -72,15 +73,20 @@ export default function Workshop() {
           <Link href={`/demo/?c=${encodeConfig(config)}`} className="btn btn-ghost text-sm">
             ← Volver al diseño
           </Link>
-          <button type="button" onClick={downloadCsv} className="btn btn-ghost text-sm">
-            Descargar CSV
-          </button>
-          <button type="button" onClick={downloadPdf} disabled={making} className="btn btn-ghost text-sm disabled:opacity-60">
-            {making ? "Armando PDF…" : "Descargar PDF"}
-          </button>
-          <button type="button" onClick={() => window.print()} className="btn btn-primary text-sm">
-            Imprimir
-          </button>
+          {/* dentro de la vista de prueba de Claude no se puede bajar ni imprimir */}
+          {!EMBEDDED && (
+            <>
+              <button type="button" onClick={downloadCsv} className="btn btn-ghost text-sm">
+                Descargar CSV
+              </button>
+              <button type="button" onClick={downloadPdf} disabled={making} className="btn btn-ghost text-sm disabled:opacity-60">
+                {making ? "Armando PDF…" : "Descargar PDF"}
+              </button>
+              <button type="button" onClick={() => window.print()} className="btn btn-primary text-sm">
+                Imprimir
+              </button>
+            </>
+          )}
         </div>
       </header>
 
