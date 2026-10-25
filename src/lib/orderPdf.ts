@@ -162,16 +162,18 @@ function coverPage(config: WardrobeConfig, q: Quote, snapshot: HTMLImageElement 
   let y = 200;
   if (snapshot) {
     const w = PAGE_W - 2 * M;
-    const h = Math.min(560, (snapshot.height / snapshot.width) * w);
-    // recorte centrado para que la foto llene el recuadro sin deformarse
-    const scale = Math.max(w / snapshot.width, h / snapshot.height);
-    const sw = w / scale;
-    const sh = h / scale;
+    const h = 560;
+    // la captura entra entera, sin recortar el placard: lo que sobra va en el color del fondo
+    const scale = Math.min(w / snapshot.width, h / snapshot.height);
+    const dw = snapshot.width * scale;
+    const dh = snapshot.height * scale;
     ctx.save();
     ctx.beginPath();
     ctx.roundRect(M, y, w, h, 18);
     ctx.clip();
-    ctx.drawImage(snapshot, (snapshot.width - sw) / 2, (snapshot.height - sh) / 2, sw, sh, M, y, w, h);
+    ctx.fillStyle = "#ebe6df";
+    ctx.fillRect(M, y, w, h);
+    ctx.drawImage(snapshot, M + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
     ctx.restore();
     y += h + 50;
   }
