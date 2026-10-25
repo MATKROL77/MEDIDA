@@ -4,42 +4,63 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  IconBack,
+  IconBulb,
+  IconDoor,
+  IconExplode,
+  IconFront,
+  IconRoom,
+  IconSide,
+  IconStudio,
+  IconThree,
+  IconTop,
+  IconXray,
+} from "@/components/icons";
 import { LayoutIcon } from "@/components/LayoutIcon";
+import { Poster } from "@/components/Poster";
+import { Dimension, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
+import { WALL_COLORS } from "@/components/viewer/constants";
+import type { ViewName } from "@/components/viewer/Scene";
 import { catalog, type HandleType } from "@/lib/catalog";
 import {
   DEFAULT_CONFIG,
+  DOOR_STYLE_LABELS,
   LAYOUT_LABELS,
+  LED_COLORS,
   LIMITS,
-  innerModuleWidth,
-  interiorHeight,
+  hasLeds,
+  innerAvailable,
   layoutFits,
+  moduleInterior,
+  moduleMin,
   normalize,
+  runSpan,
   validModuleCounts,
+  withModuleCount,
+  withModuleWidth,
+  type DoorStyle,
   type DoorType,
+  type LedColor,
   type Layout,
   type ModuleConfig,
+  type Shape,
   type WardrobeConfig,
 } from "@/lib/model";
 import { money, quote } from "@/lib/quote";
 import { decodeConfig, encodeConfig, orderMessage, whatsappLink } from "@/lib/share";
 
-// el 3D sólo existe en el navegador; en el HTML estático va un lugar reservado
-const Viewer3D = dynamic(() => import("@/components/Viewer3D"), {
-  ssr: false,
-  loading: () => <div className="grid h-full place-items-center text-sm text-ink-2">Cargando el 3D…</div>,
-});
+type Tab = "forma" | "interior" | "frentes" | "luz" | "color";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "forma", label: "Forma" },
+  { id: "interior", label: "Interior" },
+  { id: "frentes", label: "Frentes" },
+  { id: "luz", label: "Luz" },
+  { id: "color", label: "Color" },
+];
 
 const LAYOUTS = Object.keys(LAYOUT_LABELS) as Layout[];
-const DOORS: { id: DoorType; label: string }[] = [
-  { id: "none", label: "Sin puertas" },
-  { id: "hinged", label: "Batientes" },
-  { id: "sliding", label: "Corredizas" },
-];
-const HANDLES: { id: HandleType; label: string }[] = [
-  { id: "bar", label: "Barral" },
-  { id: "knob", label: "Botón" },
-  { id: "none", label: "Sin tirador" },
-];
+const RGB_PRESETS = ["#ff3b30", "#ff2d92", "#a64dff", "#3b6cff", "#00c2ff", "#21d07a", "#ffb000"];
 
 function shareLink(config: WardrobeConfig, path = "/demo/") {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
@@ -48,8 +69,15 @@ function shareLink(config: WardrobeConfig, path = "/demo/") {
 
 export default function Configurator() {
   const [config, setConfig] = useState<WardrobeConfig>(DEFAULT_CONFIG);
-  const [selected, setSelected] = useState(0);
-  const [doorsOpen, setDoorsOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>("forma");
+  const [selection, setSelection] = useState({ run: 0, module: 0 });
+  const [open, setOpen] = useState(false);
+  const [xray, setXray] = useState(false);
+  const [explode, setExplode] = useState(false);
+  const [lights, setLights] = useState(false);
+  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string }>({ mode: "room", wall: WALL_COLORS[0].hex });
+  const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
+  const [ready, setReady] = useState(false);
 
   // un link compartido abre el placard que armó el cliente
   useEffect(() => {
@@ -57,197 +85,535 @@ export default function Configurator() {
     if (fromUrl) setConfig(fromUrl);
   }, []);
 
-  // el link de la barra siempre reproduce lo que se ve, por si lo copian
+  // la barra de direcciones siempre reproduce lo que se ve, por si la copian
   useEffect(() => {
-    const id = setTimeout(() => {
-      window.history.replaceState(null, "", `?c=${encodeConfig(config)}`);
-    }, 300);
+    const id = setTimeout(() => window.history.replaceState(null, "", `?c=${encodeConfig(config)}`), 300);
     return () => clearTimeout(id);
   }, [config]);
 
   const result = useMemo(() => quote(config), [config]);
   const update = (patch: Partial<WardrobeConfig>) => setConfig((c) => normalize({ ...c, ...patch }));
-  const updateModule = (i: number, patch: Partial<ModuleConfig>) =>
-    setConfig((c) => normalize({ ...c, modules: c.modules.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
+  const updateModule = (run: number, i: number, patch: Partial<ModuleConfig>) =>
+    setConfig((c) =>
+      normalize({
+        ...c,
+        runs: c.runs.map((r, j) => (j === run ? { ...r, modules: r.modules.map((m, k) => (k === i ? { ...m, ...patch } : m)) } : r)),
+      }),
+    );
+  const updateAllModules = (patch: Partial<ModuleConfig>) =>
+    setConfig((c) => normalize({ ...c, runs: c.runs.map((r) => ({ ...r, modules: r.modules.map((m) => ({ ...m, ...patch })) })) }));
 
-  const counts = validModuleCounts(config.width);
-  const moduleIndex = Math.min(selected, config.modules.length - 1);
-  const mod = config.modules[moduleIndex];
-  const interior = interiorHeight(config);
-  const hasHandles = config.doors !== "none" || config.modules.some((m) => m.drawers > 0);
-
-  const setModuleCount = (n: number) => {
-    const modules = Array.from({ length: n }, (_, i) => config.modules[i] ?? config.modules[config.modules.length - 1]);
-    update({ modules });
-    setSelected((s) => Math.min(s, n - 1));
+  const sel = {
+    run: Math.min(selection.run, config.runs.length - 1),
+    module: 0,
   };
+  sel.module = Math.min(selection.module, config.runs[sel.run].modules.length - 1);
+  const run = config.runs[sel.run];
+  const mod = run.modules[sel.module];
+  const interior = moduleInterior(config, sel.run, sel.module);
+  const span = runSpan(config, sel.run, run.width);
+  const counts = validModuleCounts(config, sel.run, span);
+  const anyDrawers = config.runs.some((r) => r.modules.some((m) => m.drawers > 0));
+  const hasHandles = config.doors !== "none" || anyDrawers;
+  const lit = hasLeds(config);
+  const allLed = (key: "ledShelves" | "ledSides") => config.runs.every((r) => r.modules.every((m) => m[key]));
 
-  const priceLabel = money(result.price);
-  const orderHref = whatsappLink(orderMessage(config, priceLabel, shareLink(config)));
+  // ancho posible para el módulo elegido: lo que dejan los demás en su mínimo
+  const n = run.modules.length;
+  const avail = innerAvailable(span, n);
+  const othersMin = run.modules.reduce((s, _, i) => (i === sel.module ? s : s + moduleMin(config, sel.run, i, n)), 0);
+  const othersMax = run.modules.reduce((s, _, i) => (i === sel.module ? s : s + LIMITS.moduleInner.max), 0);
+  const modMin = Math.max(moduleMin(config, sel.run, sel.module, n), avail - othersMax);
+  const modMax = Math.min(LIMITS.moduleInner.max, avail - othersMin);
+
+  const price = useAnimatedNumber(result.price);
+  const orderHref = whatsappLink(orderMessage(config, money(result.price), shareLink(config)));
+
+  const selectModule = (r: number, m: number) => {
+    setSelection({ run: r, module: m });
+    if (tab !== "luz") setTab("interior");
+  };
+  const goView = (name: ViewName) => setView((v) => ({ name, nonce: v.nonce + 1 }));
+  // mientras se edita el interior las puertas se aclaran solas para ver qué cambia
+  const editingInside = tab === "interior" || tab === "luz";
 
   return (
-    <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_420px]">
+    <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_440px]">
       {/* visor: arriba en el teléfono, a la izquierda en pantalla grande */}
-      <section className="relative h-[46dvh] min-h-[320px] lg:h-full">
-        <Viewer3D
-          config={config}
-          parts={result.assembly.parts}
-          doorsOpen={doorsOpen}
-          selectedModule={moduleIndex}
-          onSelectModule={setSelected}
-        />
-        <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
+      <section className="relative h-[54dvh] min-h-[340px] overflow-hidden lg:h-full">
+        <Poster config={config} assembly={result.assembly} />
+        <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
+          <Viewer3D
+            config={config}
+            assembly={result.assembly}
+            selection={editingInside ? sel : null}
+            onSelect={selectModule}
+            open={open}
+            xray={xray || (editingInside && !open && config.doors !== "none")}
+            explode={explode}
+            lights={lights}
+            environment={environment}
+            view={view}
+            onReady={() => setTimeout(() => setReady(true), 120)}
+          />
+        </div>
+
+        <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-4">
           <div className="pointer-events-auto rounded-2xl bg-surface/90 px-4 py-2.5 shadow-sm backdrop-blur">
             <p className="font-display text-base font-semibold leading-tight">{catalog.brand.name}</p>
             <p className="text-xs text-ink-2">{catalog.brand.tagline}</p>
           </div>
-          {config.doors !== "none" && (
+          <div className="toolbar pointer-events-auto">
             <button
               type="button"
-              onClick={() => setDoorsOpen((o) => !o)}
-              className="btn btn-ghost pointer-events-auto px-4 py-2 text-sm shadow-sm"
+              className="tool px-2.5"
+              aria-pressed={environment.mode === "room"}
+              title="Habitación"
+              onClick={() => setEnvironment((e) => ({ ...e, mode: "room" }))}
             >
-              {doorsOpen ? "Cerrar puertas" : "Abrir puertas"}
+              <IconRoom />
+              <span className="hidden sm:inline">Habitación</span>
             </button>
-          )}
+            <button
+              type="button"
+              className="tool px-2.5"
+              aria-pressed={environment.mode === "studio"}
+              title="Estudio"
+              onClick={() => setEnvironment((e) => ({ ...e, mode: "studio" }))}
+            >
+              <IconStudio />
+              <span className="hidden sm:inline">Estudio</span>
+            </button>
+          </div>
         </header>
-        <div className="pointer-events-none absolute inset-x-4 bottom-3 flex items-end justify-between gap-3">
-          <p className="text-xs text-ink-2">Arrastrá para girar · tocá un módulo para editarlo</p>
-          <p className="shrink-0 rounded-full bg-surface/90 px-3 py-1 text-xs font-semibold tabular-nums shadow-sm">
-            {Math.round(config.width / 10)} × {Math.round(config.height / 10)} × {Math.round(config.depth / 10)} cm
-          </p>
+
+        {environment.mode === "room" && (
+          <div className="fade-in pointer-events-auto absolute right-3 top-[4.4rem] flex flex-col gap-1.5 rounded-full bg-surface/85 p-1.5 shadow-sm backdrop-blur sm:right-4">
+            {WALL_COLORS.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                title={`Pared ${w.name.toLowerCase()}`}
+                aria-label={`Pared ${w.name.toLowerCase()}`}
+                aria-pressed={environment.wall === w.hex}
+                onClick={() => setEnvironment((e) => ({ ...e, wall: w.hex }))}
+                className={`swatch size-6 rounded-full border-2 ${environment.wall === w.hex ? "border-ink" : "border-surface"}`}
+                style={{ background: w.hex }}
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="absolute inset-x-0 bottom-3 flex justify-center px-3">
+          <div className="toolbar max-w-full overflow-x-auto [scrollbar-width:none]">
+            {(
+              [
+                ["front", "Frente", IconFront],
+                ["three", "3/4", IconThree],
+                ["side", "Costado", IconSide],
+                ["top", "Arriba", IconTop],
+                ["back", "Atrás", IconBack],
+              ] as const
+            ).map(([id, label, Icon]) => (
+              <button key={id} type="button" className="tool px-2.5" title={`Vista ${label.toLowerCase()}`} onClick={() => goView(id)}>
+                <Icon />
+                <span className="hidden xl:inline">{label}</span>
+              </button>
+            ))}
+            <span className="tool-sep shrink-0" />
+            {config.doors !== "none" && (
+              <button type="button" className="tool" aria-pressed={open} onClick={() => setOpen((o) => !o)}>
+                <IconDoor />
+                <span className="hidden sm:inline">{open ? "Cerrar" : "Abrir"}</span>
+              </button>
+            )}
+            {config.doors !== "none" && (
+              <button type="button" className="tool" aria-pressed={xray} onClick={() => setXray((x) => !x)} title="Ver adentro sin abrir">
+                <IconXray />
+                <span className="hidden sm:inline">Ver adentro</span>
+              </button>
+            )}
+            <button type="button" className="tool" aria-pressed={explode} onClick={() => setExplode((x) => !x)} title="Separar las piezas">
+              <IconExplode />
+              <span className="hidden sm:inline">Explotar</span>
+            </button>
+            {lit && (
+              <button type="button" className="tool" aria-pressed={lights} onClick={() => setLights((l) => !l)} title="Encender las luces">
+                <IconBulb />
+                <span className="hidden sm:inline">Luces</span>
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
       <aside className="flex flex-col border-line bg-surface lg:min-h-0 lg:border-l">
-        <div className="flex-1 space-y-7 overflow-y-auto px-5 pb-32 pt-6 lg:pb-6">
-          {catalog.brand.demo && (
-            <p className="rounded-xl bg-accent-soft px-3 py-2 text-xs leading-relaxed text-accent-strong">
-              Demo: la marca y los precios son de ejemplo. Cada taller carga los suyos.
-            </p>
+        <nav className="sticky top-0 z-20 flex justify-between gap-1 border-b border-line bg-surface/95 px-5 backdrop-blur" role="tablist">
+          {TABS.map((t) => (
+            <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className="tab" onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
+        <div key={tab} className="fade-in flex-1 space-y-8 overflow-y-auto px-5 pb-36 pt-6 lg:pb-8">
+          {tab === "forma" && (
+            <>
+              <Section title="Forma">
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      ["straight", "Recto"],
+                      ["l-left", "En L, izquierda"],
+                      ["l-right", "En L, derecha"],
+                    ] as [Shape, string][]
+                  ).map(([id, label]) => (
+                    <OptionCard key={id} active={config.shape === id} label={label} onClick={() => update({ shape: id })}>
+                      <ShapeIcon shape={id} />
+                    </OptionCard>
+                  ))}
+                </div>
+              </Section>
+
+              <Section title="Medidas">
+                <Dimension
+                  label={config.shape === "straight" ? "Ancho" : "Ancho del frente"}
+                  value={config.runs[0].width}
+                  min={LIMITS.width.min}
+                  max={LIMITS.width.max}
+                  onChange={(width) => update({ runs: config.runs.map((r, i) => (i === 0 ? { ...r, width } : r)) })}
+                />
+                {config.shape !== "straight" && (
+                  <Dimension
+                    label="Ancho del lateral"
+                    value={config.runs[1].width}
+                    min={config.depth + LIMITS.width.min}
+                    max={LIMITS.width.max}
+                    onChange={(width) => update({ runs: config.runs.map((r, i) => (i === 1 ? { ...r, width } : r)) })}
+                  />
+                )}
+                <Dimension
+                  label={config.slope.enabled ? "Alto (lado alto)" : "Alto"}
+                  value={config.height}
+                  min={LIMITS.height.min}
+                  max={LIMITS.height.max}
+                  onChange={(height) => update({ height })}
+                />
+                <Dimension label="Profundidad" value={config.depth} min={LIMITS.depth.min} max={LIMITS.depth.max} onChange={(depth) => update({ depth })} />
+                <Toggle label="Zócalo de 8 cm" checked={config.plinth} onChange={(plinth) => update({ plinth })} />
+              </Section>
+
+              <Section title="Altillo">
+                <Toggle
+                  label="Altillo con puertas arriba"
+                  hint={config.slope.enabled ? "No va con techo inclinado" : "Para lo que se usa poco: valijas, mantas"}
+                  checked={config.topBox.enabled}
+                  disabled={config.slope.enabled}
+                  onChange={(enabled) => update({ topBox: { ...config.topBox, enabled } })}
+                />
+                {config.topBox.enabled && (
+                  <Dimension
+                    label="Alto del altillo"
+                    value={config.topBox.height}
+                    min={LIMITS.topBox.min}
+                    max={LIMITS.topBox.max}
+                    onChange={(height) => update({ topBox: { ...config.topBox, height } })}
+                  />
+                )}
+              </Section>
+
+              <Section title="Techo inclinado">
+                <Toggle
+                  label="Sigue la pendiente del techo"
+                  hint={config.shape !== "straight" ? "Disponible en placares rectos" : "Bajo escalera o buhardilla"}
+                  checked={config.slope.enabled}
+                  disabled={config.shape !== "straight"}
+                  onChange={(enabled) => update({ slope: { ...config.slope, enabled } })}
+                />
+                {config.slope.enabled && (
+                  <>
+                    <Segmented
+                      value={config.slope.side}
+                      options={[
+                        { id: "left", label: "Bajo a la izquierda" },
+                        { id: "right", label: "Bajo a la derecha" },
+                      ]}
+                      onChange={(side) => update({ slope: { ...config.slope, side } })}
+                    />
+                    <Dimension
+                      label="Alto del lado bajo"
+                      value={config.slope.low}
+                      min={LIMITS.slopeLow.min}
+                      max={config.height - 100}
+                      onChange={(low) => update({ slope: { ...config.slope, low } })}
+                    />
+                  </>
+                )}
+              </Section>
+
+              <Section title="Terminales curvos" hint="Estantes abiertos redondeados">
+                <Toggle label="A la izquierda" checked={config.curved.left} onChange={(left) => update({ curved: { ...config.curved, left } })} />
+                <Toggle label="A la derecha" checked={config.curved.right} onChange={(right) => update({ curved: { ...config.curved, right } })} />
+              </Section>
+            </>
           )}
 
-          <Section title="Medidas">
-            <Dimension label="Ancho" value={config.width} limits={LIMITS.width} onChange={(width) => update({ width })} />
-            <Dimension label="Alto" value={config.height} limits={LIMITS.height} onChange={(height) => update({ height })} />
-            <Dimension
-              label="Profundidad"
-              value={config.depth}
-              limits={LIMITS.depth}
-              onChange={(depth) => update({ depth })}
-            />
-            <label className="flex items-center justify-between text-sm">
-              <span>Zócalo de 8 cm</span>
-              <input
-                type="checkbox"
-                checked={config.plinth}
-                onChange={(e) => update({ plinth: e.target.checked })}
-                className="size-4 accent-[var(--color-accent)]"
-              />
-            </label>
-          </Section>
+          {tab === "interior" && (
+            <>
+              {config.runs.length > 1 && (
+                <Section title="Tramo">
+                  <Segmented
+                    value={sel.run}
+                    options={[
+                      { id: 0, label: "Frente" },
+                      { id: 1, label: "Lateral" },
+                    ]}
+                    onChange={(r) => setSelection({ run: r, module: 0 })}
+                  />
+                </Section>
+              )}
 
-          <Section title="Módulos" hint={`${Math.round(innerModuleWidth(config.width, config.modules.length) / 10)} cm cada uno por dentro`}>
-            <div className="segment">
-              {counts.map((n) => (
-                <button key={n} type="button" aria-pressed={n === config.modules.length} onClick={() => setModuleCount(n)}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          </Section>
-
-          <Section title={`Interior del módulo ${moduleIndex + 1}`}>
-            <div className="segment">
-              {config.modules.map((_, i) => (
-                <button key={i} type="button" aria-pressed={i === moduleIndex} onClick={() => setSelected(i)}>
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-5 gap-1.5">
-              {LAYOUTS.map((layout) => {
-                const fits = layoutFits(layout, interior, Math.max(1, mod.drawers));
-                const active = mod.layout === layout;
-                return (
-                  <button
-                    key={layout}
-                    type="button"
-                    disabled={!fits}
-                    aria-pressed={active}
-                    title={fits ? LAYOUT_LABELS[layout] : "No entra con este alto"}
-                    onClick={() =>
-                      updateModule(moduleIndex, {
-                        layout,
-                        drawers: layout.startsWith("drawers") ? Math.max(2, mod.drawers) : 0,
-                        shelves: layout === "shelves" || layout === "drawers-shelves" ? Math.max(2, mod.shelves) : mod.shelves,
-                      })
-                    }
-                    className={`flex flex-col items-center gap-1 rounded-xl border px-1 py-2 text-[11px] leading-tight transition-colors disabled:opacity-30 ${
-                      active ? "border-accent bg-accent-soft text-accent-strong" : "border-line text-ink-2 hover:border-ink-2"
-                    }`}
-                  >
-                    <LayoutIcon layout={layout} />
-                    {LAYOUT_LABELS[layout]}
-                  </button>
-                );
-              })}
-            </div>
-            {(mod.layout === "shelves" || mod.layout === "drawers-shelves") && (
-              <Stepper
-                label="Estantes"
-                value={mod.shelves}
-                min={mod.layout === "shelves" ? 1 : 0}
-                max={LIMITS.shelves.max}
-                onChange={(shelves) => updateModule(moduleIndex, { shelves })}
-              />
-            )}
-            {mod.drawers > 0 && (
-              <Stepper
-                label="Cajones"
-                value={mod.drawers}
-                min={1}
-                max={LIMITS.drawers.max}
-                onChange={(drawers) => updateModule(moduleIndex, { drawers })}
-              />
-            )}
-          </Section>
-
-          <Section title="Puertas">
-            <div className="segment">
-              {DOORS.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  aria-pressed={config.doors === d.id}
-                  onClick={() => {
-                    update({ doors: d.id });
-                    setDoorsOpen(false);
+              <Section title="Módulos" hint="Tocá un módulo en el 3D para editarlo">
+                <Segmented
+                  value={run.modules.length}
+                  options={counts.map((c) => ({ id: c, label: c }))}
+                  onChange={(c) => {
+                    setConfig((cur) => withModuleCount(cur, sel.run, c));
+                    setSelection((s) => ({ ...s, module: Math.min(s.module, c - 1) }));
                   }}
-                >
-                  {d.label}
-                </button>
-              ))}
-            </div>
-            {hasHandles && (
-              <div className="segment">
-                {HANDLES.map((h) => (
-                  <button key={h.id} type="button" aria-pressed={config.handle === h.id} onClick={() => update({ handle: h.id })}>
-                    {h.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </Section>
+                />
+                <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${run.modules.length}, minmax(0, 1fr))` }}>
+                  {run.modules.map((m, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      aria-pressed={i === sel.module}
+                      onClick={() => setSelection({ run: sel.run, module: i })}
+                      className={`option-card rounded-xl border px-1 py-2 text-xs ${i === sel.module ? "border-accent bg-accent-soft text-accent-strong" : "border-line text-ink-2"}`}
+                    >
+                      <span className="block font-semibold">{i + 1}</span>
+                      <span className="tabular-nums">{Math.round(m.width / 10)} cm</span>
+                    </button>
+                  ))}
+                </div>
+              </Section>
 
-          <Section title="Terminaciones">
-            <Swatches label="Cuerpo" value={config.bodyMaterial} onChange={(bodyMaterial) => update({ bodyMaterial })} />
-            <Swatches
-              label={config.doors === "none" ? "Frentes de cajón" : "Puertas"}
-              value={config.doorMaterial}
-              onChange={(doorMaterial) => update({ doorMaterial })}
-            />
-          </Section>
+              <Section title={`Módulo ${sel.module + 1}`}>
+                {n > 1 && modMax > modMin && (
+                  <Dimension
+                    label="Ancho interior"
+                    value={mod.width}
+                    min={modMin}
+                    max={modMax}
+                    onChange={(w) => setConfig((cur) => withModuleWidth(cur, sel.run, sel.module, w))}
+                  />
+                )}
+                <div className="grid grid-cols-5 gap-1.5">
+                  {LAYOUTS.map((layout) => {
+                    const fits = layoutFits(layout, interior, Math.max(1, mod.drawers));
+                    return (
+                      <OptionCard
+                        key={layout}
+                        active={mod.layout === layout}
+                        disabled={!fits}
+                        title={fits ? LAYOUT_LABELS[layout] : "No entra con este alto"}
+                        label={LAYOUT_LABELS[layout]}
+                        onClick={() =>
+                          updateModule(sel.run, sel.module, {
+                            layout,
+                            drawers: layout.startsWith("drawers") ? Math.max(2, mod.drawers) : 0,
+                            shelves: layout === "shelves" || layout === "drawers-shelves" ? Math.max(2, mod.shelves) : mod.shelves,
+                          })
+                        }
+                      >
+                        <LayoutIcon layout={layout} />
+                      </OptionCard>
+                    );
+                  })}
+                </div>
+                {(mod.layout === "shelves" || mod.layout === "drawers-shelves") && (
+                  <Stepper
+                    label="Estantes"
+                    value={mod.shelves}
+                    min={mod.layout === "shelves" ? 1 : 0}
+                    max={LIMITS.shelves.max}
+                    onChange={(shelves) => updateModule(sel.run, sel.module, { shelves })}
+                  />
+                )}
+                {mod.drawers > 0 && (
+                  <Stepper label="Cajones" value={mod.drawers} min={1} max={LIMITS.drawers.max} onChange={(drawers) => updateModule(sel.run, sel.module, { drawers })} />
+                )}
+              </Section>
+            </>
+          )}
+
+          {tab === "frentes" && (
+            <>
+              <Section title="Puertas">
+                <Segmented
+                  value={config.doors}
+                  options={(
+                    [
+                      ["none", "Sin puertas"],
+                      ["hinged", "Batientes"],
+                      ["sliding", "Corredizas"],
+                    ] as [DoorType, string][]
+                  ).map(([id, label]) => ({
+                    id,
+                    label,
+                    disabled: id === "sliding" && config.slope.enabled,
+                    title: id === "sliding" && config.slope.enabled ? "Con techo inclinado van batientes" : undefined,
+                  }))}
+                  onChange={(doors) => {
+                    update({ doors });
+                    if (doors === "none") {
+                      setOpen(false);
+                      setXray(false);
+                    }
+                  }}
+                />
+              </Section>
+              {config.doors !== "none" && (
+                <Section title="Estilo del frente">
+                  <div className="grid grid-cols-4 gap-2">
+                    {(Object.keys(DOOR_STYLE_LABELS) as DoorStyle[]).map((s) => (
+                      <OptionCard
+                        key={s}
+                        active={config.doorStyle === s}
+                        disabled={s === "glass" && config.slope.enabled}
+                        label={DOOR_STYLE_LABELS[s]}
+                        onClick={() => update({ doorStyle: s })}
+                      >
+                        <FrontPreview style={s} color={catalog.materials.find((m) => m.id === config.doorMaterial)?.color ?? "#ccc"} />
+                      </OptionCard>
+                    ))}
+                  </div>
+                </Section>
+              )}
+              {hasHandles && (
+                <Section title="Tiradores">
+                  <Segmented
+                    value={config.handle}
+                    options={(
+                      [
+                        ["bar", "Barral"],
+                        ["knob", "Botón"],
+                        ["none", "Sin tirador"],
+                      ] as [HandleType, string][]
+                    ).map(([id, label]) => ({ id, label }))}
+                    onChange={(handle) => update({ handle })}
+                  />
+                </Section>
+              )}
+            </>
+          )}
+
+          {tab === "luz" && (
+            <>
+              <Section title="Dónde va la luz" hint={lit ? `${result.assembly.ledMeters.toFixed(1)} m de tira` : undefined}>
+                <Toggle label="Bajo cada estante, en todos" checked={allLed("ledShelves")} onChange={(v) => updateAllModules({ ledShelves: v })} />
+                <Toggle label="Perfiles verticales, en todos" checked={allLed("ledSides")} onChange={(v) => updateAllModules({ ledSides: v })} />
+                <div className="space-y-1.5 rounded-2xl bg-paper p-3">
+                  {config.runs.map((r, ri) =>
+                    r.modules.map((m, mi) => (
+                      <div key={`${ri}-${mi}`} className="flex items-center justify-between gap-2 text-sm">
+                        <button type="button" className="text-left text-ink-2 hover:text-ink" onClick={() => setSelection({ run: ri, module: mi })}>
+                          {config.runs.length > 1 ? (ri === 0 ? "Frente " : "Lateral ") : "Módulo "}
+                          {mi + 1}
+                        </button>
+                        <span className="flex gap-1.5">
+                          <LedChip active={m.ledShelves} onClick={() => updateModule(ri, mi, { ledShelves: !m.ledShelves })}>
+                            Estantes
+                          </LedChip>
+                          <LedChip active={m.ledSides} onClick={() => updateModule(ri, mi, { ledSides: !m.ledSides })}>
+                            Laterales
+                          </LedChip>
+                        </span>
+                      </div>
+                    )),
+                  )}
+                </div>
+              </Section>
+
+              <Section title="Color de la luz">
+                <Segmented
+                  value={config.led.color}
+                  options={(
+                    [
+                      ...Object.entries(LED_COLORS).map(([id, c]) => [id, c.label]),
+                      ["rgb", "RGB"],
+                    ] as [LedColor, string][]
+                  ).map(([id, label]) => ({
+                    id,
+                    label: (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className="size-2.5 rounded-full"
+                          style={{
+                            background:
+                              id === "rgb" ? "conic-gradient(#ff3b30, #ffb000, #21d07a, #00c2ff, #a64dff, #ff2d92, #ff3b30)" : LED_COLORS[id as Exclude<LedColor, "rgb">].hex,
+                          }}
+                        />
+                        {label}
+                      </span>
+                    ),
+                  }))}
+                  onChange={(color) => {
+                    update({ led: { ...config.led, color } });
+                    setLights(true);
+                  }}
+                />
+                {config.led.color === "rgb" && (
+                  <div className="fade-in flex flex-wrap items-center gap-2.5">
+                    {RGB_PRESETS.map((hex) => (
+                      <button
+                        key={hex}
+                        type="button"
+                        aria-label={`Color ${hex}`}
+                        aria-pressed={config.led.rgb.toLowerCase() === hex}
+                        onClick={() => update({ led: { ...config.led, rgb: hex } })}
+                        className={`swatch size-8 rounded-full border-2 ${config.led.rgb.toLowerCase() === hex ? "border-ink" : "border-surface ring-1 ring-line"}`}
+                        style={{ background: hex, boxShadow: `0 0 14px ${hex}66` }}
+                      />
+                    ))}
+                    <label className="swatch relative size-8 cursor-pointer overflow-hidden rounded-full ring-1 ring-line" title="Elegir cualquier color">
+                      <span className="absolute inset-0" style={{ background: "conic-gradient(#ff3b30, #ffb000, #21d07a, #00c2ff, #a64dff, #ff2d92, #ff3b30)" }} />
+                      <input
+                        type="color"
+                        value={config.led.rgb}
+                        onChange={(e) => update({ led: { ...config.led, rgb: e.target.value } })}
+                        className="absolute inset-0 cursor-pointer opacity-0"
+                        aria-label="Elegir cualquier color"
+                      />
+                    </label>
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Encendido">
+                {config.doors !== "none" && (
+                  <Toggle
+                    label="Sensor al abrir"
+                    hint="La luz se prende sola al abrir la puerta"
+                    checked={config.led.sensor}
+                    onChange={(sensor) => update({ led: { ...config.led, sensor } })}
+                  />
+                )}
+                <Toggle label="Ver las luces prendidas" checked={lights} onChange={setLights} disabled={!lit} hint={lit ? undefined : "Primero elegí dónde va la luz"} />
+              </Section>
+            </>
+          )}
+
+          {tab === "color" && (
+            <Section title="Terminaciones">
+              <Swatches label="Cuerpo" value={config.bodyMaterial} onChange={(bodyMaterial) => update({ bodyMaterial })} />
+              <Swatches
+                label={config.doors === "none" ? "Frentes de cajón" : "Puertas"}
+                value={config.doorMaterial}
+                onChange={(doorMaterial) => update({ doorMaterial })}
+              />
+            </Section>
+          )}
 
           <Link href={`/demo/taller/?c=${encodeConfig(config)}`} className="block text-sm font-medium text-accent underline-offset-4 hover:underline">
             Ver lo que le llega al taller →
@@ -255,136 +621,69 @@ export default function Configurator() {
         </div>
 
         {/* precio y pedido: fijos abajo en el teléfono, al pie del panel en pantalla grande */}
-        <div className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur lg:static">
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur lg:static">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-xs text-ink-2">Precio estimado</p>
-              <p className="font-display text-2xl font-semibold tabular-nums">{priceLabel}</p>
+              <p className="font-display text-2xl font-semibold tabular-nums">{money(Math.round(price / 1000) * 1000)}</p>
             </div>
             <a href={orderHref} target="_blank" rel="noopener noreferrer" className="btn btn-whatsapp shrink-0 text-sm">
               Pedir por WhatsApp
             </a>
           </div>
-          <p className="mt-2 text-[11px] leading-snug text-ink-2">
-            Incluye materiales y fabricación. El precio final se confirma al medir en tu casa.
-          </p>
+          <p className="mt-2 text-[11px] leading-snug text-ink-2">Incluye materiales, luces y fabricación. El precio final se confirma al medir en tu casa.</p>
         </div>
       </aside>
     </div>
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+// el 3D sólo existe en el navegador; mientras carga se ve la vista de frente
+const Viewer3D = dynamic(() => import("@/components/viewer/Scene"), { ssr: false, loading: () => null });
+
+function LedChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <section className="space-y-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="eyebrow">{title}</h2>
-        {hint && <span className="text-xs text-ink-2">{hint}</span>}
-      </div>
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`option-card rounded-full border px-2.5 py-1 text-xs ${active ? "border-accent bg-accent-soft text-accent-strong" : "border-line text-ink-2"}`}
+    >
       {children}
-    </section>
+    </button>
   );
 }
 
-function Dimension({ label, value, limits, onChange }: {
-  label: string;
-  value: number;
-  limits: { min: number; max: number };
-  onChange: (mm: number) => void;
-}) {
-  const cm = Math.round(value / 10);
-  const [draft, setDraft] = useState(String(cm));
-  useEffect(() => setDraft(String(cm)), [cm]);
-
-  // el número se aplica al salir del campo: mientras se tipea "2" no tiene que
-  // saltar al mínimo
-  const commit = () => {
-    const n = Number(draft);
-    if (Number.isFinite(n) && n > 0) onChange(n * 10);
-    else setDraft(String(cm));
-  };
-
+/** forma vista desde arriba: la pared de fondo queda arriba */
+function ShapeIcon({ shape }: { shape: Shape }) {
+  const d =
+    shape === "straight" ? "M6 6H42V16H6Z" : shape === "l-left" ? "M6 6H42V16H16V34H6Z" : "M6 6H42V34H32V16H6Z";
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <label htmlFor={`dim-${label}`}>{label}</label>
-        <span className="flex items-center gap-1">
-          <input
-            id={`dim-${label}`}
-            inputMode="numeric"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
-            onBlur={commit}
-            onKeyDown={(e) => e.key === "Enter" && commit()}
-            className="w-16 rounded-lg border border-line bg-paper px-2 py-1 text-right tabular-nums focus:border-accent focus:outline-none"
-          />
-          <span className="text-ink-2">cm</span>
-        </span>
-      </div>
-      <input
-        type="range"
-        aria-label={`${label} en centímetros`}
-        min={limits.min / 10}
-        max={limits.max / 10}
-        value={cm}
-        onChange={(e) => onChange(Number(e.target.value) * 10)}
-        className="w-full"
-      />
-    </div>
+    <svg viewBox="0 0 48 40" className="h-10 w-12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" aria-hidden>
+      <path d="M3 3H45" strokeDasharray="2 2.5" opacity="0.5" />
+      <path d={d} fill="currentColor" fillOpacity="0.12" />
+    </svg>
   );
 }
 
-function Stepper({ label, value, min, max, onChange }: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onChange: (v: number) => void;
-}) {
-  const btn = "grid size-8 place-items-center rounded-full border border-line text-lg leading-none disabled:opacity-30";
+function FrontPreview({ style, color }: { style: DoorStyle; color: string }) {
   return (
-    <div className="flex items-center justify-between text-sm">
-      <span>{label}</span>
-      <span className="flex items-center gap-3">
-        <button type="button" className={btn} disabled={value <= min} onClick={() => onChange(value - 1)} aria-label={`Menos ${label.toLowerCase()}`}>
-          −
-        </button>
-        <span className="w-4 text-center tabular-nums">{value}</span>
-        <button type="button" className={btn} disabled={value >= max} onClick={() => onChange(value + 1)} aria-label={`Más ${label.toLowerCase()}`}>
-          +
-        </button>
-      </span>
-    </div>
-  );
-}
-
-function Swatches({ label, value, onChange }: { label: string; value: string; onChange: (id: string) => void }) {
-  const current = catalog.materials.find((m) => m.id === value);
-  return (
-    <div className="space-y-2">
-      <p className="text-sm">
-        {label}: <span className="text-ink-2">{current?.name}</span>
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {catalog.materials.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            title={m.name}
-            aria-label={m.name}
-            aria-pressed={m.id === value}
-            onClick={() => onChange(m.id)}
-            className={`size-9 rounded-full border-2 transition-transform ${
-              m.id === value ? "scale-110 border-ink" : "border-surface ring-1 ring-line"
-            }`}
-            style={{
-              background: m.grain
-                ? `repeating-linear-gradient(90deg, ${m.color} 0 5px, color-mix(in srgb, ${m.color} 85%, black) 5px 6px)`
-                : m.color,
-            }}
-          />
-        ))}
-      </div>
-    </div>
+    <svg viewBox="0 0 28 44" className="h-11 w-7" aria-hidden>
+      {style === "glass" ? (
+        <>
+          <rect x="1" y="1" width="26" height="42" rx="1.5" fill="#b8bcc1" />
+          <rect x="4" y="4" width="20" height="36" fill="#3a4044" opacity="0.75" />
+        </>
+      ) : (
+        <rect x="1" y="1" width="26" height="42" rx="1.5" fill={color} stroke="rgba(0,0,0,0.15)" />
+      )}
+      {style === "grooved" && [6, 10, 14, 18, 22].map((x) => <line key={x} x1={x} x2={x} y1="5" y2="39" stroke="rgba(0,0,0,0.35)" strokeWidth="0.9" />)}
+      {style === "mirror" && (
+        <>
+          <rect x="3" y="3" width="22" height="38" fill="#dfe6ea" />
+          <path d="M6 30 18 8M10 36 22 14" stroke="#fff" strokeWidth="1.4" opacity="0.8" />
+        </>
+      )}
+    </svg>
   );
 }

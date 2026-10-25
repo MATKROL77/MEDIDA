@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { catalog } from "@/lib/catalog";
-import { DEFAULT_CONFIG, LAYOUT_LABELS, type WardrobeConfig } from "@/lib/model";
+import { DEFAULT_CONFIG, LAYOUT_LABELS, totalHeight, type WardrobeConfig } from "@/lib/model";
 import { money, quote, type BoardUse, type CutRow } from "@/lib/quote";
 import { decodeConfig, encodeConfig } from "@/lib/share";
 
@@ -25,21 +25,21 @@ export default function Workshop() {
   const margin = q.price - q.cost;
 
   const downloadCsv = () => {
-    const header = ["Cantidad", "Pieza", "Material", "Largo (mm)", "Ancho (mm)", "Espesor (mm)", "Canto"];
-    const lines = q.rows.map((r) => [r.qty, r.label, r.materialName, r.length, r.width, r.thickness, r.edges]);
+    const header = ["Cantidad", "Pieza", "Material", "Largo (mm)", "Ancho (mm)", "Espesor (mm)", "Canto", "Nota"];
+    const lines = q.rows.map((r) => [r.qty, r.label, r.materialName, r.length, r.width, r.thickness, r.edges, r.note]);
     const csv = [header, ...lines].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
     // BOM para que Excel en castellano abra los acentos bien
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `despiece-${Math.round(config.width / 10)}x${Math.round(config.height / 10)}.csv`;
+    a.download = `despiece-${Math.round(config.runs[0].width / 10)}x${Math.round(totalHeight(config) / 10)}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
 
   const summary = [
-    `${Math.round(config.width / 10)} × ${Math.round(config.height / 10)} × ${Math.round(config.depth / 10)} cm`,
-    `${config.modules.length} módulos`,
+    config.runs.map((r) => Math.round(r.width / 10)).join(" + ") + ` × ${Math.round(totalHeight(config) / 10)} × ${Math.round(config.depth / 10)} cm`,
+    `${config.runs.reduce((s, r) => s + r.modules.length, 0)} módulos`,
     config.doors === "none" ? "sin puertas" : config.doors === "hinged" ? "puertas batientes" : "puertas corredizas",
   ].join(" · ");
 
@@ -96,7 +96,7 @@ export default function Workshop() {
             {q.assembly.hardware.map((h) => (
               <li key={h.key} className="flex justify-between gap-4 px-5 py-2.5">
                 <span>{h.label}</span>
-                <span className="tabular-nums text-ink-2">{h.unit === "m" ? `${h.qty.toFixed(2)} m` : `${h.qty} u`}</span>
+                <span className="tabular-nums text-ink-2">{h.unit === "u" ? `${h.qty} u` : `${h.qty.toFixed(2)} ${h.unit}`}</span>
               </li>
             ))}
           </ul>
@@ -125,13 +125,19 @@ export default function Workshop() {
       <section className="card p-5 text-sm">
         <h2 className="font-display text-lg font-semibold">Interior por módulo</h2>
         <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {config.modules.map((m, i) => (
-            <li key={i} className="rounded-xl bg-paper px-3 py-2">
-              <span className="font-medium">Módulo {i + 1}:</span> {LAYOUT_LABELS[m.layout]}
-              {m.drawers > 0 && `, ${m.drawers} cajones`}
-              {(m.layout === "shelves" || m.layout === "drawers-shelves") && `, ${m.shelves} estantes`}
-            </li>
-          ))}
+          {config.runs.flatMap((r, ri) =>
+            r.modules.map((m, i) => (
+              <li key={`${ri}-${i}`} className="rounded-xl bg-paper px-3 py-2">
+                <span className="font-medium">
+                  {config.runs.length > 1 ? (ri === 0 ? "Frente" : "Lateral") : "Módulo"} {i + 1} ({Math.round(m.width / 10)} cm):
+                </span>{" "}
+                {LAYOUT_LABELS[m.layout]}
+                {m.drawers > 0 && `, ${m.drawers} cajones`}
+                {(m.layout === "shelves" || m.layout === "drawers-shelves") && `, ${m.shelves} estantes`}
+                {(m.ledShelves || m.ledSides) && ", con luz"}
+              </li>
+            )),
+          )}
         </ol>
       </section>
     </main>
@@ -151,7 +157,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 function CutTable({ rows }: { rows: CutRow[] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-sm">
+      <table className="w-full min-w-[680px] text-sm">
         <thead className="bg-paper text-left text-xs text-ink-2">
           <tr>
             <th className="px-5 py-2 font-medium">Cant.</th>
@@ -160,19 +166,21 @@ function CutTable({ rows }: { rows: CutRow[] }) {
             <th className="px-3 py-2 text-right font-medium">Largo</th>
             <th className="px-3 py-2 text-right font-medium">Ancho</th>
             <th className="px-3 py-2 text-right font-medium">Esp.</th>
-            <th className="px-5 py-2 font-medium">Canto</th>
+            <th className="px-3 py-2 font-medium">Canto</th>
+            <th className="px-5 py-2 font-medium">Nota</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
           {rows.map((r) => (
-            <tr key={`${r.label}-${r.material}-${r.length}-${r.width}`}>
+            <tr key={`${r.label}-${r.material}-${r.length}-${r.width}-${r.note}`}>
               <td className="px-5 py-2 tabular-nums">{r.qty}</td>
               <td className="px-3 py-2">{r.label}</td>
               <td className="px-3 py-2 text-ink-2">{r.materialName}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.length}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.width}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.thickness}</td>
-              <td className="px-5 py-2 text-ink-2">{r.edges}</td>
+              <td className="px-3 py-2 text-ink-2">{r.edges}</td>
+              <td className="px-5 py-2 text-xs text-ink-2">{r.note}</td>
             </tr>
           ))}
         </tbody>

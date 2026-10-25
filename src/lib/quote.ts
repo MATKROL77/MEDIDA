@@ -2,11 +2,11 @@
  * Despiece y precio de una configuración.
  *
  * Todo el costo sale de piezas reales: placas según cómo se acomodan, metros de
- * tapacanto según los cantos que se pegan, herrajes contados uno por uno. El
- * precio al cliente es ese costo más el margen del taller.
+ * tapacanto según los cantos que se pegan, herrajes y luces contados uno por
+ * uno. El precio al cliente es ese costo más el margen del taller.
  */
 
-import { buildAssembly, type Assembly, type Part } from "./assembly.ts";
+import { allParts, buildAssembly, type Assembly, type HardwareKey, type Part } from "./assembly.ts";
 import { catalog, materialById, type Catalog } from "./catalog.ts";
 import type { WardrobeConfig } from "./model.ts";
 import { nest, type NestResult } from "./nesting.ts";
@@ -21,6 +21,7 @@ export type CutRow = {
   qty: number;
   /** "1L" = un lado largo con canto, "2L 2C" = todo el perímetro */
   edges: string;
+  note: string;
 };
 
 export type BoardUse = {
@@ -36,6 +37,7 @@ export type CostLine = { label: string; detail: string; amount: number };
 
 export type Quote = {
   assembly: Assembly;
+  parts: Part[];
   rows: CutRow[];
   boards: BoardUse[];
   bandingMeters: number;
@@ -44,11 +46,10 @@ export type Quote = {
   price: number;
 };
 
-const materialName = (id: string) =>
-  id === "back" ? "MDF 3 mm (fondo)" : id === "metal" ? "Aluminio" : materialById(id).name;
+const materialName = (id: string) => (id === "back" ? "MDF 3 mm (fondo)" : materialById(id).name);
 
-const edgesLabel = (band: { long: number; short: number }) =>
-  [band.long ? `${band.long}L` : "", band.short ? `${band.short}C` : ""].filter(Boolean).join(" ") || "—";
+const edgesLabel = (band: { long: number; short: number }, curved?: number) =>
+  [band.long ? `${band.long}L` : "", band.short ? `${band.short}C` : "", curved ? "curvo" : ""].filter(Boolean).join(" ") || "—";
 
 /** agrupa piezas iguales en una sola fila, como las pide la seccionadora */
 export function cutList(parts: Part[]): CutRow[] {
@@ -57,7 +58,8 @@ export function cutList(parts: Part[]): CutRow[] {
     if (!p.cut) continue;
     const length = Math.round(p.cut.length);
     const width = Math.round(p.cut.width);
-    const key = [p.label, p.material, length, width, p.cut.thickness].join("|");
+    const note = p.cut.note ?? "";
+    const key = [p.label, p.material, length, width, p.cut.thickness, note].join("|");
     const row = rows.get(key);
     if (row) row.qty += 1;
     else
@@ -69,7 +71,8 @@ export function cutList(parts: Part[]): CutRow[] {
         width,
         thickness: p.cut.thickness,
         qty: 1,
-        edges: edgesLabel(p.cut.band),
+        edges: edgesLabel(p.cut.band, p.cut.curvedBand),
+        note,
       });
   }
   return [...rows.values()].sort((a, b) => a.material.localeCompare(b.material) || b.length - a.length);
@@ -78,14 +81,15 @@ export function cutList(parts: Part[]): CutRow[] {
 export function bandingMeters(parts: Part[]): number {
   const mm = parts.reduce((sum, p) => {
     if (!p.cut || p.cut.thickness < 10) return sum;
-    return sum + p.cut.band.long * p.cut.length + p.cut.band.short * p.cut.width;
+    return sum + p.cut.band.long * p.cut.length + p.cut.band.short * p.cut.width + (p.cut.curvedBand ?? 0);
   }, 0);
   return mm / 1000;
 }
 
 export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
   const assembly = buildAssembly(config);
-  const { parts, hardware, counts } = assembly;
+  const { hardware, counts } = assembly;
+  const parts = allParts(assembly);
   const rows = cutList(parts);
 
   // una corrida de acomodo por material, porque cada uno es una placa distinta
@@ -118,7 +122,7 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
 
   const banding = bandingMeters(parts);
   const hw = cat.hardware;
-  const unitPrice: Record<string, number> = {
+  const unitPrice: Record<HardwareKey, number> = {
     hinge: hw.hinge,
     slidePair: hw.slidePair,
     rod: hw.rodPerMeter,
@@ -127,7 +131,18 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
     slidingTrack: hw.slidingTrackPerMeter,
     handle: hw.handle[config.handle],
     fittings: hw.fittingsPerModule,
+    mirror: cat.fronts.mirrorPerM2,
+    glass: cat.fronts.glassPerM2,
+    frameProfile: cat.fronts.frameProfilePerMeter,
+    grooving: cat.fronts.groovingPerDoor,
+    ledStrip: config.led.color === "rgb" ? cat.led.rgbStripPerMeter : cat.led.whiteStripPerMeter,
+    ledProfile: cat.led.profilePerMeter,
+    powerSupply: cat.led.powerSupply60W,
+    sensor: cat.led.sensor,
+    rgbController: cat.led.rgbController,
   };
+  const qtyLabel = (qty: number, unit: string) => (unit === "u" ? `${qty}` : `${qty.toFixed(2)} ${unit}`);
+  const boardCount = boards.reduce((s, b) => s + b.count, 0);
 
   const costs: CostLine[] = [
     ...boards.map((b) => ({
@@ -143,19 +158,28 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
     },
     ...hardware.map((h) => ({
       label: h.label,
-      detail: h.unit === "m" ? `${h.qty.toFixed(2)} m × ${money(unitPrice[h.key])}` : `${h.qty} × ${money(unitPrice[h.key])}`,
+      detail: `${qtyLabel(h.qty, h.unit)} × ${money(unitPrice[h.key])}`,
       amount: h.qty * unitPrice[h.key],
     })),
     {
       label: "Corte y canteado",
-      detail: `${boards.reduce((s, b) => s + b.count, 0)} placas × ${money(cat.labor.perBoard)}`,
-      amount: boards.reduce((s, b) => s + b.count, 0) * cat.labor.perBoard,
+      detail: `${boardCount} placas × ${money(cat.labor.perBoard)}`,
+      amount: boardCount * cat.labor.perBoard,
+    },
+    {
+      label: "Cortes especiales",
+      detail: `${counts.angledCuts} en ángulo, ${counts.curvedCuts} curvos`,
+      amount: counts.angledCuts * cat.labor.angledCut + counts.curvedCuts * cat.labor.curvedCut,
+    },
+    {
+      label: "Instalación de luces",
+      detail: `${assembly.ledMeters.toFixed(1)} m × ${money(cat.led.installPerMeter)}`,
+      amount: assembly.ledMeters * cat.led.installPerMeter,
     },
     {
       label: "Armado",
       detail: `${counts.modules} módulos, ${counts.doors} puertas, ${counts.drawers} cajones`,
-      amount:
-        counts.modules * cat.labor.perModule + counts.doors * cat.labor.perDoor + counts.drawers * cat.labor.perDrawer,
+      amount: counts.modules * cat.labor.perModule + counts.doors * cat.labor.perDoor + counts.drawers * cat.labor.perDrawer,
     },
   ].filter((c) => c.amount > 0);
 
@@ -163,7 +187,7 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
   // se redondea a miles: un precio con centavos parece calculado por una máquina
   const price = Math.ceil((cost * (1 + cat.margin)) / 1000) * 1000;
 
-  return { assembly, rows, boards, bandingMeters: banding, costs, cost, price };
+  return { assembly, parts, rows, boards, bandingMeters: banding, costs, cost, price };
 }
 
 export function money(value: number): string {

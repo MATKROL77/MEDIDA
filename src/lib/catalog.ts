@@ -48,9 +48,10 @@ export const catalog = {
   backBoard: { length: 2600, width: 1830, thickness: 3, price: 28000 },
 
   materials: [
-    { id: "blanco", name: "Blanco", color: "#f2f0eb", grain: false, boardPrice: 98000 },
+    { id: "blanco", name: "Blanco", color: "#f1efea", grain: false, boardPrice: 98000 },
     { id: "grafito", name: "Gris grafito", color: "#4a4b4d", grain: false, boardPrice: 112000 },
     { id: "salvia", name: "Verde salvia", color: "#9aa58e", grain: false, boardPrice: 118000 },
+    { id: "arena", name: "Arena", color: "#d8cbb6", grain: false, boardPrice: 114000 },
     { id: "roble", name: "Roble natural", color: "#c49a6c", grain: true, boardPrice: 124000 },
     { id: "nogal", name: "Nogal", color: "#6e4b33", grain: true, boardPrice: 129000 },
   ] satisfies readonly Material[],
@@ -73,12 +74,40 @@ export const catalog = {
     fittingsPerModule: 5500,
   },
 
+  /** frentes especiales */
+  fronts: {
+    mirrorPerM2: 62000,
+    glassPerM2: 46000,
+    /** perfil de aluminio para puerta de vidrio, por metro */
+    frameProfilePerMeter: 13500,
+    /** ranurado en CNC, por puerta */
+    groovingPerDoor: 14000,
+  },
+
+  led: {
+    whiteStripPerMeter: 6200,
+    rgbStripPerMeter: 10500,
+    /** perfil de aluminio con difusor, por metro */
+    profilePerMeter: 6800,
+    /** consumo de la tira, para dimensionar las fuentes */
+    wattsPerMeter: 9.6,
+    powerSupply60W: 17500,
+    /** sensor de apertura, uno por módulo iluminado */
+    sensor: 8500,
+    rgbController: 21000,
+    installPerMeter: 2800,
+  },
+
   labor: {
     /** corte y pegado de canto, por placa usada */
     perBoard: 24000,
     perModule: 28000,
     perDoor: 7500,
     perDrawer: 11000,
+    /** corte en ángulo para techo inclinado, por pieza */
+    angledCut: 5500,
+    /** corte curvo con router, por pieza */
+    curvedCut: 9500,
   },
 
   /** sobre el costo. 0.45 = el precio es costo + 45 % */

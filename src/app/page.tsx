@@ -24,6 +24,13 @@ const steps = [
   },
 ];
 
+const options = [
+  { title: "Formas", body: "Recto, en L hacia cualquier lado, con altillo arriba, siguiendo un techo inclinado o con terminales curvos abiertos." },
+  { title: "Interior", body: "Módulos de distinto ancho con estantes, barrales simples o dobles y cajones." },
+  { title: "Frentes", body: "Batientes o corredizos, lisos, ranurados, con espejo o de vidrio con perfil de aluminio." },
+  { title: "Luz", body: "Tiras LED bajo los estantes y perfiles verticales, en luz cálida, neutra, fría o RGB, con sensor al abrir." },
+];
+
 const workshop = [
   { title: "Despiece", body: "Cada pieza con largo, ancho, espesor y qué cantos llevan tapacanto. Listo para la seccionadora o para bajar a Excel." },
   { title: "Plano de corte", body: "Cómo acomodar las piezas en cada placa, respetando la veta, y cuántas placas comprar." },
@@ -71,7 +78,7 @@ export default function Home() {
         <Link href="/demo/" className="group block overflow-hidden rounded-[var(--radius-card)] border border-line shadow-sm">
           <Image
             src="/demo.png"
-            alt="El configurador con un placard de tres módulos y el precio estimado"
+            alt="El configurador con un placard abierto, las luces LED prendidas y el precio estimado"
             width={1440}
             height={900}
             priority
@@ -104,6 +111,21 @@ export default function Home() {
               </span>
               <h3 className="mt-4 font-display text-lg font-semibold">{s.title}</h3>
               <p className="mt-2 leading-relaxed text-ink-2">{s.body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
+        <p className="eyebrow">Lo que puede armar tu cliente</p>
+        <h2 className="mt-3 max-w-2xl font-display text-3xl font-semibold tracking-tight">
+          Lo gira, lo abre, prende las luces y lo ve desarmado pieza por pieza
+        </h2>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {options.map((o) => (
+            <article key={o.title} className="card p-5">
+              <h3 className="font-semibold">{o.title}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-ink-2">{o.body}</p>
             </article>
           ))}
         </div>
