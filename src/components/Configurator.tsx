@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   IconBack,
@@ -10,9 +10,7 @@ import {
   IconDoor,
   IconExplode,
   IconFront,
-  IconRoom,
   IconSide,
-  IconStudio,
   IconThree,
   IconTop,
   IconXray,
@@ -20,7 +18,7 @@ import {
 import { LayoutIcon } from "@/components/LayoutIcon";
 import { Poster } from "@/components/Poster";
 import { Dimension, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
-import { WALL_COLORS } from "@/components/viewer/constants";
+import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import type { ViewName } from "@/components/viewer/Scene";
 import { catalog, type HandleType } from "@/lib/catalog";
 import {
@@ -47,7 +45,8 @@ import {
   type Shape,
   type WardrobeConfig,
 } from "@/lib/model";
-import { money, quote } from "@/lib/quote";
+import { buildOrderPdf, type OrderPdf } from "@/lib/orderPdf";
+import { money, quote, summaryByTitle } from "@/lib/quote";
 import { decodeConfig, encodeConfig, orderMessage, whatsappLink } from "@/lib/share";
 
 type Tab = "forma" | "interior" | "frentes" | "luz" | "color";
@@ -75,7 +74,13 @@ export default function Configurator() {
   const [xray, setXray] = useState(false);
   const [explode, setExplode] = useState(false);
   const [lights, setLights] = useState(false);
-  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string }>({ mode: "room", wall: WALL_COLORS[0].hex });
+  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({
+    mode: "room",
+    wall: WALL_COLORS[0].hex,
+    floor: "madera",
+  });
+  const captureRef = useRef<(() => Promise<string | null>) | null>(null);
+  const [sheet, setSheet] = useState<{ open: boolean; pdf: OrderPdf | null; failed: boolean }>({ open: false, pdf: null, failed: false });
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
   const [ready, setReady] = useState(false);
 
@@ -127,7 +132,23 @@ export default function Configurator() {
   const modMax = Math.min(LIMITS.moduleInner.max, avail - othersMin);
 
   const price = useAnimatedNumber(result.price);
-  const orderHref = whatsappLink(orderMessage(config, money(result.price), shareLink(config)));
+  const message = orderMessage(config, money(result.price), shareLink(config), {
+    rows: result.rows,
+    workshopLink: shareLink(config, "/demo/taller/"),
+  });
+  const orderHref = whatsappLink(message);
+
+  // abre la hoja de envío y arma el PDF con una captura del 3D en la tapa
+  const openSend = async () => {
+    setSheet({ open: true, pdf: null, failed: false });
+    try {
+      const snapshot = captureRef.current ? await Promise.race([captureRef.current(), new Promise<null>((r) => setTimeout(() => r(null), 1500))]) : null;
+      const pdf = await buildOrderPdf(config, result, snapshot);
+      setSheet((cur) => (cur.open ? { open: true, pdf, failed: false } : cur));
+    } catch {
+      setSheet((cur) => (cur.open ? { open: true, pdf: null, failed: true } : cur));
+    }
+  };
 
   const selectModule = (r: number, m: number) => {
     setSelection({ run: r, module: m });
@@ -155,6 +176,7 @@ export default function Configurator() {
             environment={environment}
             view={view}
             onReady={() => setTimeout(() => setReady(true), 120)}
+            captureRef={captureRef}
           />
         </div>
 
@@ -163,46 +185,7 @@ export default function Configurator() {
             <p className="font-display text-base font-semibold leading-tight">{catalog.brand.name}</p>
             <p className="text-xs text-ink-2">{catalog.brand.tagline}</p>
           </div>
-          <div className="toolbar pointer-events-auto">
-            <button
-              type="button"
-              className="tool px-2.5"
-              aria-pressed={environment.mode === "room"}
-              title="Habitación"
-              onClick={() => setEnvironment((e) => ({ ...e, mode: "room" }))}
-            >
-              <IconRoom />
-              <span className="hidden sm:inline">Habitación</span>
-            </button>
-            <button
-              type="button"
-              className="tool px-2.5"
-              aria-pressed={environment.mode === "studio"}
-              title="Estudio"
-              onClick={() => setEnvironment((e) => ({ ...e, mode: "studio" }))}
-            >
-              <IconStudio />
-              <span className="hidden sm:inline">Estudio</span>
-            </button>
-          </div>
         </header>
-
-        {environment.mode === "room" && (
-          <div className="fade-in pointer-events-auto absolute right-3 top-[4.4rem] flex flex-col gap-1.5 rounded-full bg-surface/85 p-1.5 shadow-sm backdrop-blur sm:right-4">
-            {WALL_COLORS.map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                title={`Pared ${w.name.toLowerCase()}`}
-                aria-label={`Pared ${w.name.toLowerCase()}`}
-                aria-pressed={environment.wall === w.hex}
-                onClick={() => setEnvironment((e) => ({ ...e, wall: w.hex }))}
-                className={`swatch size-6 rounded-full border-2 ${environment.wall === w.hex ? "border-ink" : "border-surface"}`}
-                style={{ background: w.hex }}
-              />
-            ))}
-          </div>
-        )}
 
         <div className="absolute inset-x-0 bottom-3 flex justify-center px-3">
           <div className="toolbar max-w-full overflow-x-auto [scrollbar-width:none]">
@@ -217,7 +200,7 @@ export default function Configurator() {
             ).map(([id, label, Icon]) => (
               <button key={id} type="button" className="tool px-2.5" title={`Vista ${label.toLowerCase()}`} onClick={() => goView(id)}>
                 <Icon />
-                <span className="hidden xl:inline">{label}</span>
+                <span className="hidden 2xl:inline">{label}</span>
               </button>
             ))}
             <span className="tool-sep shrink-0" />
@@ -605,14 +588,65 @@ export default function Configurator() {
           )}
 
           {tab === "color" && (
-            <Section title="Terminaciones">
-              <Swatches label="Cuerpo" value={config.bodyMaterial} onChange={(bodyMaterial) => update({ bodyMaterial })} />
-              <Swatches
-                label={config.doors === "none" ? "Frentes de cajón" : "Puertas"}
-                value={config.doorMaterial}
-                onChange={(doorMaterial) => update({ doorMaterial })}
-              />
-            </Section>
+            <>
+              <Section title="Terminaciones">
+                <Swatches label="Cuerpo" value={config.bodyMaterial} onChange={(bodyMaterial) => update({ bodyMaterial })} />
+                <Swatches
+                  label={config.doors === "none" ? "Frentes de cajón" : "Puertas"}
+                  value={config.doorMaterial}
+                  onChange={(doorMaterial) => update({ doorMaterial })}
+                />
+              </Section>
+
+              <Section title="Tu ambiente" hint="Solo para imaginarlo: no cambia el precio">
+                <Segmented
+                  value={environment.mode}
+                  options={[
+                    { id: "room", label: "Habitación" },
+                    { id: "studio", label: "Fondo liso" },
+                  ]}
+                  onChange={(mode) => setEnvironment((e) => ({ ...e, mode }))}
+                />
+                {environment.mode === "room" && (
+                  <div className="fade-in space-y-4">
+                    <div className="space-y-2.5">
+                      <p className="text-sm">
+                        Pared: <span className="text-ink-2">{WALL_COLORS.find((w) => w.hex === environment.wall)?.name}</span>
+                      </p>
+                      <div className="flex flex-wrap gap-2.5">
+                        {WALL_COLORS.map((w) => (
+                          <button
+                            key={w.id}
+                            type="button"
+                            title={w.name}
+                            aria-label={`Pared ${w.name.toLowerCase()}`}
+                            aria-pressed={environment.wall === w.hex}
+                            onClick={() => setEnvironment((e) => ({ ...e, wall: w.hex }))}
+                            className={`swatch size-9 rounded-full border-2 ${environment.wall === w.hex ? "border-ink" : "border-surface ring-1 ring-line"}`}
+                            style={{ background: w.hex }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2.5">
+                      <p className="text-sm">Piso</p>
+                      <div className="grid grid-cols-4 gap-2">
+                        {FLOORS.map((f) => (
+                          <OptionCard
+                            key={f.id}
+                            active={environment.floor === f.id}
+                            label={f.name}
+                            onClick={() => setEnvironment((e) => ({ ...e, floor: f.id }))}
+                          >
+                            <span className="block h-9 w-full rounded-lg ring-1 ring-black/5" style={{ background: f.swatch }} />
+                          </OptionCard>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Section>
+            </>
           )}
 
           <Link href={`/demo/taller/?c=${encodeConfig(config)}`} className="block text-sm font-medium text-accent underline-offset-4 hover:underline">
@@ -627,13 +661,133 @@ export default function Configurator() {
               <p className="text-xs text-ink-2">Precio estimado</p>
               <p className="font-display text-2xl font-semibold tabular-nums">{money(Math.round(price / 1000) * 1000)}</p>
             </div>
-            <a href={orderHref} target="_blank" rel="noopener noreferrer" className="btn btn-whatsapp shrink-0 text-sm">
-              Pedir por WhatsApp
-            </a>
+            <button type="button" onClick={openSend} className="btn btn-whatsapp shrink-0 text-sm">
+              Enviar al taller
+            </button>
           </div>
           <p className="mt-2 text-[11px] leading-snug text-ink-2">Incluye materiales, luces y fabricación. El precio final se confirma al medir en tu casa.</p>
         </div>
       </aside>
+
+      {sheet.open && (
+        <SendSheet
+          pdf={sheet.pdf}
+          failed={sheet.failed}
+          rows={result.rows}
+          message={message}
+          orderHref={orderHref}
+          onClose={() => setSheet({ open: false, pdf: null, failed: false })}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Hoja para mandar el pedido. En el celular el PDF se comparte directo a
+ * WhatsApp; en la compu se baja el PDF y se abre WhatsApp con el resumen y el
+ * link al despiece con dibujos.
+ */
+function SendSheet({ pdf, failed, rows, message, orderHref, onClose }: {
+  pdf: OrderPdf | null;
+  failed: boolean;
+  rows: ReturnType<typeof quote>["rows"];
+  message: string;
+  orderHref: string;
+  onClose: () => void;
+}) {
+  const [canShare] = useState(() => {
+    try {
+      return typeof navigator !== "undefined" && !!navigator.canShare?.({ files: [new File([""], "x.pdf", { type: "application/pdf" })] });
+    } catch {
+      return false;
+    }
+  });
+  const fileName = `pedido-${catalog.brand.name.toLowerCase().replace(/\s+/g, "-")}.pdf`;
+  const file = pdf ? new File([pdf.blob], fileName, { type: "application/pdf" }) : null;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const share = async () => {
+    if (!file) return;
+    try {
+      await navigator.share({ files: [file], text: message, title: `Pedido para ${catalog.brand.name}` });
+    } catch {
+      // si la persona cancela no pasa nada; queda la hoja abierta
+    }
+  };
+  const download = () => {
+    if (!file) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(file);
+    a.download = fileName;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
+  const summary = summaryByTitle(rows);
+  const shown = summary.slice(0, 6);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Enviar el pedido al taller">
+      <button type="button" aria-label="Cerrar" className="sheet-backdrop absolute inset-0 bg-ink/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="sheet-panel relative max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[1.75rem] bg-surface p-5 shadow-2xl sm:rounded-[1.75rem] sm:p-6">
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-line sm:hidden" />
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="eyebrow">Pedido para {catalog.brand.name}</p>
+            <h2 className="mt-1 font-display text-xl font-semibold">Todo listo para el taller</h2>
+          </div>
+          <button type="button" onClick={onClose} className="tool -mr-2 -mt-1" aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-4 grid grid-cols-[110px_1fr] gap-4">
+          <div className="aspect-[1/1.414] overflow-hidden rounded-lg border border-line bg-paper">
+            {pdf ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={pdf.preview} alt="Tapa del PDF del pedido" className="fade-in h-full w-full object-cover" />
+            ) : (
+              <div className="shimmer h-full w-full" />
+            )}
+          </div>
+          <div className="text-sm">
+            <p className="font-medium">{pdf ? `PDF de ${pdf.pages} hojas` : failed ? "No se pudo armar el PDF" : "Armando el PDF…"}</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink-2">Con el dibujo de cada pieza, sus cortes, cantos, canales de luz y agujeros.</p>
+            <ul className="mt-3 space-y-1 text-xs">
+              {shown.map((r) => (
+                <li key={r.title}>
+                  <span className="font-semibold text-accent">{r.qty} ×</span> {r.title}
+                </li>
+              ))}
+              {summary.length > shown.length && <li className="text-ink-2">y {summary.length - shown.length} tipos de pieza más</li>}
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-2">
+          {canShare && (
+            <button type="button" onClick={share} disabled={!file} className="btn btn-whatsapp disabled:opacity-60">
+              Mandar el PDF por WhatsApp
+            </button>
+          )}
+          <a href={orderHref} target="_blank" rel="noopener noreferrer" className={`btn ${canShare ? "btn-ghost" : "btn-whatsapp"}`}>
+            {canShare ? "Mandar solo el resumen" : "Abrir WhatsApp con el resumen"}
+          </a>
+          <button type="button" onClick={download} disabled={!file} className="btn btn-ghost disabled:opacity-60">
+            Descargar el PDF
+          </button>
+        </div>
+        {!canShare && (
+          <p className="mt-3 text-xs leading-relaxed text-ink-2">
+            El resumen lleva el link al despiece con los dibujos. Si querés, adjuntá también el PDF en el chat.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

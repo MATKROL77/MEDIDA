@@ -66,18 +66,6 @@ export const IconBulb = ({ className = "size-5" }: P) => (
     <path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.3 1 2.2h5.2c0-.9.4-1.7 1-2.2A6 6 0 0 0 12 3z" />
   </svg>
 );
-export const IconRoom = ({ className = "size-5" }: P) => (
-  <svg {...base} className={className}>
-    <path d="M3 20h18M5 20V8l7-4 7 4v12" />
-    <rect x="9" y="12" width="6" height="8" />
-  </svg>
-);
-export const IconStudio = ({ className = "size-5" }: P) => (
-  <svg {...base} className={className}>
-    <path d="M4 4v10a6 6 0 0 0 6 6h10" />
-    <circle cx="15" cy="9" r="3" />
-  </svg>
-);
 export const IconCheck = ({ className = "size-4" }: P) => (
   <svg {...base} className={className}>
     <path d="m5 12.5 4.5 4.5L19 7.5" />

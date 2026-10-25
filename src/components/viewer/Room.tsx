@@ -8,7 +8,8 @@ import type { Shape } from "@/lib/model";
 
 import { clampDt, SOFT, SpringVec, useSceneAnim } from "./anim";
 export { WALL_COLORS } from "./constants";
-import { parquetTexture } from "./materials";
+import type { FloorType } from "./constants";
+import { concreteTexture, parquetTexture, pinoteaTexture, tileTexture } from "./materials";
 import { MM } from "./PartNode";
 
 
@@ -18,7 +19,32 @@ type Props = {
   max: [number, number, number];
   shape: Shape;
   wall: string;
+  floor: FloorType;
 };
+
+const FLOOR_SIZE = 14;
+
+/** textura, repetición y brillo de cada piso; se clonan para no pisar la repetición */
+function floorLook(type: FloorType) {
+  const make = (t: THREE.Texture, repeat: number) => {
+    const c = t.clone();
+    c.needsUpdate = true;
+    c.repeat.set(repeat, repeat);
+    return c;
+  };
+  switch (type) {
+    // una repetición por metro: tablas de unos 16 cm
+    case "madera":
+      return { map: make(parquetTexture(), FLOOR_SIZE), roughness: 0.62 };
+    case "pinotea":
+      return { map: make(pinoteaTexture(), FLOOR_SIZE), roughness: 0.5 };
+    case "cemento":
+      return { map: make(concreteTexture(), FLOOR_SIZE / 3.5), roughness: 0.82 };
+    // dos baldosas por textura: 60 cm cada una
+    case "baldosa":
+      return { map: make(tileTexture(), FLOOR_SIZE / 1.2), roughness: 0.38 };
+  }
+}
 
 const ROOM_DEPTH = 4800;
 const ROOM_HEIGHT = 2900;
@@ -29,7 +55,7 @@ const MARGIN = 650;
  * de una sola cara, mirando hacia adentro: cuando la cámara pasa por detrás,
  * desaparecen solas y el placard se puede rodear entero.
  */
-export function Room({ min, max, shape, wall }: Props) {
+export function Room({ min, max, shape, wall, floor }: Props) {
   const anim = useSceneAnim();
   const left = shape === "l-left" ? 0 : min[0] - MARGIN;
   const right = shape === "l-right" ? max[0] : max[0] + MARGIN;
@@ -48,12 +74,11 @@ export function Room({ min, max, shape, wall }: Props) {
   const daylight = useMemo(() => new THREE.Color("#fff6e8"), []);
 
   const mats = useMemo(() => {
-    const floorMap = parquetTexture().clone();
-    floorMap.needsUpdate = true;
-    // una repetición por metro: tablas de unos 16 cm
-    floorMap.repeat.set(14, 14);
+    const first = floorLook("madera");
     return {
-      floor: new THREE.MeshStandardMaterial({ map: floorMap, roughness: 0.62, transparent: true }),
+      floor: new THREE.MeshStandardMaterial({ ...first, transparent: true }),
+      /** el piso nuevo entra con un fundido encima del anterior */
+      floorNext: new THREE.MeshStandardMaterial({ ...first, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }),
       wall: new THREE.MeshStandardMaterial({ color: wall, roughness: 0.95, transparent: true }),
       base: new THREE.MeshStandardMaterial({ color: "#f4f2ee", roughness: 0.6, transparent: true }),
       glass: new THREE.MeshBasicMaterial({ color: new THREE.Color("#fff6e8").multiplyScalar(2.2), toneMapped: false, transparent: true }),
@@ -70,6 +95,15 @@ export function Room({ min, max, shape, wall }: Props) {
     wallColor.current.set(wall);
   }, [wall]);
 
+  const fade = useRef({ v: 1, active: false });
+  useEffect(() => {
+    const look = floorLook(floor);
+    mats.floorNext.map = look.map;
+    mats.floorNext.roughness = look.roughness;
+    mats.floorNext.needsUpdate = true;
+    fade.current = { v: 0, active: true };
+  }, [floor, mats]);
+
   useFrame((_, dt) => {
     const d = clampDt(dt);
     sv.current.step(d, SOFT);
@@ -81,6 +115,20 @@ export function Room({ min, max, shape, wall }: Props) {
       m.opacity = room;
       m.depthWrite = room > 0.98;
       m.visible = room > 0.01;
+    }
+    // fundido del piso: cuando el nuevo tapa al viejo, pasa a ser el de abajo
+    const f = fade.current;
+    if (f.active) {
+      f.v = Math.min(1, f.v + d * 2.2);
+      mats.floorNext.opacity = f.v * room;
+      mats.floorNext.visible = room > 0.01;
+      if (f.v >= 1) {
+        mats.floor.map = mats.floorNext.map;
+        mats.floor.roughness = mats.floorNext.roughness;
+        mats.floor.needsUpdate = true;
+        mats.floorNext.opacity = 0;
+        f.active = false;
+      }
     }
     mats.glass.color.copy(daylight).multiplyScalar(2.2 * night);
     mats.shadow.opacity = 0.16 * (1 - room);
@@ -125,7 +173,10 @@ export function Room({ min, max, shape, wall }: Props) {
     <group>
       {/* piso: parquet en habitación, solo sombra en estudio */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow material={mats.floor}>
-        <planeGeometry args={[14, 14]} />
+        <planeGeometry args={[FLOOR_SIZE, FLOOR_SIZE]} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0002, 0]} receiveShadow material={mats.floorNext}>
+        <planeGeometry args={[FLOOR_SIZE, FLOOR_SIZE]} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0005, 0]} receiveShadow material={mats.shadow}>
         <planeGeometry args={[14, 14]} />

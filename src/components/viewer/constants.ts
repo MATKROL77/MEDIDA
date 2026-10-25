@@ -7,3 +7,12 @@ export const WALL_COLORS = [
   { id: "terracota", name: "Terracota", hex: "#d4a084" },
   { id: "petroleo", name: "Azul petróleo", hex: "#4e6870" },
 ] as const;
+
+export type FloorType = "madera" | "pinotea" | "cemento" | "baldosa";
+
+export const FLOORS: { id: FloorType; name: string; swatch: string }[] = [
+  { id: "madera", name: "Madera clara", swatch: "repeating-linear-gradient(90deg, #c49a6e 0 9px, #b98d61 9px 10px)" },
+  { id: "pinotea", name: "Pinotea", swatch: "repeating-linear-gradient(90deg, #b5743f 0 6px, #a3653a 6px 7px)" },
+  { id: "cemento", name: "Cemento alisado", swatch: "radial-gradient(circle at 30% 30%, #b9b8b4, #a3a29e)" },
+  { id: "baldosa", name: "Baldosa beige", swatch: "linear-gradient(#cdbfa8 1px, transparent 1px) 0 0 / 12px 12px, linear-gradient(90deg, #cdbfa8 1px, #e3d7c3 1px) 0 0 / 12px 12px" },
+];

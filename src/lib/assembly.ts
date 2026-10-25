@@ -62,6 +62,23 @@ export type PartKind =
 
 export type Geometry = "box" | "trapezoid" | "quarter" | "knob" | "glow" | "none";
 
+/**
+ * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
+ * y cantear. Las medidas van en mm, mirando la pieza como en el dibujo.
+ */
+export type Feature =
+  /** canal fresado para el perfil LED; offset: del canto frontal al centro del canal */
+  | { type: "led-groove"; face: "bottom" | "left" | "right"; offset: number }
+  /** cazoletas de 35 mm; at: alturas desde abajo */
+  | { type: "hinge-holes"; edge: "left" | "right"; at: number[] }
+  /** agujeros del tirador, desde la esquina inferior izquierda mirando el frente */
+  | { type: "handle-holes"; points: [number, number][] }
+  /** ranuras decorativas en CNC: posición de cada una y su largo */
+  | { type: "grooves"; xs: number[]; from: number; lengths: number[] }
+  | { type: "mirror" }
+  /** puntas cortadas en ángulo (techo inclinado) */
+  | { type: "bevel"; degrees: number };
+
 export type Cut = {
   /** largo en el sentido de la veta */
   length: number;
@@ -73,6 +90,7 @@ export type Cut = {
   curvedBand?: number;
   /** aclaración para el taller: ángulos, curvas, trapecios */
   note?: string;
+  features?: Feature[];
 };
 
 export type Part = {
@@ -279,6 +297,40 @@ function frontDetails(ctx: Ctx, id: string, w: number, h: { left: number; right:
   return out;
 }
 
+/**
+ * Pasa a mecanizados lo que ya está en el 3D: las patas del tirador son sus
+ * agujeros, las ranuras son ranuras, y las puertas batientes llevan cazoletas.
+ */
+function attachFrontFeatures(p: Part) {
+  if (!p.cut) return;
+  const features: Feature[] = [];
+  if (p.kind === "door" && p.hinge) {
+    const edgeHeight = p.trapezoid ? (p.hinge === "left" ? p.trapezoid.left : p.trapezoid.right) : p.size[1];
+    const count = hingesFor(p.size[1]);
+    const at = Array.from({ length: count }, (_, i) => Math.round(100 + ((edgeHeight - 200) * i) / (count - 1)));
+    features.push({ type: "hinge-holes", edge: p.hinge, at });
+  }
+  const d = p.details ?? [];
+  const holes: [number, number][] = [];
+  for (const x of d) {
+    if (x.kind !== "handle") continue;
+    if (x.geometry === "knob") holes.push([Math.round(x.position[0] + 14), Math.round(x.position[1] + 14)]);
+    else if (/:hs\d$/.test(x.id)) holes.push([Math.round(x.position[0] + 4), Math.round(x.position[1] + 4)]);
+  }
+  if (holes.length) features.push({ type: "handle-holes", points: holes });
+  const grooves = d.filter((x) => x.kind === "groove");
+  if (grooves.length) {
+    features.push({
+      type: "grooves",
+      xs: grooves.map((g) => Math.round(g.position[0] + g.size[0] / 2)),
+      from: Math.round(grooves[0].position[1]),
+      lengths: grooves.map((g) => Math.round(g.size[1])),
+    });
+  }
+  if (d.some((x) => x.kind === "mirror")) features.push({ type: "mirror" });
+  if (features.length) p.cut.features = [...(p.cut.features ?? []), ...features];
+}
+
 function buildRun(ctx: Ctx, r: number): RunAssembly {
   const { config } = ctx;
   const t = catalog.board.thickness;
@@ -311,6 +363,11 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
     return full;
   };
   const P = (s: string) => `r${r}:${s}`;
+  const feature = (id: string, f: Feature) => {
+    const p = parts.find((x) => x.id === id);
+    if (p?.cut) (p.cut.features ??= []).push(f);
+  };
+  const verticalId = (i: number) => P(i === 0 ? "sideL" : i === n ? "sideR" : `div${i}`);
 
   // laterales y divisores, pasantes de piso a techo
   const verticalX = [0, ...xs.slice(1).map((x) => x - t), span - t];
@@ -353,7 +410,14 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
         size: [len, t, carcassD],
         rotationZ: angle,
         geometry: "box",
-        cut: { length: len, width: carcassD, thickness: t, band: { long: 1, short: 0 }, note: `corte a ${deg(angle)}° en las puntas` },
+        cut: {
+          length: len,
+          width: carcassD,
+          thickness: t,
+          band: { long: 1, short: 0 },
+          note: `corte a ${deg(angle)}° en las puntas`,
+          features: [{ type: "bevel", degrees: deg(angle) }],
+        },
         explode: [0, 220, 0],
       });
       ctx.counts.angledCuts += 1;
@@ -633,6 +697,8 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
             explode: [0, 0, 170],
           });
         }
+        // el perfil va embutido: el estante lleva un canal por debajo
+        feature(lv.id, { type: "led-groove", face: "bottom", offset: lv.id === M("top") ? 43 : 23 });
         ctx.ledMeters += len / 1000;
         lit = true;
       });
@@ -666,6 +732,8 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
           cut: null,
           explode: [side === "L" ? -40 : 40, 0, 0],
         });
+        // el perfil vertical va en la cara del lateral que da a este módulo
+        feature(verticalId(side === "L" ? m : m + 1), { type: "led-groove", face: side === "L" ? "right" : "left", offset: 63 });
         ctx.ledMeters += h / 1000;
       }
       lit = true;
@@ -919,6 +987,8 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
       ctx.counts.curvedCuts += 1;
     });
   }
+
+  for (const p of parts) attachFrontFeatures(p);
 
   ctx.hw.fittings.qty += n;
   ctx.counts.modules += n;

@@ -116,6 +116,93 @@ export function parquetTexture(): THREE.Texture {
   });
 }
 
+/** pinotea: tablas largas y angostas, tono ámbar */
+export function pinoteaTexture(): THREE.Texture {
+  return cached("pinotea", () => {
+    const size = 1024;
+    const [c, ctx] = canvas(size);
+    const rand = rng(41);
+    const cols = 10;
+    const plankW = size / cols;
+    for (let col = 0; col < cols; col++) {
+      let y = -rand() * size;
+      while (y < size) {
+        const len = size * (0.6 + rand() * 0.7);
+        const tone = new THREE.Color("#a8693a").offsetHSL((rand() - 0.5) * 0.015, (rand() - 0.5) * 0.06, (rand() - 0.5) * 0.06);
+        ctx.fillStyle = `#${tone.getHexString()}`;
+        ctx.fillRect(col * plankW, y, plankW, len);
+        for (let k = 0; k < 9; k++) {
+          ctx.strokeStyle = `rgba(70,30,10,${0.05 + rand() * 0.07})`;
+          ctx.lineWidth = 0.6 + rand() * 1.2;
+          const x = col * plankW + rand() * plankW;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + (rand() - 0.5) * 4, y + len);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "rgba(40,18,6,0.35)";
+        ctx.fillRect(col * plankW, y, plankW, 2);
+        y += len;
+      }
+      ctx.fillStyle = "rgba(40,18,6,0.3)";
+      ctx.fillRect(col * plankW, 0, 1.5, size);
+    }
+    const t = toTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  });
+}
+
+/** cemento alisado: gris con manchas suaves de llana */
+export function concreteTexture(): THREE.Texture {
+  return cached("cemento", () => {
+    const size = 1024;
+    const [c, ctx] = canvas(size);
+    const rand = rng(53);
+    ctx.fillStyle = "#adaca8";
+    ctx.fillRect(0, 0, size, size);
+    for (let i = 0; i < 70; i++) {
+      const x = rand() * size;
+      const y = rand() * size;
+      const r = 60 + rand() * 220;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      const light = rand() > 0.5;
+      g.addColorStop(0, light ? "rgba(255,255,255,0.07)" : "rgba(60,58,54,0.07)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g;
+      ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    }
+    const t = toTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  });
+}
+
+/** baldosa beige de 60 × 60 con su junta */
+export function tileTexture(): THREE.Texture {
+  return cached("baldosa", () => {
+    const size = 1024;
+    const [c, ctx] = canvas(size);
+    const rand = rng(67);
+    const n = 2;
+    const tile = size / n;
+    for (let i = 0; i < n; i++)
+      for (let j = 0; j < n; j++) {
+        const tone = new THREE.Color("#e2d6c2").offsetHSL(0, 0, (rand() - 0.5) * 0.03);
+        ctx.fillStyle = `#${tone.getHexString()}`;
+        ctx.fillRect(i * tile, j * tile, tile, tile);
+      }
+    ctx.fillStyle = "#c9bba3";
+    for (let k = 0; k <= n; k++) {
+      ctx.fillRect(k * tile - 3, 0, 6, size);
+      ctx.fillRect(0, k * tile - 3, size, 6);
+    }
+    const t = toTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  });
+}
+
 /** degradés para las tarjetas de luz de los LED */
 export function glowTexture(kind: "down" | "pool" | "fromLeft" | "fromRight"): THREE.Texture {
   return cached(`glow-${kind}`, () => {

@@ -6,12 +6,22 @@
  * uno. El precio al cliente es ese costo más el margen del taller.
  */
 
-import { allParts, buildAssembly, type Assembly, type HardwareKey, type Part } from "./assembly.ts";
+import { allParts, buildAssembly, type Assembly, type Feature, type HardwareKey, type Part } from "./assembly.ts";
 import { catalog, materialById, type Catalog } from "./catalog.ts";
 import type { WardrobeConfig } from "./model.ts";
 import { nest, type NestResult } from "./nesting.ts";
 
+export type PieceShape =
+  | { kind: "rect" }
+  | { kind: "trapezoid"; left: number; right: number }
+  | { kind: "quarter"; side: "left" | "right" };
+
+/** un grupo de piezas iguales, como se lo pide al taller */
 export type CutRow = {
+  /** nombre para el taller: "Estante con luz LED", "Puerta con espejo · bisagras a la izquierda" */
+  title: string;
+  /** el mismo nombre sin el lado de las bisagras, para los resúmenes */
+  baseTitle: string;
   label: string;
   material: string;
   materialName: string;
@@ -19,9 +29,17 @@ export type CutRow = {
   width: number;
   thickness: number;
   qty: number;
+  band: { long: number; short: number };
+  curvedBand?: number;
   /** "1L" = un lado largo con canto, "2L 2C" = todo el perímetro */
   edges: string;
   note: string;
+  /** cómo se dibuja: vertical (laterales, puertas, fondos) u horizontal (estantes) */
+  orientation: "vertical" | "horizontal";
+  shape: PieceShape;
+  features: Feature[];
+  /** false para lo que no sale de placa: puertas de vidrio y aluminio */
+  board: boolean;
 };
 
 export type BoardUse = {
@@ -51,31 +69,95 @@ const materialName = (id: string) => (id === "back" ? "MDF 3 mm (fondo)" : mater
 const edgesLabel = (band: { long: number; short: number }, curved?: number) =>
   [band.long ? `${band.long}L` : "", band.short ? `${band.short}C` : "", curved ? "curvo" : ""].filter(Boolean).join(" ") || "—";
 
+const VERTICAL = new Set(["side", "divider", "back", "door", "sliding-door", "blind"]);
+
+function shapeOf(p: Part): PieceShape {
+  if (p.geometry === "trapezoid" && p.trapezoid) return { kind: "trapezoid", left: Math.round(p.trapezoid.left), right: Math.round(p.trapezoid.right) };
+  if (p.geometry === "quarter" && p.quarter) return { kind: "quarter", side: p.quarter };
+  return { kind: "rect" };
+}
+
+/** "Estante" + canal LED = "Estante con luz LED" */
+function baseTitleOf(label: string, features: Feature[], glass: boolean): string {
+  if (glass) return `${label} de vidrio y aluminio`;
+  const parts = [label];
+  if (features.some((f) => f.type === "grooves")) parts.push("ranurada");
+  if (features.some((f) => f.type === "mirror")) parts.push("con espejo");
+  if (features.some((f) => f.type === "led-groove")) parts.push("con luz LED");
+  return parts.join(" ");
+}
+
+/** las bisagras distinguen puertas izquierdas y derechas: se taladran en espejo */
+function titleOf(base: string, features: Feature[]): string {
+  const hinge = features.find((f) => f.type === "hinge-holes");
+  if (hinge && hinge.type === "hinge-holes") return `${base} · bisagras a la ${hinge.edge === "left" ? "izquierda" : "derecha"}`;
+  return base;
+}
+
+/** orden de lectura para el taller: estructura, interior, cajones, fondos, frentes, altillo */
+function rankOf(label: string): number {
+  const altillo = /altillo/i.test(label);
+  const front = /^(Puerta|Hoja|Panel)/.test(label);
+  if (altillo) return front ? 7 : 5;
+  if (/cajón/.test(label)) return 3;
+  if (front) return 6;
+  if (/^(Lateral|Divisor)/.test(label)) return 0;
+  if (/^(Techo|Piso|Zócalo)/.test(label)) return 1;
+  if (/^Estante/.test(label)) return 2;
+  return 4;
+}
+
+/** suma por tipo de pieza, sin separar medidas: "10 × Estante con luz LED" */
+export function summaryByTitle(rows: CutRow[]): { title: string; qty: number }[] {
+  const out = new Map<string, number>();
+  for (const r of rows) out.set(r.baseTitle, (out.get(r.baseTitle) ?? 0) + r.qty);
+  return [...out.entries()].map(([title, qty]) => ({ title, qty }));
+}
+
 /** agrupa piezas iguales en una sola fila, como las pide la seccionadora */
 export function cutList(parts: Part[]): CutRow[] {
   const rows = new Map<string, CutRow>();
   for (const p of parts) {
-    if (!p.cut) continue;
-    const length = Math.round(p.cut.length);
-    const width = Math.round(p.cut.width);
-    const note = p.cut.note ?? "";
-    const key = [p.label, p.material, length, width, p.cut.thickness, note].join("|");
+    const glass = !p.cut && (p.kind === "door" || p.kind === "sliding-door") && p.material === "none";
+    if (!p.cut && !glass) continue;
+    const length = Math.round(p.cut ? p.cut.length : p.size[1]);
+    const width = Math.round(p.cut ? p.cut.width : p.size[0]);
+    const thickness = p.cut ? p.cut.thickness : 20;
+    const note = p.cut?.note ?? "";
+    const features = p.cut?.features ?? [];
+    const shape = shapeOf(p);
+    const material = glass ? "glass-door" : p.material;
+    const key = [p.label, material, length, width, thickness, note, JSON.stringify(features), JSON.stringify(shape)].join("|");
     const row = rows.get(key);
-    if (row) row.qty += 1;
-    else
-      rows.set(key, {
-        label: p.label,
-        material: p.material,
-        materialName: materialName(p.material),
-        length,
-        width,
-        thickness: p.cut.thickness,
-        qty: 1,
-        edges: edgesLabel(p.cut.band, p.cut.curvedBand),
-        note,
-      });
+    if (row) {
+      row.qty += 1;
+      continue;
+    }
+    const band = p.cut?.band ?? { long: 0, short: 0 };
+    const baseTitle = baseTitleOf(p.label, features, glass);
+    rows.set(key, {
+      title: titleOf(baseTitle, features),
+      baseTitle,
+      label: p.label,
+      material,
+      materialName: glass ? "Perfil de aluminio y vidrio fumé" : materialName(p.material),
+      length,
+      width,
+      thickness,
+      qty: 1,
+      band,
+      curvedBand: p.cut?.curvedBand,
+      edges: glass ? "—" : edgesLabel(band, p.cut?.curvedBand),
+      note,
+      orientation: VERTICAL.has(p.kind) ? "vertical" : "horizontal",
+      shape,
+      features,
+      board: !glass,
+    });
   }
-  return [...rows.values()].sort((a, b) => a.material.localeCompare(b.material) || b.length - a.length);
+  return [...rows.values()].sort(
+    (a, b) => rankOf(a.label) - rankOf(b.label) || a.baseTitle.localeCompare(b.baseTitle) || b.length - a.length || b.width - a.width,
+  );
 }
 
 export function bandingMeters(parts: Part[]): number {

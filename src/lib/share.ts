@@ -5,6 +5,7 @@
 
 import { catalog, materialById } from "./catalog.ts";
 import { DOOR_STYLE_LABELS, LAYOUT_LABELS, LED_COLORS, hasLeds, normalize, totalHeight, type WardrobeConfig } from "./model.ts";
+import { summaryByTitle, type CutRow } from "./quote.ts";
 
 function toBase64Url(text: string): string {
   const bytes = new TextEncoder().encode(text);
@@ -54,8 +55,13 @@ function runLines(config: WardrobeConfig): string {
     .join("\n");
 }
 
+/** "10 × Estante con luz LED": una línea por tipo de pieza; las medidas van en el PDF */
+export function pieceLines(rows: CutRow[]): string[] {
+  return summaryByTitle(rows).map((r) => `• ${r.qty} × ${r.title}`);
+}
+
 /** el resumen que el cliente manda al taller */
-export function orderMessage(config: WardrobeConfig, price: string, link: string): string {
+export function orderMessage(config: WardrobeConfig, price: string, link: string, extra: { rows?: CutRow[]; workshopLink?: string } = {}): string {
   const extras = [
     config.topBox.enabled ? `Altillo de ${cm(config.topBox.height)}` : "",
     config.slope.enabled ? `Techo inclinado: lado bajo de ${cm(config.slope.low)} a la ${config.slope.side === "left" ? "izquierda" : "derecha"}` : "",
@@ -78,8 +84,10 @@ export function orderMessage(config: WardrobeConfig, price: string, link: string
     ...extras,
     `Cuerpo: ${materialById(config.bodyMaterial).name}. Frentes: ${materialById(config.doorMaterial).name}`,
     `Precio estimado: ${price}`,
+    ...(extra.rows?.length ? ["", "Piezas:", ...pieceLines(extra.rows)] : []),
     "",
     `Mi diseño: ${link}`,
+    ...(extra.workshopLink ? [`Despiece con dibujos de cada pieza: ${extra.workshopLink}`] : []),
   ].join("\n");
 }
 

@@ -20,8 +20,25 @@ cada placa, los herrajes, las luces y la cuenta de costo y margen.
 - **Colores** de cuerpo y frentes del catálogo del taller.
 
 En el visor: girar 360° sin límites, vistas rápidas (frente, 3/4, costado,
-arriba, atrás), abrir puertas y cajones, ver adentro sin abrir, vista explotada,
-luces prendidas y ambiente de habitación (con color de pared) o de estudio.
+arriba, atrás), abrir puertas y cajones, ver adentro sin abrir, vista explotada
+y luces prendidas. El visor muestra solo el placard y sus controles; el
+ambiente (habitación o fondo liso, color de pared y piso de madera clara,
+pinotea, cemento alisado o baldosa beige) se elige en la solapa Color.
+
+## Lo que recibe el taller
+
+El botón "Enviar al taller" arma en el navegador un PDF con:
+
+- tapa con una captura del 3D, las medidas, el precio y el resumen por tipo de
+  pieza ("10 × Estante con luz LED");
+- una tarjeta por grupo de piezas iguales con su dibujo acotado: tapacanto,
+  canal para el perfil LED, cazoletas de las bisagras, agujeros del tirador,
+  ranuras, espejo, cortes en ángulo, trapecios y curvas;
+- herrajes, luces y placas.
+
+En el celular el PDF se comparte directo a WhatsApp. En la compu se abre
+WhatsApp con el resumen y el link a la orden (`/demo/taller/`), que muestra lo
+mismo y se puede bajar en PDF o en CSV.
 
 ## Rutas
 
@@ -61,6 +78,8 @@ máquinas sin placa de video.
 | Acomodo de piezas en la placa | `src/lib/nesting.ts` |
 | Cálculo de costo y precio | `src/lib/quote.ts` |
 | El mensaje de WhatsApp | `src/lib/share.ts` |
+| Dibujo técnico de cada pieza | `src/lib/drawings.ts` |
+| El PDF para el taller | `src/lib/orderPdf.ts` |
 | Escena 3D, cámara, luces, efectos | `src/components/viewer/Scene.tsx` |
 | Cómo se anima cada pieza | `src/components/viewer/PartNode.tsx` |
 | Habitación, paredes, ventana | `src/components/viewer/Room.tsx` |
@@ -71,9 +90,13 @@ máquinas sin placa de video.
 
 ## Cómo está pensado
 
-- **Una sola fuente.** `buildAssembly` arma cada pieza con su caja en el espacio
-  y su medida de corte. El 3D dibuja esas cajas y el despiece las agrupa: lo que
-  se ve es lo que se corta.
+- **Una sola fuente.** `buildAssembly` arma cada pieza con su caja en el espacio,
+  su medida de corte y sus mecanizados (canal LED, cazoletas, agujeros de
+  tirador, ranuras). El 3D dibuja esas cajas y el despiece las agrupa: lo que se
+  ve es lo que se corta.
+- **Dibujos y PDF sin servidor.** Cada dibujo se describe una vez como
+  primitivas y se pinta en SVG (página) o en canvas (PDF). El PDF es una imagen
+  por hoja dentro de un PDF mínimo escrito a mano: no usa librerías.
 - **Ids estables.** Cada pieza tiene un id que dice qué es (`r0:m1:s2` es el
   segundo estante del módulo 1 del frente). Cuando cambia una medida, el 3D
   anima la misma pieza a su lugar nuevo en vez de reemplazarla.

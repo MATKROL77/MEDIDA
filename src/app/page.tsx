@@ -32,9 +32,13 @@ const options = [
 ];
 
 const workshop = [
-  { title: "Despiece", body: "Cada pieza con largo, ancho, espesor y qué cantos llevan tapacanto. Listo para la seccionadora o para bajar a Excel." },
+  {
+    title: "Dibujo de cada pieza",
+    body: "Agrupadas como se fabrican (10 × estante con luz LED) y dibujadas con medidas, cantos, canales para el perfil LED, cazoletas y agujeros de tirador.",
+  },
+  { title: "PDF por WhatsApp", body: "El cliente lo manda desde el celular y te llega como documento, listo para imprimir. También en Excel para la seccionadora." },
   { title: "Plano de corte", body: "Cómo acomodar las piezas en cada placa, respetando la veta, y cuántas placas comprar." },
-  { title: "Herrajes", body: "Bisagras según el alto de cada puerta, correderas, barrales, perfiles y tiradores, contados uno por uno." },
+  { title: "Herrajes y luces", body: "Bisagras según el alto de cada puerta, correderas, barrales, tiras LED, fuentes y sensores, contados uno por uno." },
   { title: "Costo y margen", body: "Cuánto te cuesta ese placard y cuánto te queda, antes de confirmar nada." },
 ];
 

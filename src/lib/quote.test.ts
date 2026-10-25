@@ -5,7 +5,8 @@ import { allParts, buildAssembly, hingesFor, toWorld } from "./assembly.ts";
 import { catalog } from "./catalog.ts";
 import { DEFAULT_CONFIG, LIMITS, distribute, normalize, validModuleCounts, withModuleWidth, type WardrobeConfig } from "./model.ts";
 import { nest } from "./nesting.ts";
-import { quote } from "./quote.ts";
+import { quote, summaryByTitle } from "./quote.ts";
+import { pieceDrawing } from "./drawings.ts";
 import { decodeConfig, encodeConfig } from "./share.ts";
 
 const usable = {
@@ -152,4 +153,19 @@ test("más grande, más caro; las luces y los extras suman", () => {
   assert.ok(quote(lit).assembly.ledMeters > 0);
   assert.ok(quote(top).price > q.price);
   assert.ok(q.price > q.cost);
+});
+
+test("el resumen para el taller suma estantes con luz y marca los mecanizados", () => {
+  const config = normalize({ ...DEFAULT_CONFIG, doors: "hinged" });
+  const q = quote(config);
+  const lit = q.parts.filter((p) => p.cut?.features?.some((f) => f.type === "led-groove") && (p.kind === "shelf" || p.kind === "fixed-shelf"));
+  const summary = summaryByTitle(q.rows);
+  const row = summary.find((r) => r.title === "Estante con luz LED");
+  assert.ok(row && row.qty === lit.length, "los estantes con canal LED tienen que sumarse en una línea");
+  for (const door of q.parts.filter((p) => p.kind === "door")) {
+    const hinges = door.cut?.features?.find((f) => f.type === "hinge-holes");
+    assert.ok(hinges && hinges.type === "hinge-holes" && hinges.at.length === hingesFor(door.size[1]));
+  }
+  // cada grupo de piezas se puede dibujar
+  for (const r of q.rows) assert.ok(pieceDrawing(r).prims.length > 0);
 });

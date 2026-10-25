@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { PieceDrawing } from "@/components/PieceDrawing";
 import { catalog } from "@/lib/catalog";
+import { pieceDrawing } from "@/lib/drawings";
 import { DEFAULT_CONFIG, LAYOUT_LABELS, totalHeight, type WardrobeConfig } from "@/lib/model";
 import { money, quote, type BoardUse, type CutRow } from "@/lib/quote";
+import { buildOrderPdf } from "@/lib/orderPdf";
 import { decodeConfig, encodeConfig } from "@/lib/share";
 
 /**
@@ -21,12 +24,26 @@ export default function Workshop() {
   }, []);
 
   const q = useMemo(() => quote(config), [config]);
+  const [making, setMaking] = useState(false);
+  const downloadPdf = async () => {
+    setMaking(true);
+    try {
+      const pdf = await buildOrderPdf(config, q);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(pdf.blob);
+      a.download = `orden-${catalog.brand.name.toLowerCase().replace(/\s+/g, "-")}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } finally {
+      setMaking(false);
+    }
+  };
   const boardCount = q.boards.reduce((s, b) => s + b.count, 0);
   const margin = q.price - q.cost;
 
   const downloadCsv = () => {
     const header = ["Cantidad", "Pieza", "Material", "Largo (mm)", "Ancho (mm)", "Espesor (mm)", "Canto", "Nota"];
-    const lines = q.rows.map((r) => [r.qty, r.label, r.materialName, r.length, r.width, r.thickness, r.edges, r.note]);
+    const lines = q.rows.map((r) => [r.qty, r.title, r.materialName, r.length, r.width, r.thickness, r.edges, r.note]);
     const csv = [header, ...lines].map((l) => l.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
     // BOM para que Excel en castellano abra los acentos bien
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
@@ -58,6 +75,9 @@ export default function Workshop() {
           <button type="button" onClick={downloadCsv} className="btn btn-ghost text-sm">
             Descargar CSV
           </button>
+          <button type="button" onClick={downloadPdf} disabled={making} className="btn btn-ghost text-sm disabled:opacity-60">
+            {making ? "Armando PDF…" : "Descargar PDF"}
+          </button>
           <button type="button" onClick={() => window.print()} className="btn btn-primary text-sm">
             Imprimir
           </button>
@@ -75,6 +95,39 @@ export default function Workshop() {
         <Stat label="Costo" value={money(q.cost)} />
         <Stat label="Margen" value={money(margin)} note={`${Math.round((margin / q.price) * 100)} % del precio`} />
         <Stat label="Placas" value={String(boardCount)} note={`${q.bandingMeters.toFixed(1)} m de canto`} />
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-display text-lg font-semibold">Piezas</h2>
+          <p className="text-xs text-ink-2">Medidas en mm · naranja: tapacanto · amarillo: canal LED</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {q.rows.map((r) => {
+            const d = pieceDrawing(r);
+            return (
+              <article key={`${r.title}-${r.material}-${r.length}-${r.width}-${r.note}-${JSON.stringify(r.features)}`} className="card flex flex-col p-4">
+                <h3 className="font-semibold leading-snug">
+                  <span className="text-accent">{r.qty} ×</span> {r.title}
+                </h3>
+                <p className="mt-0.5 text-xs text-ink-2">
+                  {r.length} × {r.width} × {r.thickness} mm · {r.materialName}
+                  {r.edges !== "—" && ` · canto ${r.edges}`}
+                </p>
+                <div className="my-3 rounded-xl bg-paper">
+                  <PieceDrawing drawing={d} />
+                </div>
+                {d.notes.length > 0 && (
+                  <ul className="space-y-1 text-xs leading-relaxed text-ink-2">
+                    {d.notes.map((n) => (
+                      <li key={n}>{n}</li>
+                    ))}
+                  </ul>
+                )}
+              </article>
+            );
+          })}
+        </div>
       </section>
 
       <section className="card overflow-hidden">
@@ -172,9 +225,9 @@ function CutTable({ rows }: { rows: CutRow[] }) {
         </thead>
         <tbody className="divide-y divide-line">
           {rows.map((r) => (
-            <tr key={`${r.label}-${r.material}-${r.length}-${r.width}-${r.note}`}>
+            <tr key={`${r.title}-${r.material}-${r.length}-${r.width}-${r.note}-${JSON.stringify(r.features)}`}>
               <td className="px-5 py-2 tabular-nums">{r.qty}</td>
-              <td className="px-3 py-2">{r.label}</td>
+              <td className="px-3 py-2">{r.title}</td>
               <td className="px-3 py-2 text-ink-2">{r.materialName}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.length}</td>
               <td className="px-3 py-2 text-right tabular-nums">{r.width}</td>

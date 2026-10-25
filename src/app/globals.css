@@ -276,6 +276,41 @@ body {
   }
 }
 
+@layer components {
+  .sheet-backdrop {
+    animation: fade-in-plain 260ms ease both;
+  }
+  .sheet-panel {
+    animation: sheet-in 520ms var(--ease-spring) both;
+  }
+  .shimmer {
+    background: linear-gradient(100deg, var(--color-paper) 30%, var(--color-surface) 50%, var(--color-paper) 70%);
+    background-size: 220% 100%;
+    animation: shimmer 1.2s linear infinite;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-in-plain {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes shimmer {
+  to {
+    background-position: -120% 0;
+  }
+}
+
 @keyframes pop {
   0% {
     transform: scale(0.6);

@@ -2,7 +2,7 @@
 
 import { Edges, Environment, Lightformer, OrbitControls, PerformanceMonitor } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping } from "@react-three/postprocessing";
+import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -14,6 +14,7 @@ import { ledHex, type WardrobeConfig } from "@/lib/model";
 import { clampDt, FIRM, type SceneAnim, SceneAnimContext, SOFT, spring, SpringVec, step, useSceneAnim } from "./anim";
 import { createKit, disposeKit, frontMaterials, type MaterialKit } from "./materials";
 import { MM, PartNode, Presence } from "./PartNode";
+import type { FloorType } from "./constants";
 import { Room } from "./Room";
 
 export type ViewName = "front" | "three" | "side" | "top" | "back";
@@ -27,9 +28,11 @@ export type ViewerProps = {
   xray: boolean;
   explode: boolean;
   lights: boolean;
-  environment: { mode: "room" | "studio"; wall: string };
+  environment: { mode: "room" | "studio"; wall: string; floor: FloorType };
   view: { name: ViewName; nonce: number };
   onReady?: () => void;
+  /** se llena con una función que devuelve una captura del 3D (JPEG, data URL) */
+  captureRef?: React.MutableRefObject<(() => Promise<string | null>) | null>;
 };
 
 const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
@@ -261,6 +264,33 @@ function CameraRig({ assembly, view }: { assembly: Assembly; view: ViewerProps["
   return null;
 }
 
+/**
+ * Captura del 3D para la tapa del PDF. Se lee justo después de que el
+ * compositor dibuja el cuadro, antes de que el navegador limpie el lienzo.
+ */
+function Capturer({ captureRef }: { captureRef?: ViewerProps["captureRef"] }) {
+  const gl = useThree((s) => s.gl);
+  const pending = useRef<((url: string | null) => void)[]>([]);
+  useEffect(() => {
+    if (!captureRef) return;
+    captureRef.current = () => new Promise((resolve) => pending.current.push(resolve));
+    return () => {
+      captureRef.current = null;
+    };
+  }, [captureRef]);
+  useFrame(() => {
+    if (!pending.current.length) return;
+    let url: string | null = null;
+    try {
+      url = gl.domElement.toDataURL("image/jpeg", 0.92);
+    } catch {
+      url = null;
+    }
+    pending.current.splice(0).forEach((resolve) => resolve(url));
+  }, 2);
+  return null;
+}
+
 function Effects({ hq }: { hq: boolean }) {
   // dos composiciones fijas: el compositor no admite hijos que aparecen y desaparecen
   if (hq)
@@ -268,6 +298,7 @@ function Effects({ hq }: { hq: boolean }) {
       <EffectComposer multisampling={4} enableNormalPass={false}>
         <N8AO aoRadius={0.45} intensity={2.4} distanceFalloff={0.9} quality="medium" />
         <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.92} luminanceSmoothing={0.25} radius={0.7} />
+        <Vignette offset={0.3} darkness={0.45} />
         <ToneMapping mode={ToneMappingMode.AGX} />
       </EffectComposer>
     );
@@ -275,6 +306,7 @@ function Effects({ hq }: { hq: boolean }) {
   return (
     <EffectComposer multisampling={0} enableNormalPass={false}>
       <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.92} luminanceSmoothing={0.25} radius={0.7} />
+      <Vignette offset={0.3} darkness={0.45} />
       <ToneMapping mode={ToneMappingMode.AGX} />
       <SMAA />
     </EffectComposer>
@@ -286,7 +318,13 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   const totalH = Math.max(1, props.assembly.bounds.max[1]);
   return (
     <Centered assembly={props.assembly}>
-      <Room min={props.assembly.bounds.min} max={props.assembly.bounds.max} shape={props.config.shape} wall={props.environment.wall} />
+      <Room
+        min={props.assembly.bounds.min}
+        max={props.assembly.bounds.max}
+        shape={props.config.shape}
+        wall={props.environment.wall}
+        floor={props.environment.floor}
+      />
       {props.assembly.runs.map((run) => (
         <RunGroup key={run.index} run={run}>
           <Presence parts={run.parts}>
@@ -338,6 +376,7 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
         maxPolarAngle={Math.PI}
       />
       <Effects hq={props.hq} />
+      <Capturer captureRef={props.captureRef} />
     </>
   );
 }
