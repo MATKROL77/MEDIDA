@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+/*
+ * Paleta cálida de taller: papel, tinta y madera. Los nombres dicen qué son,
+ * no qué color tienen, para poder cambiar la marca sin tocar componentes.
+ * Contraste medido contra --color-paper: ink-2 6,3:1, accent 5,9:1.
+ */
+@theme {
+  --color-paper: #f5f2ec;
+  --color-surface: #fffdf9;
+  --color-ink: #1f1d1a;
+  --color-ink-2: #5c574f;
+  --color-line: #e3ddd2;
+  --color-accent: #8a5528;
+  --color-accent-strong: #6f4220;
+  --color-accent-soft: #f1e6d8;
+  --color-ok: #2f6b4f;
+  --color-whatsapp: #1f8f52;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter-tight), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1.25rem;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+}
+
+@layer components {
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  .eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    padding: 0.8rem 1.4rem;
+    font-weight: 600;
+    transition:
+      transform 120ms ease,
+      background-color 160ms ease;
+  }
+  .btn:active {
+    transform: scale(0.98);
+  }
+  .btn-primary {
+    background: var(--color-ink);
+    color: var(--color-surface);
+  }
+  .btn-primary:hover {
+    background: #000;
+  }
+  .btn-ghost {
+    border: 1px solid var(--color-line);
+    background: var(--color-surface);
+  }
+  .btn-ghost:hover {
+    border-color: var(--color-ink-2);
+  }
+  .btn-whatsapp {
+    background: var(--color-whatsapp);
+    color: #fff;
+  }
+  .btn-whatsapp:hover {
+    background: #187a45;
+  }
+
+  /* botones de opción: un grupo donde se elige una sola cosa */
+  .segment {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 0.9rem;
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+  }
+  .segment > button {
+    border-radius: 0.65rem;
+    padding: 0.55rem 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-ink-2);
+  }
+  .segment > button[aria-pressed="true"] {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  }
+  .segment > button:disabled {
+    opacity: 0.35;
+  }
+
+  input[type="range"] {
+    accent-color: var(--color-accent);
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  .card {
+    break-inside: avoid;
+  }
+}
