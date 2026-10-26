@@ -6,11 +6,10 @@ import * as THREE from "three";
 
 import type { Part } from "@/lib/assembly";
 
-import { BOUNCY, clampDt, FIRM, spring, SpringVec, step, useSceneAnim } from "./anim";
+import { BOUNCY, clampDt, doorProgress, FIRM, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
 import type { MaterialKit } from "./materials";
 
 export const MM = 0.001;
-const OPEN_ANGLE = (100 * Math.PI) / 180;
 
 // geometrías unitarias compartidas: cada pieza es una de estas escalada
 let shared: {
@@ -107,13 +106,15 @@ type NodeProps = {
   /** segundos de espera antes de aparecer (la entrada escalonada) */
   delay: number;
   onSelect?: (run: number, module: number) => void;
+  /** tocar una hoja corrediza la corre para el otro lado */
+  onLeaf?: (id: string) => void;
 };
 
 /**
  * Una pieza animada. Medidas, posición y giro siguen a sus valores con
  * resortes; al aparecer crece con un rebote y al irse se encoge.
  */
-export function PartNode({ part, exiting, kit, delay, onSelect }: NodeProps) {
+export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodeProps) {
   const anim = useSceneAnim();
   const outer = useRef<THREE.Group>(null);
   const rot = useRef<THREE.Group>(null);
@@ -159,23 +160,28 @@ export function PartNode({ part, exiting, kit, delay, onSelect }: NodeProps) {
 
     const [px, py, pz, sx, sy, sz, rz, tl, tr] = s.v;
     const e = anim.explode.v;
-    const o = anim.open.v;
     const ex = part.explode;
+    // los cajones siguen al resorte de su módulo; las hojas corredizas, al suyo
+    const drawer = part.openShift && part.module !== null ? springFor(anim.drawers, `${part.run}:${part.module}`).v : 0;
     const os = part.openShift;
+    const slideX = part.slide ? springFor(anim.leaves, part.id).v : 0;
     const a = Math.max(appear.current.v, 1e-4);
 
-    // pivote: el borde de la bisagra en las puertas, el centro en lo demás
-    const pivot = door ? [door === "left" ? px : px + sx, py, pz] : [px + sx / 2, py + sy / 2, pz + sz / 2];
+    // pivote: en las puertas, el canto de adelante del lado de la bisagra (así no
+    // se mete en el lateral al girar); en lo demás, el centro
+    const pivot = door ? [door === "left" ? px : px + sx, py, pz + sz] : [px + sx / 2, py + sy / 2, pz + sz / 2];
     if (outer.current) {
       outer.current.position.set(
-        (pivot[0] + ex[0] * e + (os ? os[0] * o : 0)) * MM,
-        (pivot[1] + ex[1] * e + (os ? os[1] * o : 0)) * MM,
-        (pivot[2] + ex[2] * e + (os ? os[2] * o : 0)) * MM,
+        (pivot[0] + ex[0] * e + (os ? os[0] * drawer : 0) + slideX) * MM,
+        (pivot[1] + ex[1] * e + (os ? os[1] * drawer : 0)) * MM,
+        (pivot[2] + ex[2] * e + (os ? os[2] * drawer : 0)) * MM,
       );
     }
     if (rot.current) {
-      if (door) rot.current.rotation.set(0, (door === "left" ? -1 : 1) * OPEN_ANGLE * o, 0);
-      else rot.current.rotation.set(0, 0, rz);
+      if (door) {
+        const angle = (part.openAngle ?? Math.PI / 2) * doorProgress(anim.open.v, part.openDelay);
+        rot.current.rotation.set(0, (door === "left" ? -1 : 1) * angle, 0);
+      } else rot.current.rotation.set(0, 0, rz);
     }
 
     const m = mesh.current;
@@ -185,7 +191,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect }: NodeProps) {
         // el trapecio tiene su origen en la esquina mínima
         const ox = door ? (door === "left" ? 0 : -sx) : -sx / 2;
         const oy = door ? 0 : -sy / 2;
-        const oz = door ? 0 : -sz / 2;
+        const oz = door ? -sz : -sz / 2;
         m.position.set(ox * MM * a, oy * MM * a, oz * MM * a);
         m.scale.setScalar(a);
       } else if (part.geometry === "quarter") {
@@ -197,13 +203,13 @@ export function PartNode({ part, exiting, kit, delay, onSelect }: NodeProps) {
         else if (part.glow === "x+" || part.glow === "x-") m.scale.set(sz * MM * a, sy * MM * a, 1);
         else m.scale.set(sx * MM * a, sy * MM * a, 1);
       } else {
-        if (door) m.position.set(((door === "left" ? sx : -sx) / 2) * MM, (sy / 2) * MM, (sz / 2) * MM);
+        if (door) m.position.set(((door === "left" ? sx : -sx) / 2) * MM, (sy / 2) * MM, (-sz / 2) * MM);
         m.scale.set(Math.max(sx, 0.01) * MM * a, Math.max(sy, 0.01) * MM * a, Math.max(sz, 0.01) * MM * a);
       }
     }
     if (details.current) {
       const ox = door ? (door === "left" ? 0 : -sx) : -sx / 2;
-      details.current.position.set(ox * MM, (door ? 0 : -sy / 2) * MM, (door ? 0 : -sz / 2) * MM);
+      details.current.position.set(ox * MM, (door ? 0 : -sy / 2) * MM, (door ? -sz : -sz / 2) * MM);
     }
   });
 
@@ -221,8 +227,17 @@ export function PartNode({ part, exiting, kit, delay, onSelect }: NodeProps) {
   // el mapa de sombras no las resuelve y salpica la puerta de rayas
   const castShadow = !["glow", "glass", "groove", "mirror", "led"].includes(part.kind);
 
+  const leafClick =
+    part.slide && onLeaf
+      ? (e: ThreeEvent<MouseEvent>) => {
+          if (e.delta > 6) return;
+          e.stopPropagation();
+          onLeaf(part.id);
+        }
+      : undefined;
+
   return (
-    <group ref={outer}>
+    <group ref={outer} onClick={leafClick}>
       <group ref={rot}>
         {material && (
           <mesh

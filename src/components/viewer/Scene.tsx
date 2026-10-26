@@ -11,7 +11,8 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Assembly, RunAssembly } from "@/lib/assembly";
 import { ledHex, type WardrobeConfig } from "@/lib/model";
 
-import { clampDt, FIRM, type SceneAnim, SceneAnimContext, SOFT, spring, SpringVec, step, useSceneAnim } from "./anim";
+import { clampDt, DRAWER, FIRM, HEAVY, type SceneAnim, SceneAnimContext, SOFT, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
+import { drawerGroupsOf, isCovered, leavesOf, overlaps, sweep } from "@/lib/motion";
 import { createKit, disposeKit, frontMaterials, type MaterialKit } from "./materials";
 import { MM, PartNode, Presence } from "./PartNode";
 import type { FloorType } from "./constants";
@@ -31,6 +32,9 @@ export type ViewerProps = {
   environment: { mode: "room" | "studio"; wall: string; floor: FloorType };
   view: { name: ViewName; nonce: number };
   onReady?: () => void;
+  /** cuánto corrió el cliente cada hoja corrediza (mm); vacío = cerradas */
+  leafOffsets: Record<string, number>;
+  onLeaf?: (id: string) => void;
   /** se llena con una función que devuelve una captura del 3D (JPEG, data URL) */
   captureRef?: React.MutableRefObject<(() => Promise<string | null>) | null>;
 };
@@ -50,7 +54,6 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   const hasDoors = props.config.doors !== "none";
   // con sensor, la luz se prende sola al abrir las puertas
   const lightsOn = props.lights || (props.config.led.sensor && hasDoors && props.open);
-  anim.open.target = props.open ? 1 : 0;
   anim.explode.target = props.explode ? 1 : 0;
   anim.xray.target = props.xray ? 1 : 0;
   anim.lights.target = lightsOn ? 1 : 0;
@@ -60,9 +63,20 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   const fronts = useMemo(() => frontMaterials(kit), [kit]);
   const bg = useMemo(() => ({ studio: new THREE.Color("#ebe6df"), room: new THREE.Color("#e9e4dc"), cur: new THREE.Color("#ebe6df") }), []);
 
+  const motion = useMemo(
+    () => ({ leaves: leavesOf(props.assembly), groups: drawerGroupsOf(props.assembly) }),
+    [props.assembly],
+  );
+  // lo que se pide y lo que está pasando se leen en cada cuadro desde acá
+  const wanted = useRef({ open: props.open, offsets: props.leafOffsets, doors: props.config.doors });
+  wanted.current = { open: props.open, offsets: props.open ? props.leafOffsets : {}, doors: props.config.doors };
+
   useFrame((_, dt) => {
     const d = clampDt(dt);
-    step(anim.open, d, FIRM);
+    sequence(anim, motion, wanted.current);
+    step(anim.open, d, HEAVY);
+    for (const s of anim.drawers.values()) step(s, d, DRAWER);
+    for (const s of anim.leaves.values()) step(s, d, HEAVY);
     step(anim.explode, d, FIRM);
     step(anim.xray, d, SOFT);
     step(anim.lights, d, SOFT);
@@ -93,6 +107,67 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
     scene.background = bg.cur;
   });
   return null;
+}
+
+/**
+ * El orden real de las cosas, decidido cuadro a cuadro:
+ * - al abrir, primero las puertas y después los cajones; al cerrar, al revés;
+ * - una hoja corrediza no arranca si en su camino hay un cajón afuera: primero
+ *   se cierra el cajón;
+ * - un cajón sólo sale si ninguna hoja lo tapa, ni ahora ni donde van a
+ *   quedar, y si ninguna puerta le queda delante.
+ */
+function sequence(
+  anim: SceneAnim,
+  motion: { leaves: ReturnType<typeof leavesOf>; groups: ReturnType<typeof drawerGroupsOf> },
+  want: { open: boolean; offsets: Record<string, number>; doors: WardrobeConfig["doors"] },
+) {
+  const current: Record<string, number> = {};
+  const target: Record<string, number> = {};
+  for (const l of motion.leaves) {
+    current[l.id] = springFor(anim.leaves, l.id).v;
+    target[l.id] = want.offsets[l.id] ?? 0;
+  }
+  // tramos que barren las hojas que todavía tienen que moverse
+  const sweeps = motion.leaves
+    .filter((l) => Math.abs(target[l.id] - current[l.id]) > 1)
+    .map((l) => ({ leaf: l, span: sweep(l, current[l.id], target[l.id]) }));
+
+  for (const g of motion.groups) {
+    const s = springFor(anim.drawers, g.key);
+    let out = want.open && !g.blocked;
+    if (want.doors === "hinged") out &&= anim.open.v > 0.96;
+    if (want.doors === "sliding") {
+      out &&= !isCovered(motion.leaves, target, g) && !isCovered(motion.leaves, current, g);
+      out &&= !sweeps.some((w) => w.leaf.run === g.run && overlaps(w.span, g));
+    }
+    s.target = out ? 1 : 0;
+  }
+
+  const drawerOut = (pred: (g: (typeof motion.groups)[number]) => boolean = () => true) =>
+    motion.groups.some((g) => pred(g) && springFor(anim.drawers, g.key).v > 0.06);
+
+  // batientes: no se cierran mientras quede un cajón afuera
+  if (want.open) anim.open.target = 1;
+  else if (!drawerOut()) anim.open.target = 0;
+
+  // corredizas: cada hoja arranca cuando su camino está libre. Una hoja que
+  // empuja a otra de su riel espera a que la otra arranque: si la empujada
+  // está esperando que se cierre un cajón, la que empuja la atravesaría
+  const started = (l: (typeof motion.leaves)[number]) => springFor(anim.leaves, l.id).target === target[l.id];
+  for (const w of sweeps) {
+    if (started(w.leaf)) continue;
+    const drawerInWay = drawerOut((g) => g.run === w.leaf.run && overlaps(w.span, g));
+    const mateInWay = sweeps.some(
+      (o) =>
+        o.leaf !== w.leaf &&
+        o.leaf.run === w.leaf.run &&
+        o.leaf.track === w.leaf.track &&
+        !started(o.leaf) &&
+        Math.min(w.span[1], o.leaf.home + current[o.leaf.id] + o.leaf.width) - Math.max(w.span[0], o.leaf.home + current[o.leaf.id]) > 1,
+    );
+    if (!drawerInWay && !mateInWay) springFor(anim.leaves, w.leaf.id).target = target[w.leaf.id];
+  }
 }
 
 function KeyLight({ span, shape }: { span: number; shape: WardrobeConfig["shape"] }) {
@@ -332,7 +407,7 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
               // al cargar, el placard se arma de abajo hacia arriba
               const age = typeof performance === "undefined" ? 0 : (performance.now() - anim.bornAt) / 1000;
               const delay = age < 1.2 ? 0.15 + (p.position[1] / totalH) * 0.55 + run.index * 0.12 : 0;
-              return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={delay} onSelect={props.onSelect} />;
+              return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={delay} onSelect={props.onSelect} onLeaf={props.onLeaf} />;
             }}
           </Presence>
           {props.selection && props.selection.run === run.index && <SelectionBox run={run} module={props.selection.module} />}
@@ -382,12 +457,24 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
 }
 
 export default function Scene(props: ViewerProps) {
-  // ?calidad=baja fuerza el modo liviano, para equipos muy viejos
-  const [forcedLow] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("calidad") === "baja");
+  // ?calidad=baja fuerza el modo liviano, para equipos muy viejos;
+  // ?calidad=alta la deja fija arriba (para grabar videos cuadro a cuadro)
+  const [forced] = useState(() => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("calidad")));
+  const forcedLow = forced === "baja";
+  const forcedHigh = forced === "alta";
   const [hq, setHq] = useState(!forcedLow);
-  const [dpr, setDpr] = useState(forcedLow ? 1 : 1.5);
+  const [dpr, setDpr] = useState(forcedLow || forcedHigh ? 1 : 1.5);
   const anim = useMemo<SceneAnim>(
-    () => ({ open: spring(), explode: spring(), xray: spring(), lights: spring(), room: spring(1), bornAt: typeof performance === "undefined" ? 0 : performance.now() }),
+    () => ({
+      open: spring(),
+      drawers: new Map(),
+      leaves: new Map(),
+      explode: spring(),
+      xray: spring(),
+      lights: spring(),
+      room: spring(1),
+      bornAt: typeof performance === "undefined" ? 0 : performance.now(),
+    }),
     [],
   );
   const { onReady } = props;
@@ -405,16 +492,18 @@ export default function Scene(props: ViewerProps) {
         {/* la calidad baja sola si el equipo no llega a 60 cuadros */}
         <PerformanceMonitor
           onIncline={() => {
-            if (forcedLow) return;
+            if (forcedLow || forcedHigh) return;
             setHq(true);
             setDpr(Math.min(2, window.devicePixelRatio));
           }}
           onDecline={() => {
+            if (forcedHigh) return;
             setHq(false);
             setDpr(1);
           }}
           flipflops={3}
           onFallback={() => {
+            if (forcedHigh) return;
             setHq(false);
             setDpr(1);
           }}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { PieceDrawing } from "@/components/PieceDrawing";
+import { Watermark } from "@/components/Watermark";
 import { catalog } from "@/lib/catalog";
 import { pieceDrawing } from "@/lib/drawings";
 import { DEFAULT_CONFIG, LAYOUT_LABELS, totalHeight, type WardrobeConfig } from "@/lib/model";
@@ -62,7 +63,8 @@ export default function Workshop() {
   ].join(" · ");
 
   return (
-    <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
+    <main className="relative mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
+      <Watermark fixed />
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Orden de producción · {catalog.brand.name}</p>

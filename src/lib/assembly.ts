@@ -125,11 +125,19 @@ export type Part = {
   explode: Vec3;
   /** frentes: se vuelven translúcidos en la vista de rayos X */
   front?: boolean;
+  /** hoja corrediza: en qué riel va, dónde está cerrada y cuánto puede correr el conjunto */
+  slide?: { track: 0 | 1; index: number; home: number; width: number; from: number; to: number };
+  /** puerta batiente: hasta qué ángulo abre (radianes) y cuándo arranca dentro del movimiento (0 a 1) */
+  openAngle?: number;
+  openDelay?: number;
+  /** cajón que no puede salir porque una puerta abierta le queda delante */
+  drawerBlocked?: boolean;
 };
 
 export type HardwareKey =
   | "hinge"
   | "slidePair"
+  | "slideSpacer"
   | "rod"
   | "rodSupport"
   | "slidingKit"
@@ -208,7 +216,18 @@ type Ctx = {
 };
 
 /** terminaciones y tirador de un frente, en coordenadas del frente */
-function frontDetails(ctx: Ctx, id: string, w: number, h: { left: number; right: number }, handleAt: "left" | "right" | "drawer" | null): Part[] {
+/**
+ * `flush`: tirador al ras, para las hojas del riel de atrás. Entre riel y riel
+ * quedan 12 mm: un barral común chocaría con la hoja que le pasa por delante.
+ */
+function frontDetails(
+  ctx: Ctx,
+  id: string,
+  w: number,
+  h: { left: number; right: number },
+  handleAt: "left" | "right" | "drawer" | null,
+  flush = false,
+): Part[] {
   const { config } = ctx;
   const t = catalog.board.thickness;
   const hMax = Math.max(h.left, h.right);
@@ -273,7 +292,9 @@ function frontDetails(ctx: Ctx, id: string, w: number, h: { left: number; right:
     const len = drawer ? Math.min(220, w * 0.4) : Math.min(320, hMin * 0.3);
     const cx = drawer ? w / 2 : handleAt === "right" ? w - 45 : 45;
     const cy = drawer ? hMax * 0.62 : Math.min(hMin / 2, 1050);
-    if (config.handle === "knob") {
+    if (flush) {
+      detail({ id: `${id}:h`, label: "Tirador", kind: "handle", material: "handle", position: [cx - 5, cy - len / 2, faceZ], size: [10, len, 6], geometry: "box" });
+    } else if (config.handle === "knob") {
       detail({ id: `${id}:h`, label: "Tirador", kind: "handle", material: "handle", position: [cx - 14, cy - 14, faceZ + 4], size: [28, 28, 26], geometry: "knob" });
     } else {
       const size: Vec3 = drawer ? [len, 12, 12] : [12, len, 12];
@@ -355,6 +376,20 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
   const corner = r === 0 ? cornerModule(config.shape, n) : null;
   // el tramo lateral tapa la esquina: ahí va un panel ciego en vez de puerta
   const blind = corner === null ? null : config.shape === "l-left" ? { from: 0, to: D } : { from: span - D, to: span };
+  // el módulo del tramo lateral que toca la esquina
+  const cornerEnd = r === 1 ? (config.shape === "l-left" ? n - 1 : 0) : null;
+
+  /**
+   * Bisagra de una puerta sola. En la esquina abre hacia afuera, para no
+   * chocar con el otro tramo; en los demás, evita compartir divisor con la
+   * bisagra del módulo vecino.
+   */
+  const lastRightHinge = { main: false, top: false };
+  const singleHinge = (m: number, prevRight: boolean): "left" | "right" => {
+    if (blind && m === corner) return blind.from === 0 ? "right" : "left";
+    if (m === cornerEnd) return config.shape === "l-left" ? "left" : "right";
+    return prevRight ? "right" : "left";
+  };
 
   const parts: Part[] = [];
   const add = (p: Omit<Part, "run">) => {
@@ -529,8 +564,14 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
     const drawers = (count: number) => {
       // la caja de cajón pierde 12,5 mm por lado para la corredera
       const slide = Math.max(250, Math.floor((shelfD - t - 10) / 50) * 50);
-      const boxW = w - 26;
       const boxH = DRAWER_PITCH - 50;
+      // detrás de puertas batientes el frente deja 12 mm por lado: ahí queda
+      // la puerta abierta, y el cajón tiene que salir sin tocarla. Detrás de
+      // corredizas va 40 mm adentro, sobre suplementos: el hueco que deja una
+      // hoja corrida es más angosto que el módulo por el solape entre hojas
+      const inset = hinged ? 12 : sliding ? 40 : 2;
+      const sideGap = Math.max(13, inset + 1);
+      const boxW = w - 2 * sideGap;
       for (let j = 0; j < count; j++) {
         const y = innerBottom + j * DRAWER_PITCH + 2;
         const open: Vec3 = [0, 0, slide * 0.55];
@@ -541,10 +582,10 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
           kind: "drawer-front",
           material: config.doors === "none" ? config.doorMaterial : config.bodyMaterial,
           module: m,
-          position: [x0 + 2, y, back + shelfD - t],
-          size: [w - 4, DRAWER_PITCH - 4, t],
+          position: [x0 + inset, y, back + shelfD - t],
+          size: [w - 2 * inset, DRAWER_PITCH - 4, t],
           geometry: "box",
-          cut: { length: w - 4, width: DRAWER_PITCH - 4, thickness: t, band: { long: 2, short: 2 } },
+          cut: { length: w - 2 * inset, width: DRAWER_PITCH - 4, thickness: t, band: { long: 2, short: 2 } },
           openShift: open,
           explode: [0, 0, 320],
           front: config.doors === "none",
@@ -559,7 +600,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
             kind: "drawer-side",
             material: config.bodyMaterial,
             module: m,
-            position: [side === 0 ? x0 + 13 : x0 + 13 + boxW - t, y + 20, back + shelfD - t - slide],
+            position: [side === 0 ? x0 + sideGap : x0 + sideGap + boxW - t, y + 20, back + shelfD - t - slide],
             size: [t, boxH, slide],
             geometry: "box",
             cut: { length: slide, width: boxH, thickness: t, band: { long: 1, short: 0 } },
@@ -574,7 +615,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
             kind: "drawer-end",
             material: config.bodyMaterial,
             module: m,
-            position: [x0 + 13 + t, y + 20, end === 0 ? back + shelfD - t - slide : back + shelfD - 2 * t],
+            position: [x0 + sideGap + t, y + 20, end === 0 ? back + shelfD - t - slide : back + shelfD - 2 * t],
             size: [boxW - 2 * t, boxH, t],
             geometry: "box",
             cut: { length: boxW - 2 * t, width: boxH, thickness: t, band: { long: 1, short: 0 } },
@@ -588,7 +629,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
           kind: "drawer-bottom",
           material: "back",
           module: m,
-          position: [x0 + 13, y + 17, back + shelfD - t - slide],
+          position: [x0 + sideGap, y + 17, back + shelfD - t - slide],
           size: [boxW, back, slide],
           geometry: "box",
           cut: { length: slide, width: boxW, thickness: back, band: { long: 0, short: 0 } },
@@ -596,6 +637,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
           explode: [0, 0, 240],
         });
         ctx.hw.slidePair.qty += 1;
+        if (sideGap > 13) ctx.hw.slideSpacer.qty += 1;
       }
       ctx.counts.drawers += count;
       return innerBottom + drawerZone(count);
@@ -751,11 +793,13 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
       const span_ = dx1 - dx0;
       const leaves = span_ > 650 ? 2 : 1;
       const doorW = span_ / leaves - DOOR_GAP;
+      const single = singleHinge(m, lastRightHinge.main);
       for (let k = 0; k < leaves; k++) {
         const left = dx0 + k * (span_ / leaves) + DOOR_GAP / 2;
         const hl = hAt(left) - Z - DOOR_GAP;
         const hr = hAt(left + doorW) - Z - DOOR_GAP;
-        const hinge: "left" | "right" = leaves === 2 ? (k === 0 ? "left" : "right") : m % 2 === 0 ? "left" : "right";
+        const hinge: "left" | "right" = leaves === 2 ? (k === 0 ? "left" : "right") : single;
+        if (k === leaves - 1) lastRightHinge.main = hinge === "right";
         const id = M(`door${k}`);
         const doorH = Math.max(hl, hr);
         add({
@@ -821,8 +865,6 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
       const frontTrack = k % 2 === 0;
       const z = frontTrack ? bodyD - 25 - t : bodyD - 55 - t;
       const step = leafW - SLIDING_OVERLAP;
-      // al abrir, las del riel de adelante pasan por delante de su vecina
-      const shift = frontTrack ? (k < leaves - 1 ? step : -step) : 0;
       const id = P(`slide${k}`);
       add({
         id,
@@ -834,8 +876,8 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
         size: [leafW, leafH, t],
         geometry: config.doorStyle === "glass" ? "none" : "box",
         cut: config.doorStyle === "glass" ? null : { length: leafH, width: leafW, thickness: t, band: { long: 2, short: 2 } },
-        details: frontDetails(ctx, id, leafW, { left: leafH, right: leafH }, frontTrack ? "right" : "left"),
-        openShift: [shift, 0, 0],
+        details: frontDetails(ctx, id, leafW, { left: leafH, right: leafH }, frontTrack ? "right" : "left", !frontTrack),
+        slide: { track: frontTrack ? 0 : 1, index: k, home: from + k * step, width: leafW, from, to },
         explode: [0, 0, frontTrack ? 460 : 400],
         front: true,
       });
@@ -912,8 +954,10 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
         const leaves = span_ > 650 ? 2 : 1;
         const doorW = span_ / leaves - DOOR_GAP;
         const doorH = ht - DOOR_GAP;
+        const single = singleHinge(m, lastRightHinge.top);
         for (let k = 0; k < leaves; k++) {
-          const hinge: "left" | "right" = leaves === 2 ? (k === 0 ? "left" : "right") : m % 2 === 0 ? "left" : "right";
+          const hinge: "left" | "right" = leaves === 2 ? (k === 0 ? "left" : "right") : single;
+          if (k === leaves - 1) lastRightHinge.top = hinge === "right";
           const id = A(`door${k}`);
           add({
             id,
@@ -997,6 +1041,111 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
   return { index: r, ...transform, span, parts };
 }
 
+const FULL_OPEN = Math.PI / 2;
+/** la puerta que cede en un par con bisagras en el mismo divisor */
+const SHY_OPEN = (72 * Math.PI) / 180;
+
+/** contorno en planta (x, z de mundo) de una puerta batiente abierta a `angle` */
+function doorFootprint(run: RunAssembly, d: Part, angle: number): [number, number][] {
+  const left = d.hinge === "left";
+  const w = d.size[0];
+  const t = d.size[2];
+  // pivote en el canto de adelante, del lado de la bisagra; 30 mm de margen por el tirador
+  const px = left ? d.position[0] : d.position[0] + w;
+  const pz = d.position[2] + t;
+  const local: [number, number][] = left
+    ? [[0, -t], [w, -t], [w, 30], [0, 30]]
+    : [[-w, -t], [0, -t], [0, 30], [-w, 30]];
+  const th = left ? -angle : angle;
+  const c = Math.cos(th);
+  const s = Math.sin(th);
+  return local.map(([x, z]) => {
+    const p = toWorld(run, [px + x * c + z * s, 0, pz - x * s + z * c]);
+    return [p[0], p[2]];
+  });
+}
+
+/** separación de ejes: dos polígonos convexos en planta, ¿se tocan? */
+function polygonsTouch(a: [number, number][], b: [number, number][]): boolean {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const [x1, y1] = poly[i];
+      const [x2, y2] = poly[(i + 1) % poly.length];
+      const nx = y2 - y1;
+      const ny = x1 - x2;
+      const project = (p: [number, number][]) => p.map(([x, y]) => x * nx + y * ny);
+      const pa = project(a);
+      const pb = project(b);
+      if (Math.max(...pa) < Math.min(...pb) || Math.max(...pb) < Math.min(...pa)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Cómo abre cada puerta batiente para que nada se atraviese:
+ * - las puertas abren en cascada, de a poco;
+ * - si dos puertas tienen la bisagra en el mismo divisor, una abre a 90° y la
+ *   otra a 72°: así los tiradores no se chocan. Abre del todo la que tiene
+ *   cajones detrás;
+ * - una puerta que no llega a 90° le queda delante a sus cajones: esos cajones
+ *   no salen;
+ * - en la L, la puerta de la esquina del lateral espera a la del frente y abre
+ *   hasta donde no la toca.
+ */
+function planDoorMotion(runs: RunAssembly[], config: WardrobeConfig) {
+  const block = (run: RunAssembly, module: number | null) => {
+    for (const p of run.parts) if (p.module === module && p.kind.startsWith("drawer")) p.drawerBlocked = true;
+  };
+  for (const run of runs) {
+    const doors = run.parts.filter((p) => p.kind === "door" && p.hinge);
+    const drawers = new Set(run.parts.filter((p) => p.kind === "drawer-front").map((p) => p.module));
+    doors.forEach((d, i) => {
+      d.openAngle = FULL_OPEN;
+      d.openDelay = Math.min(0.24, i * 0.035);
+    });
+    for (const a of doors) {
+      if (a.hinge !== "right") continue;
+      const ax = a.position[0] + a.size[0];
+      const b = doors.find((d) => d.hinge === "left" && Math.abs(d.position[0] - ax) < 12 && Math.abs(d.position[1] - a.position[1]) < 50);
+      if (!b) continue;
+      const main = a.position[1] < config.height;
+      const aHas = main && drawers.has(a.module);
+      const bHas = main && drawers.has(b.module);
+      const shy = bHas && !aHas ? a : b;
+      shy.openAngle = SHY_OPEN;
+      if (main && drawers.has(shy.module)) block(run, shy.module);
+    }
+  }
+
+  if (config.shape === "straight" || runs.length < 2) return;
+  const [front, side] = runs;
+  const cornerModule = config.shape === "l-left" ? 0 : front.parts.filter((p) => p.kind === "bottom" && !p.id.includes("alt:")).length - 1;
+  const sideModules = side.parts.filter((p) => p.kind === "bottom" && !p.id.includes("alt:")).length;
+  const cornerEnd = config.shape === "l-left" ? sideModules - 1 : 0;
+  for (const row of ["main", "top"] as const) {
+    const inRow = (p: Part) => (row === "main" ? p.position[1] < config.height : p.position[1] >= config.height);
+    const fixed = front.parts.filter((p) => p.kind === "door" && p.module === cornerModule && inRow(p));
+    const moving = side.parts.filter((p) => p.kind === "door" && p.module === cornerEnd && inRow(p));
+    for (const d of moving) {
+      let max = d.openAngle ?? FULL_OPEN;
+      for (let deg = 1; deg <= 90; deg++) {
+        const angle = (deg * Math.PI) / 180;
+        if (angle > max) break;
+        const mine = doorFootprint(side, d, angle);
+        if (fixed.some((f) => polygonsTouch(mine, doorFootprint(front, f, f.openAngle ?? FULL_OPEN)))) {
+          max = ((deg - 1) * Math.PI) / 180;
+          break;
+        }
+      }
+      d.openAngle = max;
+      // espera a que la del frente termine de abrir
+      d.openDelay = 0.5;
+      if (row === "main" && max < FULL_OPEN - 0.02) block(side, d.module);
+    }
+  }
+}
+
 /** qué extremos de un tramo llevan terminal curvo, según la forma */
 export function curvedEnds(config: WardrobeConfig, r: number): { left: boolean; right: boolean } {
   const { left, right } = config.curved;
@@ -1027,6 +1176,7 @@ export function buildAssembly(config: WardrobeConfig): Assembly {
     hw: {
       hinge: line("hinge", "Bisagra cazoleta 35 mm", "u"),
       slidePair: line("slidePair", "Corredera telescópica (par)", "u"),
+      slideSpacer: line("slideSpacer", "Suplemento de corredera (par)", "u"),
       rod: line("rod", "Barral oval de aluminio", "m"),
       rodSupport: line("rodSupport", "Soporte de barral", "u"),
       slidingKit: line("slidingKit", "Kit de ruedas por hoja corrediza", "u"),
@@ -1049,6 +1199,7 @@ export function buildAssembly(config: WardrobeConfig): Assembly {
   };
 
   const runs = config.runs.map((_, r) => buildRun(ctx, r));
+  planDoorMotion(runs, config);
 
   if (ctx.ledMeters > 0) {
     ctx.hw.ledStrip.qty = ctx.ledMeters;

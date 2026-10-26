@@ -7,6 +7,7 @@ import { DEFAULT_CONFIG, LIMITS, distribute, normalize, validModuleCounts, withM
 import { nest } from "./nesting.ts";
 import { quote, summaryByTitle } from "./quote.ts";
 import { pieceDrawing } from "./drawings.ts";
+import { drawerGroupsOf, isCovered, leavesOf, openOffsets, toggleLeaf } from "./motion.ts";
 import { decodeConfig, encodeConfig } from "./share.ts";
 
 const usable = {
@@ -168,4 +169,67 @@ test("el resumen para el taller suma estantes con luz y marca los mecanizados", 
   }
   // cada grupo de piezas se puede dibujar
   for (const r of q.rows) assert.ok(pieceDrawing(r).prims.length > 0);
+});
+
+test("corredizas: las hojas de un mismo riel nunca se pisan y el cajón tapado no sale", () => {
+  for (const width of [1600, 2400, 3200, 4000]) {
+    const config = normalize({
+      ...DEFAULT_CONFIG,
+      doors: "sliding",
+      runs: [{ width, modules: DEFAULT_CONFIG.runs[0].modules.map((m) => ({ ...m, layout: "drawers-shelves", drawers: 2, shelves: 2 })) }],
+    });
+    const a = buildAssembly(config);
+    const leaves = leavesOf(a);
+    const groups = drawerGroupsOf(a);
+    const check = (off: Record<string, number>) => {
+      for (const l of leaves) {
+        const x = l.home + (off[l.id] ?? 0);
+        assert.ok(x >= l.from - 0.5 && x + l.width <= l.to + 0.5, `hoja ${l.id} fuera del riel`);
+        for (const o of leaves) {
+          if (o === l || o.track !== l.track) continue;
+          const y = o.home + (off[o.id] ?? 0);
+          assert.ok(x + l.width <= y + 0.5 || y + o.width <= x + 0.5, `${l.id} pisa a ${o.id} en el mismo riel (${width})`);
+        }
+      }
+    };
+    const opened = openOffsets(leaves, groups);
+    check(opened);
+    assert.ok(groups.some((g) => !isCovered(leaves, opened, g)), `al abrir no queda ningún cajón a la vista (${width})`);
+    // tocar las hojas en cualquier orden nunca las pisa ni las saca del riel
+    let off: Record<string, number> = {};
+    for (const l of [...leaves, ...[...leaves].reverse()]) {
+      off = toggleLeaf(leaves, off, l.id);
+      check(off);
+    }
+    // una hoja trabada contra otra de su riel igual se corre: empuja a la vecina
+    const front = leaves.filter((l) => l.track === 0).sort((p, q) => p.home - q.home);
+    if (front.length >= 2) {
+      const [first, second] = front;
+      const stuck = toggleLeaf(leaves, {}, second.id);
+      const moved = toggleLeaf(leaves, stuck, first.id);
+      check(moved);
+      assert.ok(Math.abs((moved[first.id] ?? 0) - (stuck[first.id] ?? 0)) >= 60, `la hoja trabada no se movió (${width})`);
+    }
+  }
+});
+
+test("batientes: dos puertas en el mismo divisor no abren igual y los cajones dejan lugar", () => {
+  const config = normalize({ ...DEFAULT_CONFIG, doors: "hinged" });
+  const a = buildAssembly(config);
+  const doors = a.runs[0].parts.filter((p) => p.kind === "door");
+  for (const d of doors) {
+    if (d.hinge !== "right") continue;
+    const ax = d.position[0] + d.size[0];
+    const pair = doors.find((o) => o.hinge === "left" && Math.abs(o.position[0] - ax) < 12);
+    if (pair) assert.notEqual(d.openAngle, pair.openAngle, "un par en el mismo divisor tiene que abrir a distinto ángulo");
+  }
+  // el frente de un cajón interior deja 12 mm por lado para la puerta abierta
+  for (const f of a.runs[0].parts.filter((p) => p.kind === "drawer-front")) {
+    const bottom = a.runs[0].parts.find((p) => p.kind === "bottom" && p.module === f.module)!;
+    assert.ok(f.position[0] - bottom.position[0] >= 11.9);
+  }
+  // los cajones que se abren tienen todas sus puertas a 90°
+  for (const f of a.runs[0].parts.filter((p) => p.kind === "drawer-front" && !p.drawerBlocked)) {
+    for (const d of doors.filter((x) => x.module === f.module)) assert.ok(Math.abs((d.openAngle ?? 0) - Math.PI / 2) < 1e-6);
+  }
 });

@@ -7,6 +7,7 @@
  */
 
 import { catalog } from "./catalog.ts";
+import { product } from "./product.ts";
 import { INK, fitDrawing, pieceDrawing, type Drawing } from "./drawings.ts";
 import { DOOR_STYLE_LABELS, LED_COLORS, hasLeds, totalHeight, type WardrobeConfig } from "./model.ts";
 import { money, summaryByTitle, type CutRow, type Quote } from "./quote.ts";
@@ -30,7 +31,21 @@ function newPage(): [HTMLCanvasElement, Ctx] {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, PAGE_W, PAGE_H);
   ctx.textBaseline = "alphabetic";
+  if (catalog.brand.demo) watermark(ctx);
   return [c, ctx];
+}
+
+/** marca de agua de la demo, en diagonal y muy suave, por debajo del contenido */
+function watermark(ctx: Ctx) {
+  ctx.save();
+  ctx.fillStyle = "rgba(31, 29, 26, 0.06)";
+  ctx.font = `700 34px ${fontFamily()}`;
+  ctx.textAlign = "center";
+  ctx.rotate((-24 * Math.PI) / 180);
+  for (let y = -200; y < PAGE_H * 1.4; y += 230) {
+    for (let x = -600; x < PAGE_W * 1.4; x += 560) ctx.fillText(product.watermark, x + ((y / 230) % 2) * 280, y);
+  }
+  ctx.restore();
 }
 
 function text(ctx: Ctx, s: string, x: number, y: number, size: number, opts: { weight?: number; color?: string; align?: CanvasTextAlign } = {}) {

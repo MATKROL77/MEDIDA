@@ -17,6 +17,7 @@ import {
 } from "@/components/icons";
 import { LayoutIcon } from "@/components/LayoutIcon";
 import { Poster } from "@/components/Poster";
+import { Watermark, WatermarkNote } from "@/components/Watermark";
 import { Dimension, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import type { ViewName } from "@/components/viewer/Scene";
@@ -46,6 +47,7 @@ import {
   type WardrobeConfig,
 } from "@/lib/model";
 import { EMBEDDED, currentQuery, rememberQuery } from "@/lib/embed";
+import { drawerGroupsOf, leavesOf, openOffsets, toggleLeaf } from "@/lib/motion";
 import { buildOrderPdf, type OrderPdf } from "@/lib/orderPdf";
 import { money, quote, summaryByTitle } from "@/lib/quote";
 import { decodeConfig, encodeConfig, orderMessage, whatsappLink } from "@/lib/share";
@@ -98,6 +100,26 @@ export default function Configurator() {
   }, [config]);
 
   const result = useMemo(() => quote(config), [config]);
+
+  // corredizas: dónde dejó cada hoja el cliente; se vuelve a empezar si cambian las hojas
+  const leaves = useMemo(() => leavesOf(result.assembly), [result.assembly]);
+  const leafKey = leaves.map((l) => `${l.id}:${Math.round(l.home)}:${Math.round(l.width)}`).join("|");
+  const [leafOffsets, setLeafOffsets] = useState<Record<string, number>>({});
+  useEffect(() => {
+    setLeafOffsets(open && leaves.length ? openOffsets(leaves, drawerGroupsOf(result.assembly)) : {});
+    // sólo cuando cambian las hojas, no cada vez que se abre
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leafKey]);
+  const toggleOpen = () => {
+    const next = !open;
+    setOpen(next);
+    setLeafOffsets(next && leaves.length ? openOffsets(leaves, drawerGroupsOf(result.assembly)) : {});
+  };
+  // tocar una hoja la corre para el otro lado; los cajones que quedan a la vista salen
+  const slideLeaf = (id: string) => {
+    setLeafOffsets((cur) => toggleLeaf(leaves, open ? cur : {}, id));
+    setOpen(true);
+  };
   const update = (patch: Partial<WardrobeConfig>) => setConfig((c) => normalize({ ...c, ...patch }));
   const updateModule = (run: number, i: number, patch: Partial<ModuleConfig>) =>
     setConfig((c) =>
@@ -171,6 +193,8 @@ export default function Configurator() {
             selection={editingInside ? sel : null}
             onSelect={selectModule}
             open={open}
+            leafOffsets={leafOffsets}
+            onLeaf={slideLeaf}
             xray={xray || (editingInside && !open && config.doors !== "none")}
             explode={explode}
             lights={lights}
@@ -181,14 +205,17 @@ export default function Configurator() {
           />
         </div>
 
-        <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-4">
+        <Watermark />
+
+        <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
           <div className="pointer-events-auto rounded-2xl bg-surface/90 px-4 py-2.5 shadow-sm backdrop-blur">
             <p className="font-display text-base font-semibold leading-tight">{catalog.brand.name}</p>
             <p className="text-xs text-ink-2">{catalog.brand.tagline}</p>
           </div>
+          <WatermarkNote className="mt-1 hidden rounded-full bg-surface/70 px-3 py-1.5 backdrop-blur sm:block" />
         </header>
 
-        <div className="absolute inset-x-0 bottom-3 flex justify-center px-3">
+        <div className="absolute inset-x-0 bottom-3 z-10 flex justify-center px-3">
           <div className="toolbar max-w-full overflow-x-auto [scrollbar-width:none]">
             {(
               [
@@ -206,7 +233,7 @@ export default function Configurator() {
             ))}
             <span className="tool-sep shrink-0" />
             {config.doors !== "none" && (
-              <button type="button" className="tool" aria-pressed={open} onClick={() => setOpen((o) => !o)}>
+              <button type="button" className="tool" aria-pressed={open} onClick={toggleOpen}>
                 <IconDoor />
                 <span className="hidden sm:inline">{open ? "Cerrar" : "Abrir"}</span>
               </button>

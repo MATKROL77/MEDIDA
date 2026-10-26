@@ -63,6 +63,8 @@ export const catalog = {
     hinge: 3200,
     /** par de correderas telescópicas */
     slidePair: 13500,
+    /** par de suplementos para correr la corredera hacia adentro (cajones detrás de corredizas) */
+    slideSpacer: 2600,
     rodPerMeter: 8500,
     rodSupport: 1400,
     /** juego de ruedas y guías para una hoja corrediza */

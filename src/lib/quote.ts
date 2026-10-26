@@ -207,6 +207,7 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
   const unitPrice: Record<HardwareKey, number> = {
     hinge: hw.hinge,
     slidePair: hw.slidePair,
+    slideSpacer: hw.slideSpacer,
     rod: hw.rodPerMeter,
     rodSupport: hw.rodSupport,
     slidingKit: hw.slidingKitPerLeaf,

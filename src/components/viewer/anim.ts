@@ -16,6 +16,10 @@ export const FIRM = { k: 210, c: 19 };
 export const BOUNCY = { k: 170, c: 13 };
 /** suave: luces, transparencias, ambiente */
 export const SOFT = { k: 90, c: 19 };
+/** puertas y hojas corredizas: con peso, casi sin rebote para no pasarse del tope */
+export const HEAVY = { k: 48, c: 12.5 };
+/** cajones: un poco más ágiles que las puertas */
+export const DRAWER = { k: 75, c: 15 };
 
 export function step(s: Spring, dt: number, p = FIRM): boolean {
   const d = s.target - s.v;
@@ -74,7 +78,12 @@ export class SpringVec {
 
 /** estado global de la escena que leen todas las piezas en cada cuadro */
 export type SceneAnim = {
+  /** puertas batientes: 0 cerradas, 1 abiertas (cada una con su ángulo y su demora) */
   open: Spring;
+  /** cajones por módulo ("tramo:módulo"): 0 adentro, 1 afuera */
+  drawers: Map<string, Spring>;
+  /** hojas corredizas: cuánto se corrió cada una, en mm */
+  leaves: Map<string, Spring>;
   explode: Spring;
   xray: Spring;
   lights: Spring;
@@ -93,3 +102,15 @@ export function useSceneAnim(): SceneAnim {
 
 /** paso de tiempo acotado: si el equipo se traba, la animación sigue sin saltar */
 export const clampDt = (dt: number) => Math.min(dt, 0.1);
+
+/** el resorte de una clave, creado la primera vez que se pide */
+export function springFor(map: Map<string, Spring>, key: string): Spring {
+  let s = map.get(key);
+  if (!s) map.set(key, (s = spring()));
+  return s;
+}
+
+/** avance de una puerta que arranca con demora dentro del movimiento general */
+export function doorProgress(open: number, delay = 0): number {
+  return Math.min(1, Math.max(0, (open - delay) / (1 - delay)));
+}

@@ -21,7 +21,8 @@ cada placa, los herrajes, las luces y la cuenta de costo y margen.
 
 En el visor: girar 360° sin límites, vistas rápidas (frente, 3/4, costado,
 arriba, atrás), abrir puertas y cajones, ver adentro sin abrir, vista explotada
-y luces prendidas. El visor muestra solo el placard y sus controles; el
+y luces prendidas. Tocando una hoja corrediza en el 3D se la corre para el
+otro lado. El visor muestra solo el placard y sus controles; el
 ambiente (habitación o fondo liso, color de pared y piso de madera clara,
 pinotea, cemento alisado o baldosa beige) se elige en la solapa Color.
 
@@ -65,7 +66,16 @@ npm run build      # export estático en out/
 
 `/demo/?calidad=baja` fuerza el modo liviano del 3D (sin oclusión ambiental ni
 antialias por muestreo). Sirve para equipos muy viejos y para sacar capturas en
-máquinas sin placa de video.
+máquinas sin placa de video. `/demo/?calidad=alta` hace lo contrario: deja todos
+los efectos aunque el equipo no llegue a 60 cuadros, para grabar video.
+
+## Marca de agua
+
+Mientras `catalog.brand.demo` sea `true`, el 3D, la vista del taller y cada hoja
+del PDF llevan "MEDIDA · DEMO" en diagonal, y arriba a la derecha aparece el
+contacto de quien vende el producto. Sirve para mandar el link o el video sin
+que se confunda con un placard real. El texto se cambia en `src/lib/product.ts`;
+en el sitio de un taller real se pone `demo: false` y desaparece.
 
 ## Dónde tocar cada cosa
 
@@ -104,6 +114,19 @@ máquinas sin placa de video.
   explotada, luces y transparencias siguen a su valor con resortes apenas
   subamortiguados (`viewer/anim.ts`): llegan con un rebote chiquito. Las piezas
   nuevas crecen y las que se van se encogen antes de desaparecer.
+- **Se abre en el orden de verdad.** Lo que se mueve sigue las reglas de un
+  placard real (`lib/motion.ts`, y `sequence` en `viewer/Scene.tsx` cuadro a
+  cuadro): primero se abren las puertas y después salen los cajones; al cerrar,
+  primero entran los cajones. Una hoja corrediza corre por su riel hasta tocar
+  la otra hoja del mismo riel; si está trabada, empuja a la vecina. Antes de
+  que una hoja pase por delante de un cajón abierto, el cajón se cierra, y un
+  cajón tapado por una hoja no sale. Con batientes, de dos puertas que comparten
+  divisor una abre a 90° y la otra a 72° para no chocarse, y la del cajón es la
+  que abre entera. Detrás de batientes, el frente del cajón es 12 mm más
+  angosto por lado para pasar junto a la puerta abierta; detrás de corredizas,
+  el cajón entero va corrido hacia adentro con suplementos de corredera para
+  salir por el hueco que dejan las hojas. Los suplementos están en el despiece
+  y en el precio.
 - **Sin pantallas de carga.** Mientras baja el 3D se ve una vista de frente en
   SVG; cuando el 3D está listo entra con un fundido y el placard se arma de abajo
   hacia arriba.
