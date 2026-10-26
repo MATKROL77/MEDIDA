@@ -14,6 +14,7 @@ export function Watermark({ fixed = false }: { fixed?: boolean }) {
   return (
     <div
       aria-hidden
+      data-watermark
       className={`pointer-events-none inset-0 z-[5] ${fixed ? "fixed" : "absolute"}`}
       style={{ backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(tile(product.watermark))}")`, backgroundRepeat: "repeat" }}
     />
@@ -22,5 +23,5 @@ export function Watermark({ fixed = false }: { fixed?: boolean }) {
 
 export function WatermarkNote({ className = "" }: { className?: string }) {
   if (!catalog.brand.demo) return null;
-  return <p className={`pointer-events-none select-none text-[11px] font-medium tracking-wide text-ink-2/80 ${className}`}>{product.watermarkNote}</p>;
+  return <p data-watermark className={`pointer-events-none select-none text-[11px] font-medium tracking-wide text-ink-2/80 ${className}`}>{product.watermarkNote}</p>;
 }

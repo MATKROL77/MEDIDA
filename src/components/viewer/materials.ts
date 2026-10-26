@@ -204,6 +204,9 @@ export function tileTexture(): THREE.Texture {
 }
 
 /** degradés para las tarjetas de luz de los LED */
+/** vidrio fumé: deja ver el interior y las luces, pero se nota que hay vidrio */
+export const GLASS_OPACITY = 0.42;
+
 export function glowTexture(kind: "down" | "pool" | "fromLeft" | "fromRight"): THREE.Texture {
   return cached(`glow-${kind}`, () => {
     const size = 256;
@@ -265,7 +268,7 @@ export function createKit(bodyId: string, doorId: string) {
     handle: new THREE.MeshStandardMaterial({ color: "#2a2a2a", metalness: 0.75, roughness: 0.28, transparent: true }),
     groove: new THREE.MeshStandardMaterial({ color: "#191714", roughness: 0.9, transparent: true }),
     mirror: new THREE.MeshStandardMaterial({ color: "#f2f5f6", metalness: 1, roughness: 0.035, envMapIntensity: 1.4, transparent: true }),
-    glass: new THREE.MeshStandardMaterial({ color: "#2d3336", metalness: 0.2, roughness: 0.06, transparent: true, opacity: 0.55, envMapIntensity: 1.3 }),
+    glass: new THREE.MeshStandardMaterial({ color: "#3a4246", metalness: 0.2, roughness: 0.05, transparent: true, opacity: GLASS_OPACITY, envMapIntensity: 1.2 }),
     frame: new THREE.MeshStandardMaterial({ color: "#b8bcc1", metalness: 1, roughness: 0.3, transparent: true }),
     led: new THREE.MeshStandardMaterial({ color: "#e6e6e6", roughness: 0.4, emissive: "#000000", emissiveIntensity: 0 }),
     glow: {

@@ -34,6 +34,8 @@ import {
   moduleInterior,
   moduleMin,
   normalize,
+  allowsDrawers,
+  cornerPair,
   runSpan,
   validModuleCounts,
   withModuleCount,
@@ -122,12 +124,15 @@ export default function Configurator() {
   };
   const update = (patch: Partial<WardrobeConfig>) => setConfig((c) => normalize({ ...c, ...patch }));
   const updateModule = (run: number, i: number, patch: Partial<ModuleConfig>) =>
-    setConfig((c) =>
-      normalize({
+    setConfig((c) => {
+      // la esquina de una L es un solo espacio: se edita desde el módulo del frente
+      const pair = cornerPair(c);
+      const [tr, ti] = pair && run === 1 && i === pair.side ? [0, pair.front] : [run, i];
+      return normalize({
         ...c,
-        runs: c.runs.map((r, j) => (j === run ? { ...r, modules: r.modules.map((m, k) => (k === i ? { ...m, ...patch } : m)) } : r)),
-      }),
-    );
+        runs: c.runs.map((r, j) => (j === tr ? { ...r, modules: r.modules.map((m, k) => (k === ti ? { ...m, ...patch } : m)) } : r)),
+      });
+    });
   const updateAllModules = (patch: Partial<ModuleConfig>) =>
     setConfig((c) => normalize({ ...c, runs: c.runs.map((r) => ({ ...r, modules: r.modules.map((m) => ({ ...m, ...patch })) })) }));
 
@@ -139,6 +144,8 @@ export default function Configurator() {
   const run = config.runs[sel.run];
   const mod = run.modules[sel.module];
   const interior = moduleInterior(config, sel.run, sel.module);
+  // las corredizas llevan una hoja por módulo: si no entran dos hojas de verdad, no se ofrecen
+  const slidingOk = useMemo(() => normalize({ ...config, doors: "sliding" }).doors === "sliding", [config]);
   // con corredizas hay módulos que ninguna combinación de hojas deja libres enteros
   const drawersStuck =
     config.doors === "sliding" &&
@@ -283,7 +290,13 @@ export default function Configurator() {
                       ["l-right", "En L, derecha"],
                     ] as [Shape, string][]
                   ).map(([id, label]) => (
-                    <OptionCard key={id} active={config.shape === id} label={label} onClick={() => update({ shape: id })}>
+                    <OptionCard
+                      key={id}
+                      active={config.shape === id}
+                      label={label}
+                      // al cambiar de forma la esquina pide otro ancho: los módulos se vuelven a repartir parejo
+                      onClick={() => update({ shape: id, runs: config.runs.map((r) => ({ ...r, modules: r.modules.map((m) => ({ ...m, width: 0 })) })) })}
+                    >
                       <ShapeIcon shape={id} />
                     </OptionCard>
                   ))}
@@ -414,6 +427,11 @@ export default function Configurator() {
               </Section>
 
               <Section title={`Módulo ${sel.module + 1}`}>
+                {!allowsDrawers(config, sel.run, sel.module) && (
+                  <p className="text-xs leading-relaxed text-ink-2">
+                    Es la esquina: este módulo y el del otro tramo forman un solo espacio, con estantes y barral en L.
+                  </p>
+                )}
                 {n > 1 && modMax > modMin && (
                   <Dimension
                     label="Ancho interior"
@@ -425,13 +443,14 @@ export default function Configurator() {
                 )}
                 <div className="grid grid-cols-5 gap-1.5">
                   {LAYOUTS.map((layout) => {
-                    const fits = layoutFits(layout, interior, Math.max(1, mod.drawers));
+                    const noDrawers = layout.startsWith("drawers") && !allowsDrawers(config, sel.run, sel.module);
+                    const fits = !noDrawers && layoutFits(layout, interior, Math.max(1, mod.drawers));
                     return (
                       <OptionCard
                         key={layout}
                         active={mod.layout === layout}
                         disabled={!fits}
-                        title={fits ? LAYOUT_LABELS[layout] : "No entra con este alto"}
+                        title={fits ? LAYOUT_LABELS[layout] : noDrawers ? "En la esquina no van cajones: chocarían con el otro tramo" : "No entra con este alto"}
                         label={LAYOUT_LABELS[layout]}
                         onClick={() =>
                           updateModule(sel.run, sel.module, {
@@ -482,8 +501,13 @@ export default function Configurator() {
                   ).map(([id, label]) => ({
                     id,
                     label,
-                    disabled: id === "sliding" && config.slope.enabled,
-                    title: id === "sliding" && config.slope.enabled ? "Con techo inclinado van batientes" : undefined,
+                    disabled: id === "sliding" && !slidingOk,
+                    title:
+                      id === "sliding" && !slidingOk
+                        ? config.slope.enabled
+                          ? "Con techo inclinado van batientes"
+                          : "Hace falta lugar para dos hojas de al menos 50 cm"
+                        : undefined,
                   }))}
                   onChange={(doors) => {
                     update({ doors });

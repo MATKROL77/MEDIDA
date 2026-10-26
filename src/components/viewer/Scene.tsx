@@ -13,7 +13,7 @@ import { ledHex, type WardrobeConfig } from "@/lib/model";
 
 import { clampDt, DRAWER, FIRM, HEAVY, type SceneAnim, SceneAnimContext, SOFT, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
 import { drawerGroupsOf, isCovered, leavesOf, overlaps, sweep } from "@/lib/motion";
-import { createKit, disposeKit, frontMaterials, type MaterialKit } from "./materials";
+import { createKit, disposeKit, frontMaterials, GLASS_OPACITY, type MaterialKit } from "./materials";
 import { MM, PartNode, Presence } from "./PartNode";
 import type { FloorType } from "./constants";
 import { Room } from "./Room";
@@ -89,18 +89,18 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
     kit.led.emissiveIntensity = 0.02 + l * 5.5;
     const glowBase = l * (1 - 0.85 * e);
     kit.glow.z.color.copy(led);
-    kit.glow.z.opacity = glowBase * 0.7;
+    kit.glow.z.opacity = glowBase * 0.85;
     kit.glow.y.color.copy(led);
-    kit.glow.y.opacity = glowBase * 0.5;
+    kit.glow.y.opacity = glowBase * 0.6;
     kit.glow["x+"].color.copy(led);
-    kit.glow["x+"].opacity = glowBase * 0.45;
+    kit.glow["x+"].opacity = glowBase * 0.55;
     kit.glow["x-"].color.copy(led);
-    kit.glow["x-"].opacity = glowBase * 0.45;
+    kit.glow["x-"].opacity = glowBase * 0.55;
     for (const m of fronts) {
       m.opacity = 1 - 0.84 * x;
       m.depthWrite = m.opacity > 0.97;
     }
-    kit.glass.opacity = 0.55 * (1 - 0.7 * x);
+    kit.glass.opacity = GLASS_OPACITY * (1 - 0.7 * x);
     // de noche el ambiente baja para que se luzcan los LED
     scene.environmentIntensity = 1 - 0.62 * l;
     bg.cur.copy(bg.studio).lerp(bg.room, anim.room.v).multiplyScalar(1 - 0.35 * l);
@@ -478,6 +478,11 @@ export default function Scene(props: ViewerProps) {
     [],
   );
   const { onReady } = props;
+  // al grabar un video, el guion lee el estado de puertas, cajones y luces
+  // cuadro a cuadro para poner los sonidos donde de verdad se mueven las cosas
+  useEffect(() => {
+    if (forcedHigh) (window as unknown as { __medidaAnim?: SceneAnim }).__medidaAnim = anim;
+  }, [forcedHigh, anim]);
 
   return (
     <SceneAnimContext.Provider value={anim}>

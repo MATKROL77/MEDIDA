@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { allParts, buildAssembly, hingesFor, slidingGeometry, slidingOpenings, toWorld } from "./assembly.ts";
+import { allParts, buildAssembly, hingesFor, slidingOpenings, toWorld, type Part, type RunAssembly } from "./assembly.ts";
 import { catalog } from "./catalog.ts";
-import { DEFAULT_CONFIG, LIMITS, distribute, normalize, validModuleCounts, withModuleWidth, type WardrobeConfig } from "./model.ts";
+import { DEFAULT_CONFIG, LIMITS, cornerPair, distribute, normalize, validModuleCounts, withModuleWidth, type WardrobeConfig } from "./model.ts";
 import { nest } from "./nesting.ts";
 import { quote, summaryByTitle } from "./quote.ts";
 import { pieceDrawing } from "./drawings.ts";
@@ -60,21 +60,54 @@ test("las piezas del tramo recto no se salen del placard", () => {
   }
 });
 
-test("en L el tramo lateral no pisa al de frente", () => {
+test("en L la esquina es un solo espacio y ningún tramo atraviesa al otro", () => {
+  const box = (run: RunAssembly, p: Part) => {
+    const a = toWorld(run, p.position);
+    const b = toWorld(run, [p.position[0] + p.size[0], p.position[1] + p.size[1], p.position[2] + p.size[2]]);
+    return [0, 1, 2].map((i) => [Math.min(a[i], b[i]), Math.max(a[i], b[i])] as const);
+  };
   for (const shape of ["l-left", "l-right"] as const) {
-    const config = normalize({ ...DEFAULT_CONFIG, shape, runs: [{ width: 2600, modules: [] }, { width: 1800, modules: [] }] });
-    const a = buildAssembly(config);
-    const [front, side] = a.runs;
-    const sideCarcass = side.parts.filter((p) => p.kind === "side" || p.kind === "divider" || p.kind === "back");
-    for (const p of sideCarcass) {
-      const corners = [p.position, [p.position[0] + p.size[0], p.position[1], p.position[2] + p.size[2]]] as const;
-      for (const c of corners) {
-        const w = toWorld(side, [c[0], c[1], c[2]]);
-        // el lateral arranca delante del frente: nada suyo detrás de z = profundidad
-        assert.ok(w[2] >= config.depth - 0.5, `${shape} ${p.id} entra en el frente (z=${w[2].toFixed(1)})`);
+    for (const doors of ["hinged", "sliding", "none"] as const) {
+      for (const topBox of [false, true]) {
+        const config = normalize({
+          ...DEFAULT_CONFIG,
+          shape,
+          doors,
+          topBox: { enabled: topBox, height: 450 },
+          runs: [{ width: 2600, modules: [] }, { width: 1800, modules: [] }],
+        });
+        const tag = `${shape} ${doors}${topBox ? " con altillo" : ""}`;
+        const a = buildAssembly(config);
+        const [front, side] = a.runs;
+        assert.ok(!front.parts.some((p) => p.kind === "blind"), `${tag}: quedó un panel ciego`);
+        const solid = (p: Part) => !["glow", "led", "rod"].includes(p.kind) && p.geometry !== "none";
+        for (const p of side.parts.filter(solid)) {
+          const pb = box(side, p);
+          for (const q of front.parts.filter(solid)) {
+            const qb = box(front, q);
+            const overlap = pb.every(([lo, hi], i) => Math.min(hi, qb[i][1]) - Math.max(lo, qb[i][0]) > 0.5);
+            assert.ok(!overlap, `${tag}: ${p.id} atraviesa ${q.id}`);
+          }
+        }
+        // los estantes del lateral en la esquina tocan a los del frente
+        const pair = cornerPair(config)!;
+        const frontShelves = front.parts.filter((p) => p.kind === "shelf" && p.module === pair.front);
+        const cornerShelves = side.parts.filter((p) => p.label === "Estante de esquina");
+        assert.equal(cornerShelves.length, frontShelves.length, `${tag}: la esquina no tiene los mismos estantes de los dos lados`);
+        for (const sh of cornerShelves) {
+          const sb = box(side, sh);
+          const match = frontShelves.find((f) => Math.abs(f.position[1] - sh.position[1]) < 0.5);
+          assert.ok(match, `${tag}: el estante de esquina ${sh.id} no tiene pareja en el frente`);
+          const fb = box(front, match!);
+          assert.ok(Math.abs(sb[2][0] - fb[2][1]) < 1.5, `${tag}: entre los estantes de la esquina quedan ${(sb[2][0] - fb[2][1]).toFixed(1)} mm`);
+        }
+        // y en la esquina no hay cajones
+        assert.ok(
+          !a.runs.some((r) => r.parts.some((p) => p.kind === "drawer-front" && p.module === (r.index === 0 ? pair.front : pair.side))),
+          `${tag}: hay cajones en la esquina`,
+        );
       }
     }
-    assert.ok(front.parts.some((p) => p.kind === "blind"), `${shape} sin panel ciego`);
   }
 });
 
@@ -180,6 +213,11 @@ test("corredizas: las hojas de un mismo riel nunca se pisan y el cajón tapado n
       doors: "sliding",
       runs: [{ width, modules: DEFAULT_CONFIG.runs[0].modules.map((m) => ({ ...m, layout: "drawers-shelves", drawers: 2, shelves: 2 })) }],
     });
+    // si no entran dos hojas de verdad, el placard pasa a batientes
+    if (config.doors !== "sliding") {
+      assert.ok(shape !== "straight" || width < 2 * 480 + 3 * 18, `${shape} ${width} tendría que admitir corredizas`);
+      continue;
+    }
     const a = buildAssembly(config);
     const leaves = leavesOf(a);
     const groups = drawerGroupsOf(a);
@@ -197,10 +235,20 @@ test("corredizas: las hojas de un mismo riel nunca se pisan y el cajón tapado n
     const opened = openOffsets(leaves, groups);
     check(opened);
     assert.ok(groups.some((g) => !isCovered(leaves, opened, g)), `al abrir no queda ningún cajón a la vista (${shape} ${width})`);
-    // cada cajón que se puede abrir entra en algún hueco que las hojas pueden dejar
-    for (const g of groups.filter((x) => !x.blocked)) {
+    // una hoja por módulo, y se juntan sobre los divisores
+    for (const run of a.runs) {
+      const mine = leaves.filter((l) => l.run === run.index);
+      assert.equal(mine.length, config.runs[run.index].modules.length, `hojas y módulos no coinciden (${shape} ${width})`);
+      const dividers = run.parts.filter((p) => p.kind === "divider").map((p) => p.position[0] + p.size[0] / 2);
+      for (const c of dividers) {
+        assert.ok(mine.some((l) => Math.abs(l.home + l.width - (c + 20)) < 0.5), `ninguna hoja termina sobre el divisor ${c} (${shape} ${width})`);
+      }
+    }
+    // con una hoja por módulo, todos los cajones tienen por dónde salir
+    assert.ok(groups.every((g) => !g.blocked), `hay cajones que nunca salen (${shape} ${width})`);
+    for (const g of groups) {
       const mine = leaves.filter((l) => l.run === g.run);
-      const openings = slidingOpenings(slidingGeometry(mine[0].from, mine[0].to));
+      const openings = slidingOpenings(mine, mine[0].from, mine[0].to);
       assert.ok(
         openings.some(([a, b]) => g.x0 >= a - 0.5 && g.x1 <= b + 0.5),
         `el cajón ${g.key} no tiene por dónde salir (${shape} ${width})`,

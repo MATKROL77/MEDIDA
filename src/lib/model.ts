@@ -83,6 +83,12 @@ export const HANG_MIN = 900;
 export const CURVE_RADIUS = 350;
 /** puerta mínima que tiene que quedar al lado del panel ciego de esquina */
 export const CORNER_DOOR_MIN = 300;
+/**
+ * Con corredizas va una hoja por módulo, con los cantos sobre los divisores,
+ * como en un placard real. Una hoja de menos de 50 cm no se usa: el módulo
+ * tiene que medir por dentro al menos esto.
+ */
+export const SLIDING_MODULE_MIN = 480;
 
 export const LAYOUT_LABELS: Record<Layout, string> = {
   shelves: "Estantes",
@@ -161,11 +167,30 @@ export function cornerModule(shape: Shape, count: number): number | null {
   return null;
 }
 
-export function moduleMin(config: Pick<WardrobeConfig, "shape" | "depth">, run: number, index: number, count: number): number {
+/**
+ * En L, el módulo del frente que está en la esquina y el del lateral que la
+ * toca forman un solo espacio: comparten interior (estantes y barral en L).
+ */
+export function cornerPair(config: Pick<WardrobeConfig, "shape" | "runs">): { front: number; side: number } | null {
+  if (config.shape === "straight" || config.runs.length < 2) return null;
+  const front = cornerModule(config.shape, config.runs[0].modules.length);
+  if (front === null) return null;
+  return { front, side: config.shape === "l-left" ? config.runs[1].modules.length - 1 : 0 };
+}
+
+/** en la esquina no van cajones: al salir chocarían con el otro tramo */
+export function allowsDrawers(config: Pick<WardrobeConfig, "shape" | "runs">, run: number, index: number): boolean {
+  const pair = cornerPair(config);
+  return !pair || !((run === 0 && index === pair.front) || (run === 1 && index === pair.side));
+}
+
+export function moduleMin(config: Pick<WardrobeConfig, "shape" | "depth" | "doors">, run: number, index: number, count: number): number {
+  const sliding = config.doors === "sliding";
   if (run === 0 && cornerModule(config.shape, count) === index) {
-    return Math.max(LIMITS.moduleInner.min, config.depth + CORNER_DOOR_MIN);
+    // la parte que queda a la vista al lado del panel ciego lleva su puerta u hoja
+    return Math.max(LIMITS.moduleInner.min, config.depth + (sliding ? SLIDING_MODULE_MIN : CORNER_DOOR_MIN));
   }
-  return LIMITS.moduleInner.min;
+  return sliding ? SLIDING_MODULE_MIN : LIMITS.moduleInner.min;
 }
 
 /** suma de anchos interiores disponible para los módulos de un tramo */
@@ -174,9 +199,10 @@ export function innerAvailable(span: number, count: number): number {
 }
 
 /** cantidades de módulos que respetan los anchos interiores permitidos */
-export function validModuleCounts(config: Pick<WardrobeConfig, "shape" | "depth">, run: number, span: number): number[] {
+export function validModuleCounts(config: Pick<WardrobeConfig, "shape" | "depth" | "doors">, run: number, span: number): number[] {
   const counts: number[] = [];
-  for (let n = 1; n <= 10; n++) {
+  // una sola hoja corrediza no tiene adónde correrse
+  for (let n = config.doors === "sliding" ? 2 : 1; n <= 10; n++) {
     const avail = innerAvailable(span, n);
     let minSum = 0;
     for (let i = 0; i < n; i++) minSum += moduleMin(config, run, i, n);
@@ -327,30 +353,39 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
     height: Math.round(clamp(Number(topIn.height) || base.topBox.height, LIMITS.topBox.min, LIMITS.topBox.max)),
   };
 
-  const partial = { shape, depth } as const;
-  const runCount = shape === "straight" ? 1 : 2;
-  const runs: RunConfig[] = Array.from({ length: runCount }, (_, r) => {
-    const raw = rawRuns[r] ?? (r === 1 ? { width: Math.max(depth + 1200, 1500), modules: [base.runs[0].modules[0], base.runs[0].modules[2]] } : base.runs[0]);
-    const minWidth = r === 1 ? depth + LIMITS.width.min : LIMITS.width.min;
-    const width = Math.round(clamp(Number(raw.width) || base.runs[0].width, minWidth, LIMITS.width.max));
-    const span = runSpan({ depth }, r, width);
-    const counts = validModuleCounts(partial, r, span);
-    const source = Array.isArray(raw.modules) && raw.modules.length ? raw.modules : base.runs[0].modules;
-    const count = nearestCount(counts, source.length);
-    const modules = Array.from({ length: count }, (_, i) => normalizeModule(source[i], normalizeModule(source[source.length - 1], base.runs[0].modules[0])));
-
-    const avail = innerAvailable(span, count);
-    const mins = modules.map((_, i) => moduleMin(partial, r, i, count));
-    const maxs = modules.map(() => LIMITS.moduleInner.max);
-    const sameCount = source.length === count && source.every((m) => Number(m?.width) > 0);
-    const requested = sameCount ? modules.map((m) => m.width) : modules.map(() => avail / count);
-    distribute(requested, mins, maxs, avail).forEach((w, i) => (modules[i].width = Math.round(w * 10) / 10));
-    return { width, modules };
-  });
-
   const doorsIn = input.doors === "none" || input.doors === "sliding" ? input.doors : input.doors === "hinged" ? "hinged" : base.doors;
-  // con techo inclinado las hojas corredizas no corren: van batientes
-  const doors: DoorType = slopeEnabled && doorsIn === "sliding" ? "hinged" : doorsIn;
+  const runCount = shape === "straight" ? 1 : 2;
+  const buildRuns = (doorType: DoorType): RunConfig[] | null => {
+    const partial = { shape, depth, doors: doorType } as const;
+    const out: RunConfig[] = [];
+    for (let r = 0; r < runCount; r++) {
+      const raw = rawRuns[r] ?? (r === 1 ? { width: Math.max(depth + 1200, 1500), modules: [base.runs[0].modules[0], base.runs[0].modules[2]] } : base.runs[0]);
+      const minWidth = r === 1 ? depth + LIMITS.width.min : LIMITS.width.min;
+      const width = Math.round(clamp(Number(raw.width) || base.runs[0].width, minWidth, LIMITS.width.max));
+      const span = runSpan({ depth }, r, width);
+      const counts = validModuleCounts(partial, r, span);
+      if (!counts.length) return null;
+      const source = Array.isArray(raw.modules) && raw.modules.length ? raw.modules : base.runs[0].modules;
+      const count = nearestCount(counts, source.length);
+      const modules = Array.from({ length: count }, (_, i) => normalizeModule(source[i], normalizeModule(source[source.length - 1], base.runs[0].modules[0])));
+
+      const avail = innerAvailable(span, count);
+      const mins = modules.map((_, i) => moduleMin(partial, r, i, count));
+      const maxs = modules.map(() => LIMITS.moduleInner.max);
+      const sameCount = source.length === count && source.every((m) => Number(m?.width) > 0);
+      const requested = sameCount ? modules.map((m) => m.width) : modules.map(() => avail / count);
+      distribute(requested, mins, maxs, avail).forEach((w, i) => (modules[i].width = Math.round(w * 10) / 10));
+      out.push({ width, modules });
+    }
+    return out;
+  };
+  // con techo inclinado las hojas corredizas no corren, y si el tramo no da
+  // para dos hojas de verdad tampoco: en los dos casos van batientes
+  const wantsSliding = doorsIn === "sliding" && !slopeEnabled;
+  const slidingRuns = wantsSliding ? buildRuns("sliding") : null;
+  const doors: DoorType = wantsSliding ? (slidingRuns ? "sliding" : "hinged") : doorsIn === "sliding" ? "hinged" : doorsIn;
+  const runs = slidingRuns ?? buildRuns(doors)!;
+
   const styleIn: DoorStyle = input.doorStyle && input.doorStyle in DOOR_STYLE_LABELS ? input.doorStyle : base.doorStyle;
   // el marco de aluminio es rectangular: con pendiente, la puerta va lisa
   const doorStyle: DoorStyle = slopeEnabled && styleIn === "glass" ? "flat" : styleIn;
@@ -380,6 +415,16 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
     },
   };
 
+  // la esquina es un solo espacio: el módulo del lateral copia el interior
+  // del de frente, y ahí no van cajones
+  const pair = cornerPair(config);
+  if (pair) {
+    const front = config.runs[0].modules[pair.front];
+    if (front.layout === "drawers-shelves") front.layout = "shelves";
+    if (front.layout === "drawers-hanging") front.layout = "hanging";
+    front.drawers = 0;
+  }
+
   // el layout de cada módulo tiene que entrar en su alto, que con pendiente varía
   config.runs.forEach((run, r) =>
     run.modules.forEach((m, i) => {
@@ -401,6 +446,10 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
       if (m.layout === "shelves") m.shelves = Math.max(1, m.shelves);
     }),
   );
+  if (pair) {
+    const side = config.runs[1].modules[pair.side];
+    config.runs[1].modules[pair.side] = { ...config.runs[0].modules[pair.front], width: side.width };
+  }
 
   return config;
 }
