@@ -123,10 +123,13 @@ en el sitio de un taller real se pone `demo: false` y desaparece.
   cajón tapado por una hoja no sale. Con batientes, de dos puertas que comparten
   divisor una abre a 90° y la otra a 72° para no chocarse, y la del cajón es la
   que abre entera. Detrás de batientes, el frente del cajón es 12 mm más
-  angosto por lado para pasar junto a la puerta abierta; detrás de corredizas,
-  el cajón entero va corrido hacia adentro con suplementos de corredera para
-  salir por el hueco que dejan las hojas. Los suplementos están en el despiece
-  y en el precio.
+  angosto por lado para pasar junto a la puerta abierta. Detrás de corredizas,
+  el cajón se hace del ancho del hueco más grande que las hojas pueden dejar
+  delante de su módulo (en cada riel, unas hojas apiladas a la izquierda y otras
+  a la derecha) y la caja va sobre suplementos de corredera, que están en el
+  despiece y en el precio. Si ningún hueco deja salir un cajón útil (con dos
+  hojas, el módulo del medio de tres), el cajón queda cerrado y el panel lo
+  avisa.
 - **Sin pantallas de carga.** Mientras baja el 3D se ve una vista de frente en
   SVG; cuando el 3D está listo entra con un fundido y el placard se arma de abajo
   hacia arriba.
