@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { allParts, buildAssembly, hingesFor, toWorld } from "./assembly.ts";
+import { allParts, buildAssembly, hingesFor, slidingGeometry, slidingOpenings, toWorld } from "./assembly.ts";
 import { catalog } from "./catalog.ts";
 import { DEFAULT_CONFIG, LIMITS, distribute, normalize, validModuleCounts, withModuleWidth, type WardrobeConfig } from "./model.ts";
 import { nest } from "./nesting.ts";
@@ -172,9 +172,11 @@ test("el resumen para el taller suma estantes con luz y marca los mecanizados", 
 });
 
 test("corredizas: las hojas de un mismo riel nunca se pisan y el cajón tapado no sale", () => {
-  for (const width of [1600, 2400, 3200, 4000]) {
+  const cases = [1600, 2400, 3010, 3200, 4000].flatMap((width) => (["straight", "l-left", "l-right"] as const).map((shape) => ({ width, shape })));
+  for (const { width, shape } of cases) {
     const config = normalize({
       ...DEFAULT_CONFIG,
+      shape,
       doors: "sliding",
       runs: [{ width, modules: DEFAULT_CONFIG.runs[0].modules.map((m) => ({ ...m, layout: "drawers-shelves", drawers: 2, shelves: 2 })) }],
     });
@@ -186,15 +188,24 @@ test("corredizas: las hojas de un mismo riel nunca se pisan y el cajón tapado n
         const x = l.home + (off[l.id] ?? 0);
         assert.ok(x >= l.from - 0.5 && x + l.width <= l.to + 0.5, `hoja ${l.id} fuera del riel`);
         for (const o of leaves) {
-          if (o === l || o.track !== l.track) continue;
+          if (o === l || o.run !== l.run || o.track !== l.track) continue;
           const y = o.home + (off[o.id] ?? 0);
-          assert.ok(x + l.width <= y + 0.5 || y + o.width <= x + 0.5, `${l.id} pisa a ${o.id} en el mismo riel (${width})`);
+          assert.ok(x + l.width <= y + 0.5 || y + o.width <= x + 0.5, `${l.id} pisa a ${o.id} en el mismo riel (${shape} ${width})`);
         }
       }
     };
     const opened = openOffsets(leaves, groups);
     check(opened);
-    assert.ok(groups.some((g) => !isCovered(leaves, opened, g)), `al abrir no queda ningún cajón a la vista (${width})`);
+    assert.ok(groups.some((g) => !isCovered(leaves, opened, g)), `al abrir no queda ningún cajón a la vista (${shape} ${width})`);
+    // cada cajón que se puede abrir entra en algún hueco que las hojas pueden dejar
+    for (const g of groups.filter((x) => !x.blocked)) {
+      const mine = leaves.filter((l) => l.run === g.run);
+      const openings = slidingOpenings(slidingGeometry(mine[0].from, mine[0].to));
+      assert.ok(
+        openings.some(([a, b]) => g.x0 >= a - 0.5 && g.x1 <= b + 0.5),
+        `el cajón ${g.key} no tiene por dónde salir (${shape} ${width})`,
+      );
+    }
     // tocar las hojas en cualquier orden nunca las pisa ni las saca del riel
     let off: Record<string, number> = {};
     for (const l of [...leaves, ...[...leaves].reverse()]) {
@@ -202,13 +213,13 @@ test("corredizas: las hojas de un mismo riel nunca se pisan y el cajón tapado n
       check(off);
     }
     // una hoja trabada contra otra de su riel igual se corre: empuja a la vecina
-    const front = leaves.filter((l) => l.track === 0).sort((p, q) => p.home - q.home);
+    const front = leaves.filter((l) => l.run === 0 && l.track === 0).sort((p, q) => p.home - q.home);
     if (front.length >= 2) {
       const [first, second] = front;
       const stuck = toggleLeaf(leaves, {}, second.id);
       const moved = toggleLeaf(leaves, stuck, first.id);
       check(moved);
-      assert.ok(Math.abs((moved[first.id] ?? 0) - (stuck[first.id] ?? 0)) >= 60, `la hoja trabada no se movió (${width})`);
+      assert.ok(Math.abs((moved[first.id] ?? 0) - (stuck[first.id] ?? 0)) >= 60, `la hoja trabada no se movió (${shape} ${width})`);
     }
   }
 });

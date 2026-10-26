@@ -139,6 +139,10 @@ export default function Configurator() {
   const run = config.runs[sel.run];
   const mod = run.modules[sel.module];
   const interior = moduleInterior(config, sel.run, sel.module);
+  // con corredizas hay módulos que ninguna combinación de hojas deja libres enteros
+  const drawersStuck =
+    config.doors === "sliding" &&
+    !!result.assembly.runs[sel.run]?.parts.some((p) => p.module === sel.module && p.kind === "drawer-front" && p.drawerBlocked);
   const span = runSpan(config, sel.run, run.width);
   const counts = validModuleCounts(config, sel.run, span);
   const anyDrawers = config.runs.some((r) => r.modules.some((m) => m.drawers > 0));
@@ -453,6 +457,12 @@ export default function Configurator() {
                 )}
                 {mod.drawers > 0 && (
                   <Stepper label="Cajones" value={mod.drawers} min={1} max={LIMITS.drawers.max} onChange={(drawers) => updateModule(sel.run, sel.module, { drawers })} />
+                )}
+                {mod.drawers > 0 && drawersStuck && (
+                  <p className="fade-in rounded-xl bg-accent-soft px-3 py-2 text-xs leading-relaxed text-accent-strong">
+                    Con estas corredizas, este módulo nunca queda libre entero y los cajones no pueden salir. Ponelos en otro módulo o cambiá
+                    el ancho.
+                  </p>
                 )}
               </Section>
             </>

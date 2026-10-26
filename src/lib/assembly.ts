@@ -195,6 +195,37 @@ export function slidingLeaves(width: number): number {
 }
 
 const SLIDING_OVERLAP = 40;
+
+/** las hojas corredizas de un tramo: cuántas, de qué ancho y dónde arrancan */
+export function slidingGeometry(from: number, to: number) {
+  const cover = to - from;
+  const leaves = slidingLeaves(cover);
+  const leafW = (cover + (leaves - 1) * SLIDING_OVERLAP) / leaves;
+  return { from, to, cover, leaves, leafW, step: leafW - SLIDING_OVERLAP };
+}
+
+/**
+ * Los huecos que una persona puede abrir corriendo hojas: en cada riel, las
+ * hojas de la izquierda se apilan contra un extremo y las de la derecha contra
+ * el otro. Las hojas alternan riel: las pares van adelante.
+ */
+export function slidingOpenings(g: ReturnType<typeof slidingGeometry>): [number, number][] {
+  const perTrack = [Math.ceil(g.leaves / 2), Math.floor(g.leaves / 2)];
+  const out: [number, number][] = [];
+  for (let a = 0; a <= perTrack[0]; a++) {
+    for (let b = 0; b <= perTrack[1]; b++) {
+      const left = g.from + Math.max(a, b) * g.leafW;
+      const right = g.to - Math.max(perTrack[0] - a, perTrack[1] - b) * g.leafW;
+      if (right - left > 1) out.push([left, right]);
+    }
+  }
+  return out;
+}
+
+/** luz entre el frente de un cajón y el canto de la hoja corrida */
+const SLIDING_DRAWER_CLEAR = 10;
+/** un cajón más angosto que esto no sirve: se deja del ancho del módulo */
+const MIN_DRAWER_FRONT = 300;
 /** lo que ocupan los rieles adelante en un placard corredizo */
 const SLIDING_RESERVE = 90;
 /** retiro de los estantes para que la puerta batiente cierre sin tocar */
@@ -378,6 +409,11 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
   const blind = corner === null ? null : config.shape === "l-left" ? { from: 0, to: D } : { from: span - D, to: span };
   // el módulo del tramo lateral que toca la esquina
   const cornerEnd = r === 1 ? (config.shape === "l-left" ? n - 1 : 0) : null;
+  // las corredizas se calculan antes que los cajones: cada cajón tiene que
+  // salir por un hueco que las hojas puedan dejar
+  const slideGeo = sliding
+    ? slidingGeometry(t + (blind?.from === 0 ? D - t : 0), span - t - (blind && blind.from !== 0 ? D - t : 0))
+    : null;
 
   /**
    * Bisagra de una puerta sola. En la esquina abre hacia afuera, para no
@@ -567,11 +603,28 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
       const boxH = DRAWER_PITCH - 50;
       // detrás de puertas batientes el frente deja 12 mm por lado: ahí queda
       // la puerta abierta, y el cajón tiene que salir sin tocarla. Detrás de
-      // corredizas va 40 mm adentro, sobre suplementos: el hueco que deja una
-      // hoja corrida es más angosto que el módulo por el solape entre hojas
+      // corredizas se hace del ancho del hueco más grande que las hojas pueden
+      // dejar delante del módulo, y la caja va sobre suplementos
       const inset = hinged ? 12 : sliding ? 40 : 2;
-      const sideGap = Math.max(13, inset + 1);
-      const boxW = w - 2 * sideGap;
+      let fa = x0 + inset;
+      let fb = x0 + w - inset;
+      // con dos hojas, el módulo del medio nunca queda libre entero: el cajón no sale
+      let unreachable = false;
+      if (slideGeo) {
+        let best: [number, number] | null = null;
+        for (const [a, b] of slidingOpenings(slideGeo)) {
+          const lo = Math.max(x0 + 12, a + SLIDING_DRAWER_CLEAR);
+          const hi = Math.min(x0 + w - 12, b - SLIDING_DRAWER_CLEAR);
+          if (hi - lo > (best ? best[1] - best[0] : 0)) best = [lo, hi];
+        }
+        if (best && best[1] - best[0] >= MIN_DRAWER_FRONT) [fa, fb] = best.map(Math.round) as [number, number];
+        else unreachable = true;
+      }
+      const frontW = fb - fa;
+      // la corredera necesita 13 mm por lado; si la caja queda más adentro, va sobre suplementos
+      const boxX = Math.max(fa + 1, x0 + 13);
+      const boxW = Math.min(fb - 1, x0 + w - 13) - boxX;
+      const spacer = boxX > x0 + 13.5 || boxX + boxW < x0 + w - 13.5;
       for (let j = 0; j < count; j++) {
         const y = innerBottom + j * DRAWER_PITCH + 2;
         const open: Vec3 = [0, 0, slide * 0.55];
@@ -582,11 +635,12 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
           kind: "drawer-front",
           material: config.doors === "none" ? config.doorMaterial : config.bodyMaterial,
           module: m,
-          position: [x0 + inset, y, back + shelfD - t],
-          size: [w - 2 * inset, DRAWER_PITCH - 4, t],
+          position: [fa, y, back + shelfD - t],
+          size: [frontW, DRAWER_PITCH - 4, t],
           geometry: "box",
-          cut: { length: w - 2 * inset, width: DRAWER_PITCH - 4, thickness: t, band: { long: 2, short: 2 } },
+          cut: { length: frontW, width: DRAWER_PITCH - 4, thickness: t, band: { long: 2, short: 2 } },
           openShift: open,
+          drawerBlocked: unreachable || undefined,
           explode: [0, 0, 320],
           front: config.doors === "none",
         });
@@ -600,7 +654,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
             kind: "drawer-side",
             material: config.bodyMaterial,
             module: m,
-            position: [side === 0 ? x0 + sideGap : x0 + sideGap + boxW - t, y + 20, back + shelfD - t - slide],
+            position: [side === 0 ? boxX : boxX + boxW - t, y + 20, back + shelfD - t - slide],
             size: [t, boxH, slide],
             geometry: "box",
             cut: { length: slide, width: boxH, thickness: t, band: { long: 1, short: 0 } },
@@ -615,7 +669,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
             kind: "drawer-end",
             material: config.bodyMaterial,
             module: m,
-            position: [x0 + sideGap + t, y + 20, end === 0 ? back + shelfD - t - slide : back + shelfD - 2 * t],
+            position: [boxX + t, y + 20, end === 0 ? back + shelfD - t - slide : back + shelfD - 2 * t],
             size: [boxW - 2 * t, boxH, t],
             geometry: "box",
             cut: { length: boxW - 2 * t, width: boxH, thickness: t, band: { long: 1, short: 0 } },
@@ -629,7 +683,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
           kind: "drawer-bottom",
           material: "back",
           module: m,
-          position: [x0 + sideGap, y + 17, back + shelfD - t - slide],
+          position: [boxX, y + 17, back + shelfD - t - slide],
           size: [boxW, back, slide],
           geometry: "box",
           cut: { length: slide, width: boxW, thickness: back, band: { long: 0, short: 0 } },
@@ -637,7 +691,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
           explode: [0, 0, 240],
         });
         ctx.hw.slidePair.qty += 1;
-        if (sideGap > 13) ctx.hw.slideSpacer.qty += 1;
+        if (spacer) ctx.hw.slideSpacer.qty += 1;
       }
       ctx.counts.drawers += count;
       return innerBottom + drawerZone(count);
@@ -853,18 +907,14 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
     });
   }
 
-  if (sliding) {
-    const from = t + (blind?.from === 0 ? D - t : 0);
-    const to = span - t - (blind && blind.from !== 0 ? D - t : 0);
-    const cover = to - from;
-    const leaves = slidingLeaves(cover);
-    const leafW = (cover + (leaves - 1) * SLIDING_OVERLAP) / leaves;
+  if (slideGeo) {
+    const { from, to, cover, leaves, leafW } = slideGeo;
     const leafH = H - Z - 2 * t - 30;
     for (let k = 0; k < leaves; k++) {
       // las hojas alternan entre el riel de adelante y el de atrás
       const frontTrack = k % 2 === 0;
       const z = frontTrack ? bodyD - 25 - t : bodyD - 55 - t;
-      const step = leafW - SLIDING_OVERLAP;
+      const step = slideGeo.step;
       const id = P(`slide${k}`);
       add({
         id,

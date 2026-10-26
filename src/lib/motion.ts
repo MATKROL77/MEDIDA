@@ -169,17 +169,41 @@ export function openOffsets(leaves: Leaf[], groups: DrawerGroup[]): Offsets {
         candidates.push(off);
       }
     }
+    // abrir delante de un módulo: en cada riel, las hojas de la izquierda se
+    // apilan contra un extremo y las de la derecha contra el otro
+    const tracks = ([0, 1] as const).map((tr) => mine.filter((l) => l.track === tr).sort((a, b) => a.home - b.home));
+    for (let a = 0; a <= tracks[0].length; a++) {
+      for (let b = 0; b <= tracks[1].length; b++) candidates.push({ ...stacked(tracks[0], a), ...stacked(tracks[1], b) });
+    }
     const score = (off: Offsets) => {
       const drawers = groups.filter((g) => g.run === run && !g.blocked && !isCovered(mine, off, g)).length;
       const from = mine[0]?.from ?? 0;
       const to = mine[0]?.to ?? 0;
       const visible = to - from - coveredLength(mine, off, run, from, to);
-      return drawers * 1e6 + visible;
+      // a igual resultado, el que menos mueve: es lo que haría una persona
+      const moved = mine.reduce((s, l) => s + Math.abs(off[l.id] ?? 0), 0);
+      return drawers * 1e6 + visible - moved * 0.01;
     };
     const best = candidates.reduce((a, b) => (score(b) > score(a) ? b : a), candidates[0] ?? {});
     result = { ...result, ...best };
   }
   return result;
+}
+
+/** las primeras `split` hojas de un riel contra el extremo izquierdo, el resto contra el derecho */
+function stacked(track: Leaf[], split: number): Offsets {
+  const off: Offsets = {};
+  let x = track[0]?.from ?? 0;
+  for (const l of track.slice(0, split)) {
+    off[l.id] = x - l.home;
+    x += l.width;
+  }
+  let y = track[0]?.to ?? 0;
+  for (const l of track.slice(split).reverse()) {
+    y -= l.width;
+    off[l.id] = y - l.home;
+  }
+  return off;
 }
 
 /** el tramo que barre una hoja al ir de un lugar a otro */
