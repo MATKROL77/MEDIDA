@@ -64,6 +64,11 @@ npm run lint
 npm run build      # export estático en out/
 ```
 
+Para grabar un video sin marca de agua, el guion de grabación esconde los
+elementos con `data-watermark`; con `?calidad=alta` el 3D deja además en
+`window.__medidaAnim` el estado de puertas, cajones y luces, para sincronizar
+los sonidos con lo que se mueve.
+
 `/demo/?calidad=baja` fuerza el modo liviano del 3D (sin oclusión ambiental ni
 antialias por muestreo). Sirve para equipos muy viejos y para sacar capturas en
 máquinas sin placa de video. `/demo/?calidad=alta` hace lo contrario: deja todos
@@ -139,7 +144,16 @@ en el sitio de un taller real se pone `demo: false` y desaparece.
 - **Construcción.** Laterales y divisores van de piso a techo; techo, piso y
   zócalo van por módulo. Así todo entra en una placa de 2600 × 1830, aunque el
   placard mida 4 m. En L, el tramo lateral arranca delante del frente y la
-  esquina lleva un panel ciego.
+  esquina es un solo espacio: el módulo del lateral que la toca no tiene
+  lateral (lleva un parante de 10 cm adelante) y su techo, piso, estantes y
+  barral siguen hasta encontrarse con los del frente. Quedan estantes y barral
+  en L y no hay rincón muerto. En la esquina no van cajones: chocarían con el
+  otro tramo.
+- **Corredizas como en un placard real.** Una hoja por módulo, con los cantos
+  sobre los divisores y 4 cm de solape entre hojas vecinas, alternando riel de
+  adelante y de atrás. Hacen falta dos módulos de al menos 48 cm; si no entran,
+  el placard va batiente. Las hojas de vidrio llevan perfil tirador de
+  aluminio a los costados.
 - **Límites de fabricación.** El alto llega hasta 250 cm porque un lateral
   tiene que entrar entero en la placa refilada (2580 mm útiles); con altillo se
   suma arriba. Por dentro, el módulo mide entre 35 y 100 cm.
