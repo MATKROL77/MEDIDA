@@ -167,6 +167,18 @@ en el sitio de un taller real se pone `demo: false` y desaparece.
 Es un sitio estático: `npm run build` genera `out/`, que se sube tal cual a
 Cloudflare Pages, Cloudflare Workers (assets) o GitHub Pages.
 
+Está preparado para Cloudflare Workers (`wrangler.jsonc`, nombre `medida`):
+
+- **Solo, desde GitHub:** `.github/workflows/deploy-configurador.yml` verifica
+  (pruebas, tipos, lint, build) y publica en cada push que toque
+  `configurador/`. Se enciende cargando en el repositorio los secretos
+  `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`; el archivo explica cómo.
+- **A mano, desde la compu:** `npm run build` y después
+  `npx wrangler@4 deploy` (la primera vez pide entrar a Cloudflare).
+
+Queda en `https://medida.<tu-subdominio>.workers.dev`: la página para talleres
+en `/` y el configurador en `/demo/`.
+
 Para probarlo sin dominio, `npm run artifact` arma una versión de un solo
 archivo (`artifact-out/index.html` y `app.js`) que se publica como página
 privada de Claude. Ahí todo funciona salvo bajar y compartir el PDF, que esos

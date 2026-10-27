@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // queda en medida.<tu-subdominio>.workers.dev
+  "name": "medida",
+  "compatibility_date": "2026-08-03",
+  // sitio estático: no hay script de Worker, sólo los archivos de `out/`
+  "assets": {
+    "directory": "./out",
+    // cada ruta es una carpeta con index.html (trailingSlash en Next)
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}
