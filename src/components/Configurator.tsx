@@ -194,8 +194,9 @@ export default function Configurator() {
 
   return (
     <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_440px]">
-      {/* visor: arriba en el teléfono, a la izquierda en pantalla grande */}
-      <section className="relative h-[54dvh] min-h-[340px] overflow-hidden lg:h-full">
+      {/* visor: arriba en el teléfono, a la izquierda en pantalla grande. En el
+          teléfono queda fijo mientras se recorren las opciones, para ver cada cambio */}
+      <section className="sticky top-0 z-20 h-[max(46dvh,300px)] overflow-hidden lg:relative lg:z-auto lg:h-full">
         <Poster config={config} assembly={result.assembly} />
         <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
           <Viewer3D
@@ -237,14 +238,21 @@ export default function Configurator() {
                 ["back", "Atrás", IconBack],
               ] as const
             ).map(([id, label, Icon]) => (
-              <button key={id} type="button" className="tool px-2.5" title={`Vista ${label.toLowerCase()}`} onClick={() => goView(id)}>
+              <button
+                key={id}
+                type="button"
+                // en el teléfono no entran todas: arriba y atrás quedan para pantallas más anchas
+                className={`tool px-2.5 ${id === "top" || id === "back" ? "hidden sm:inline-flex" : ""}`}
+                title={`Vista ${label.toLowerCase()}`}
+                onClick={() => goView(id)}
+              >
                 <Icon />
                 <span className="hidden 2xl:inline">{label}</span>
               </button>
             ))}
             <span className="tool-sep shrink-0" />
             {config.doors !== "none" && (
-              <button type="button" className="tool" aria-pressed={open} onClick={toggleOpen}>
+              <button type="button" className="tool" aria-pressed={open} onClick={toggleOpen} aria-label={open ? "Cerrar" : "Abrir"} title={open ? "Cerrar" : "Abrir"}>
                 <IconDoor />
                 <span className="hidden sm:inline">{open ? "Cerrar" : "Abrir"}</span>
               </button>
@@ -270,7 +278,7 @@ export default function Configurator() {
       </section>
 
       <aside className="flex flex-col border-line bg-surface lg:min-h-0 lg:border-l">
-        <nav className="sticky top-0 z-20 flex justify-between gap-1 border-b border-line bg-surface/95 px-5 backdrop-blur" role="tablist">
+        <nav className="sticky top-[max(46dvh,300px)] z-20 flex justify-between lg:top-0 gap-1 border-b border-line bg-surface/95 px-5 backdrop-blur" role="tablist">
           {TABS.map((t) => (
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className="tab" onClick={() => setTab(t.id)}>
               {t.label}
