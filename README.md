@@ -28,6 +28,13 @@ por falta de los secretos de Cloudflare. Una verificación exitosa no demuestra
 que exista una URL publicada. Las mejoras se entregan en una rama para revisión;
 publicar exige autorización del usuario.
 
+El 30/10/2026 el usuario autorizó expresamente publicar esta versión como
+archivos estáticos gratuitos. URL comprobada:
+https://medida.matiascolimodio.workers.dev/demo/ . Inicio, configurador y
+vista del taller responden HTTP200. Versión Cloudflare:
+`fca313e1-1629-4da3-b1cf-7f881a7080b6`. Se usó la sesión OAuth oficial ya
+existente, sin activar planes pagos ni guardar tokens en GitHub.
+
 ## Qué se puede armar
 
 - **Formas:** recto, en L con el lateral a la izquierda o a la derecha, altillo
