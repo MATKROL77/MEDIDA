@@ -84,6 +84,7 @@ export function orderMessage(config: WardrobeConfig, price: string, link: string
     ...extras,
     `Cuerpo: ${materialById(config.bodyMaterial).name}. Frentes: ${materialById(config.doorMaterial).name}`,
     `Precio estimado: ${price}`,
+    ...(catalog.brand.samplePricing ? ["Valores orientativos de muestra; el fabricante debe validar medidas y costos."] : []),
     ...(extra.rows?.length ? ["", "Piezas:", ...pieceLines(extra.rows)] : []),
     "",
     `Mi diseño: ${link}`,

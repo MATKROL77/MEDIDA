@@ -5,9 +5,8 @@
  * y el cálculo de precio leen todo de acá, así que sumar un taller nuevo es
  * copiar este archivo y cambiar los valores.
  *
- * LOS PRECIOS SON DE EJEMPLO. La marca "Altura Placares" es inventada para la
- * demo: no corresponde a ningún fabricante real. Cada taller carga sus propios
- * costos antes de publicar.
+ * LOS PRECIOS SON DE EJEMPLO. Cada taller carga sus propios costos antes de
+ * usar el cálculo en una cotización real.
  */
 
 export type Material = {
@@ -25,12 +24,14 @@ export type HandleType = "bar" | "knob" | "none";
 
 export const catalog = {
   brand: {
-    name: "Altura Placares",
+    name: "MEDIDA",
     tagline: "Placares y vestidores a medida",
     city: "Pilar, Buenos Aires",
     /** wa.me sin + ni espacios. En la demo apunta al número de Matías. */
     whatsapp: "5492324582614",
-    demo: true,
+    demo: false,
+    /** independiente de la marca de agua: los costos aún son orientativos */
+    samplePricing: true,
   },
 
   /** placa de melamina estándar y cómo la corta la seccionadora */

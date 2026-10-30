@@ -16,7 +16,7 @@ const steps = [
   },
   {
     title: "Ve el precio al instante",
-    body: "El precio sale de tus placas, tus herrajes y tu margen. Nada de cotizar a ojo ni de esperar dos días.",
+    body: "El precio se calcula con los costos de placas, herrajes, mano de obra y margen configurados para tu taller.",
   },
   {
     title: "Te llega el pedido",
@@ -36,7 +36,7 @@ const workshop = [
     title: "Dibujo de cada pieza",
     body: "Agrupadas como se fabrican (10 × estante con luz LED) y dibujadas con medidas, cantos, canales para el perfil LED, cazoletas y agujeros de tirador.",
   },
-  { title: "PDF por WhatsApp", body: "El cliente lo manda desde el celular y te llega como documento, listo para imprimir. También en Excel para la seccionadora." },
+  { title: "PDF y planilla", body: "El pedido se puede descargar en PDF y compartir desde un celular compatible. El despiece también se exporta en CSV para revisar en una planilla." },
   { title: "Plano de corte", body: "Cómo acomodar las piezas en cada placa, respetando la veta, y cuántas placas comprar." },
   { title: "Herrajes y luces", body: "Bisagras según el alto de cada puerta, correderas, barrales, tiras LED, fuentes y sensores, contados uno por uno." },
   { title: "Costo y margen", body: "Cuánto te cuesta ese placard y cuánto te queda, antes de confirmar nada." },
@@ -58,7 +58,7 @@ export default function Home() {
         <span className="font-display text-xl font-semibold tracking-tight">{product.name}</span>
         <div className="flex items-center gap-2">
           <Link href="/demo/" className="btn btn-ghost px-4 py-2 text-sm">
-            Probar la demo
+            Abrir configurador
           </Link>
         </div>
       </nav>
@@ -72,7 +72,7 @@ export default function Home() {
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-2">{product.pitch}</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/demo/" className="btn btn-primary">
-              Probar la demo
+              Abrir configurador
             </Link>
             <a href={contact} target="_blank" rel="noopener noreferrer" className="btn btn-ghost">
               Quiero verlo con mi taller

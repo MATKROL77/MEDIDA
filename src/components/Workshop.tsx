@@ -92,9 +92,9 @@ export default function Workshop() {
         </div>
       </header>
 
-      {catalog.brand.demo && (
+      {catalog.brand.samplePricing && (
         <p className="no-print rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-strong">
-          Demo: los precios son de ejemplo. Con un taller real, los costos salen de su lista de precios.
+          Precios orientativos de muestra. Cada fabricante debe cargar y validar su propia lista de costos.
         </p>
       )}
 

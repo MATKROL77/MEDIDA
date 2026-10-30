@@ -28,6 +28,28 @@ const variants: Partial<WardrobeConfig>[] = [
 ];
 const configs = variants.map((v) => normalize({ ...DEFAULT_CONFIG, ...v }));
 
+test("un link con anchos desbordados mantiene medidas y piezas finitas", () => {
+  for (const value of ["1e999", "1e308"]) {
+    const raw = JSON.parse(`{"runs":[{"width":2400,"modules":[{"width":${value}},{"width":${value}},{"width":780}]}]}`);
+    const config = normalize(raw);
+    for (const mod of config.runs[0].modules) {
+      assert.ok(Number.isFinite(mod.width));
+      assert.ok(mod.width >= LIMITS.moduleInner.min && mod.width <= LIMITS.moduleInner.max);
+    }
+    const q = quote(config);
+    assert.ok(Number.isFinite(q.price) && q.price > 0);
+    assert.ok(q.rows.every((row) => Number.isFinite(row.length) && Number.isFinite(row.width)));
+  }
+});
+
+test("los links no aceptan propiedades heredadas como tipos de interior o frente", () => {
+  const raw = JSON.parse('{"doorStyle":"toString","modules":[{"layout":"constructor"},{"layout":"toString"},{"layout":"__proto__"}]}');
+  const config = normalize(raw);
+  assert.equal(config.doorStyle, DEFAULT_CONFIG.doorStyle);
+  assert.ok(config.runs[0].modules.every((mod) => mod.layout === "shelves"));
+  assert.ok(Number.isFinite(quote(config).price));
+});
+
 test("toda pieza de placa entra en una placa entera", () => {
   for (const config of configs) {
     for (const p of allParts(buildAssembly(config))) {

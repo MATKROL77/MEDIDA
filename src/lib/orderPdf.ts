@@ -146,7 +146,7 @@ function footer(ctx: Ctx, page: number, total: number) {
   ctx.fillRect(M, PAGE_H - 70, PAGE_W - 2 * M, 1);
   text(ctx, `${catalog.brand.name} · Orden de producción`, M, PAGE_H - 40, 16, { color: "#5c574f" });
   text(ctx, `${page} / ${total}`, PAGE_W - M, PAGE_H - 40, 16, { color: "#5c574f", align: "right" });
-  if (catalog.brand.demo) text(ctx, "Demo: precios de ejemplo", PAGE_W / 2, PAGE_H - 40, 16, { color: "#8a5528", align: "center" });
+  if (catalog.brand.samplePricing) text(ctx, "Precios orientativos de muestra", PAGE_W / 2, PAGE_H - 40, 16, { color: "#8a5528", align: "center" });
 }
 
 function specLines(config: WardrobeConfig): string[] {

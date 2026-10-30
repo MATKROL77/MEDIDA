@@ -12,8 +12,8 @@ export const product = {
   whatsapp: "5492324582614",
   email: "matiascolimodio@gmail.com",
   /** marca de agua de la demo: va en el 3D, en la vista del taller y en el PDF */
-  watermark: "MEDIDA · DEMO",
-  watermarkNote: "Demo de Medida · matiascolimodio@gmail.com",
+  watermark: "MEDIDA",
+  watermarkNote: "Medida · matiascolimodio@gmail.com",
 } as const;
 
 export function productWhatsapp(message: string) {

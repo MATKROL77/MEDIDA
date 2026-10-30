@@ -339,6 +339,12 @@ export default function Configurator() {
                 <Toggle label="Zócalo de 8 cm" checked={config.plinth} onChange={(plinth) => update({ plinth })} />
               </Section>
 
+              <details className="rounded-xl border border-line p-4">
+                <summary className="cursor-pointer text-sm font-medium text-ink">
+                  Opciones especiales
+                  <span className="mt-1 block text-xs font-normal text-ink-2">Altillo, techo inclinado y terminales curvos</span>
+                </summary>
+                <div className="mt-5 space-y-8">
               <Section title="Altillo">
                 <Toggle
                   label="Altillo con puertas arriba"
@@ -391,6 +397,8 @@ export default function Configurator() {
                 <Toggle label="A la izquierda" checked={config.curved.left} onChange={(left) => update({ curved: { ...config.curved, left } })} />
                 <Toggle label="A la derecha" checked={config.curved.right} onChange={(right) => update({ curved: { ...config.curved, right } })} />
               </Section>
+                </div>
+              </details>
             </>
           )}
 
@@ -735,7 +743,11 @@ export default function Configurator() {
               Enviar al taller
             </button>
           </div>
-          <p className="mt-2 text-[11px] leading-snug text-ink-2">Incluye materiales, luces y fabricación. El precio final se confirma al medir en tu casa.</p>
+          <p className="mt-2 text-[11px] leading-snug text-ink-2">
+            {catalog.brand.samplePricing
+              ? "Valores orientativos de muestra. El fabricante debe confirmar medidas y costos antes de cotizar."
+              : "Incluye materiales, luces y fabricación. El precio final se confirma al medir en tu casa."}
+          </p>
         </div>
       </aside>
 

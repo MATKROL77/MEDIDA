@@ -150,7 +150,7 @@ const RAW_DEFAULT: WardrobeConfig = {
 
 const T = () => catalog.board.thickness;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-const isLayout = (v: unknown): v is Layout => typeof v === "string" && v in LAYOUT_LABELS;
+const isLayout = (v: unknown): v is Layout => typeof v === "string" && Object.hasOwn(LAYOUT_LABELS, v);
 
 /**
  * Largo útil de un tramo. El lateral de un placard en L arranca delante del
@@ -311,7 +311,9 @@ function normalizeModule(m: Partial<ModuleConfig> | undefined, fallback: ModuleC
     layout: isLayout(src.layout) ? src.layout : "shelves",
     shelves: Math.round(clamp(Number(src.shelves) || 0, LIMITS.shelves.min, LIMITS.shelves.max)),
     drawers: Math.round(clamp(Number(src.drawers) || 0, LIMITS.drawers.min, LIMITS.drawers.max)),
-    width: Math.max(0, Number(src.width) || 0),
+    // Un exponente válido en JSON puede desbordar a Infinity. Acotar antes
+    // del reparto evita NaN y sumas de pesos que desborden.
+    width: Number.isFinite(Number(src.width)) ? clamp(Number(src.width), 0, LIMITS.moduleInner.max) : 0,
     ledShelves: Boolean(src.ledShelves),
     ledSides: Boolean(src.ledSides),
   };
@@ -386,7 +388,7 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
   const doors: DoorType = wantsSliding ? (slidingRuns ? "sliding" : "hinged") : doorsIn === "sliding" ? "hinged" : doorsIn;
   const runs = slidingRuns ?? buildRuns(doors)!;
 
-  const styleIn: DoorStyle = input.doorStyle && input.doorStyle in DOOR_STYLE_LABELS ? input.doorStyle : base.doorStyle;
+  const styleIn: DoorStyle = input.doorStyle && Object.hasOwn(DOOR_STYLE_LABELS, input.doorStyle) ? input.doorStyle : base.doorStyle;
   // el marco de aluminio es rectangular: con pendiente, la puerta va lisa
   const doorStyle: DoorStyle = slopeEnabled && styleIn === "glass" ? "flat" : styleIn;
   const handle: HandleType = input.handle === "knob" || input.handle === "none" ? input.handle : input.handle === "bar" ? "bar" : base.handle;

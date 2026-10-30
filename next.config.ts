@@ -7,6 +7,8 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   output: "export",
+  // Evita tomar un lockfile de otra carpeta como raíz del proyecto.
+  outputFileTracingRoot: __dirname,
   reactStrictMode: true,
   devIndicators: false,
   // cada ruta como carpeta con index.html: no depende de reescrituras del hosting

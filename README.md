@@ -6,6 +6,28 @@ cada placa, los herrajes, las luces y la cuenta de costo y margen.
 
 "Medida" es un nombre de trabajo: se cambia en `src/lib/product.ts`.
 
+## Estado verificado — 30/10/2026
+
+La interfaz lleva la marca MEDIDA, sin rótulo ni marca de agua DEMO, por pedido
+del usuario. Los precios siguen señalados como valores orientativos de muestra
+(`catalog.brand.samplePricing`), independientemente de la marca de agua.
+Las opciones de altillo, techo inclinado y terminales curvos se agrupan en
+«Opciones especiales» para simplificar el primer recorrido.
+
+Se verificaron 18 pruebas del modelo y despiece, tipos, lint y export estático.
+En navegador se probó a 390 y 1440 px: cambio de medidas, conservación en el
+enlace, vista del taller y descargas PDF/CSV, sin desborde horizontal.
+
+El CSV sirve para una planilla; el formato de una seccionadora concreta requiere
+adaptación. No hay login ni servidor: el catálogo se descarga al navegador y la
+vista del taller puede abrirse con su enlace. No cargar costos confidenciales
+sin resolver el acceso y la arquitectura antes.
+
+GitHub tenía verificaciones exitosas, pero la publicación anterior se omitió
+por falta de los secretos de Cloudflare. Una verificación exitosa no demuestra
+que exista una URL publicada. Las mejoras se entregan en una rama para revisión;
+publicar exige autorización del usuario.
+
 ## Qué se puede armar
 
 - **Formas:** recto, en L con el lateral a la izquierda o a la derecha, altillo
@@ -46,7 +68,7 @@ mismo y se puede bajar en PDF o en CSV.
 | Ruta | Qué es |
 | --- | --- |
 | `/` | Página para venderle el producto a los talleres |
-| `/demo/` | El configurador, con una marca inventada (Altura Placares) |
+| `/demo/` | El configurador MEDIDA, con costos orientativos de muestra |
 | `/demo/taller/` | Lo que recibe el taller: despiece, placas, herrajes, costos |
 
 La configuración viaja entera en el link (`?c=...`), así que el pedido que llega
