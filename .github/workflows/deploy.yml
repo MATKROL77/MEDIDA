@@ -1,0 +1,128 @@
+# Verifica y publica MEDIDA en Cloudflare en cada push a `main` o a una rama
+# `claude/**`.
+#
+# El token de Cloudflare está cargado como secreto de un *environment* de
+# GitHub (Settings -> Environments), no como secreto del repositorio. Un job
+# solo ve esos secretos si declara el environment, así que el primer job
+# averigua cómo se llama y se lo pasa al segundo.
+#
+# Si hay más de un environment, se elige con la variable del repositorio
+# DEPLOY_ENVIRONMENT (Settings -> Secrets and variables -> Actions ->
+# Variables).
+#
+# Secretos que lee (en el environment o en el repositorio):
+#   CLOUDFLARE_API_TOKEN   obligatorio
+#   CLOUDFLARE_ACCOUNT_ID  opcional: hace falta solo si el token ve más de
+#                          una cuenta
+name: Publicar MEDIDA
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: publicar-medida
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verificar:
+    name: Verificar
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.environment.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Pruebas, tipos y lint
+        run: |
+          npm test
+          npm run typecheck
+          npm run lint
+
+      - name: Buscar el environment que tiene el token de Cloudflare
+        id: environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFERRED: ${{ vars.DEPLOY_ENVIRONMENT }}
+        run: |
+          names=$(gh api "repos/$GITHUB_REPOSITORY/environments" --jq '.environments[].name' 2>/dev/null | grep -v '^github-pages$' || true)
+          count=$(printf '%s\n' "$names" | grep -c . || true)
+          if [ -n "$PREFERRED" ]; then
+            name="$PREFERRED"
+          elif [ "$count" -eq 1 ]; then
+            name="$names"
+          else
+            name=$(printf '%s\n' "$names" | grep -i -m1 -E 'cloudflare|prod|deploy|medida' || true)
+            [ -n "$name" ] || name=$(printf '%s\n' "$names" | head -n1)
+          fi
+          echo "Environments del repositorio: ${names:-ninguno}"
+          echo "Se publica con: ${name:-ninguno (secretos del repositorio)}"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+  publicar:
+    name: Publicar en Cloudflare
+    needs: verificar
+    runs-on: ubuntu-latest
+    environment: ${{ needs.verificar.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Publicar
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::No se encontró CLOUDFLARE_API_TOKEN. Cargalo como secreto del environment o del repositorio. MEDIDA no se publicó."
+            exit 1
+          fi
+          if [ -n "$ACCOUNT_ID" ]; then export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID"; fi
+          npx wrangler deploy 2>&1 | tee deploy.log
+          url=$(grep -o -m1 'https://[a-z0-9.-]*workers\.dev' deploy.log || true)
+          echo "url=$url" >> "$GITHUB_ENV"
+
+      - name: Comprobar que el sitio publicado responde
+        run: |
+          if [ -z "$url" ]; then
+            echo "::warning::Se publicó, pero wrangler no informó la dirección: no se pudo comprobar."
+            exit 0
+          fi
+          # la primera publicación de un subdominio puede tardar unos segundos
+          for path in / /demo/ /demo/taller/; do
+            ok=""
+            for attempt in 1 2 3 4 5 6; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' "$url$path" || true)
+              if [ "$code" = "200" ]; then ok=1; break; fi
+              sleep 5
+            done
+            if [ -z "$ok" ]; then
+              echo "::error::$url$path respondió $code"
+              exit 1
+            fi
+            echo "$url$path -> 200"
+          done
+          {
+            echo "### MEDIDA publicado"
+            echo "$url"
+          } >> "$GITHUB_STEP_SUMMARY"

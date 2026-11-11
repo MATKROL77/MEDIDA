@@ -193,17 +193,18 @@ en el sitio de un taller real se pone `demo: false` y desaparece.
 
 ## Publicarlo
 
-Es un sitio estático: `npm run build` genera `out/`, que se sube tal cual a
-Cloudflare Pages, Cloudflare Workers (assets) o GitHub Pages.
+Es un sitio estático: `npm run build` genera `out/`.
 
 Está preparado para Cloudflare Workers (`wrangler.jsonc`, nombre `medida`):
 
-- **Solo, desde GitHub:** `.github/workflows/deploy-configurador.yml` verifica
-  (pruebas, tipos, lint, build) y publica en cada push que toque
-  `configurador/`. Se enciende cargando en el repositorio los secretos
-  `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`; el archivo explica cómo.
-- **A mano, desde la compu:** `npm run build` y después
-  `npx wrangler@4 deploy` (la primera vez pide entrar a Cloudflare).
+- **Solo, desde GitHub:** `.github/workflows/deploy.yml` verifica (pruebas,
+  tipos, lint, build), publica en cada push a `main` o a una rama `claude/**` y
+  comprueba que el sitio publicado responda. El token de Cloudflare
+  (`CLOUDFLARE_API_TOKEN`) está cargado como secreto de un environment de
+  GitHub; el archivo explica cómo lo encuentra. Si falta el token, la
+  ejecución falla en vez de terminar en verde sin publicar.
+- **A mano, desde la compu:** `npm run build` y después `npx wrangler deploy`
+  (la primera vez pide entrar a Cloudflare).
 
 Queda en `https://medida.<tu-subdominio>.workers.dev`: la página para talleres
 en `/` y el configurador en `/demo/`.

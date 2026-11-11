@@ -1,8 +1,8 @@
 {
-  "name": "configurador-placares",
+  "name": "medida",
   "version": "0.1.0",
   "private": true,
-  "description": "Configurador 3D de placares y vestidores a medida, con precio al instante y despiece para el taller",
+  "description": "MEDIDA: configuradores 3D de productos a medida, con precio al instante y despiece para el fabricante",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -34,6 +34,7 @@
     "eslint-config-next": "^15.5.4",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.13",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "wrangler": "^4.160.1"
   }
 }
