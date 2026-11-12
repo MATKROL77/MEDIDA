@@ -102,7 +102,7 @@ export default function Home() {
             <h2 id="configuradores" className="display-lg mt-4">
               Un configurador para cada familia de producto.
             </h2>
-            <p className="lead mt-5">Hoy se puede probar el de placares y vestidores. Los demás están en desarrollo, sobre el mismo motor.</p>
+            <p className="lead mt-5">Seis familias para probar ahora mismo. Todas corren sobre el mismo motor: cambian las medidas y las reglas, no el sistema.</p>
           </div>
           <Link href="/configuradores/" className="link-arrow">
             Ver todos
@@ -193,7 +193,7 @@ export default function Home() {
               La consulta llega completa.
             </h2>
             <p className="lead mt-5">
-              En el configurador de placares, el 3D y el despiece salen del mismo cálculo: lo que el cliente ve es lo que se corta.
+              El 3D y el despiece salen del mismo cálculo: lo que el cliente ve es lo que se corta. El de placares suma además el plano de corte y el PDF para el taller.
             </p>
             <dl className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2">
               {received.map((item) => (

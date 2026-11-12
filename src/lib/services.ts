@@ -38,7 +38,7 @@ export const SERVICES: Service[] = [
       { title: "Armamos una demostración", body: "Una versión con tus productos para que la pruebes antes de decidir." },
       { title: "Se integra en tu web", body: "Queda publicado en tu página y las consultas llegan a tu WhatsApp o tu email." },
     ],
-    notes: ["El configurador de placares y vestidores ya funciona y se puede probar. Otras familias de producto se desarrollan a partir de ese motor."],
+    notes: ["Hay seis familias para probar. La de placares es la más completa (despiece dibujado, plano de corte y PDF); en las demás, lo que tu producto necesite de más se desarrolla sobre el mismo motor."],
   },
   {
     slug: "web-completa",

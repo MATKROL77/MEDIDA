@@ -62,7 +62,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
 
 // ---------------------------------------------------------------- landing y páginas
 
-const PAGES = ["/", "/configuradores/", "/servicios/", "/servicios/configurador-para-tu-web/", "/servicios/web-completa/", "/servicios/plataforma/", "/mis-disenos/", "/privacidad/", "/cookies/", "/terminos/"];
+const PAGES = ["/", "/demo/mesas/", "/demo/ratonas/", "/demo/tv/", "/demo/bibliotecas/", "/demo/sillones/", "/configuradores/", "/servicios/", "/servicios/configurador-para-tu-web/", "/servicios/web-completa/", "/servicios/plataforma/", "/mis-disenos/", "/privacidad/", "/cookies/", "/terminos/"];
 
 for (const [width, height] of [
   [390, 844],
@@ -74,7 +74,7 @@ for (const [width, height] of [
       errors.length = 0;
       const res = await page.goto(base + path, { waitUntil: "networkidle" });
       assert(res.status() === 200, `respondió ${res.status()}`);
-      assert((await page.locator("h1").count()) === 1, "tiene que haber un solo h1");
+      if (!path.startsWith("/demo/")) assert((await page.locator("h1").count()) === 1, "tiene que haber un solo h1");
       const extra = await overflow(page);
       assert(extra <= 0, `sobran ${extra} px de ancho`);
       assert(errors.length === 0, `error en la página: ${errors[0]}`);
@@ -116,9 +116,22 @@ for (const [width, height] of [
     assert(decodeURIComponent(wa2).includes("me interesa contratar una página web profesional"), wa2);
   });
 
-  await check("familias: una sola con demo, las demás dicen que están en desarrollo", async () => {
-    assert((await page.getByText("Demo funcionando").count()) === 1, "tiene que haber una demo");
-    assert((await page.getByText("En desarrollo", { exact: true }).count()) === 5, "tienen que ser cinco en desarrollo");
+  await check("familias: las seis se pueden probar y abren su configurador", async () => {
+    assert((await page.getByText("Para probar", { exact: true }).count()) === 6, "tienen que ser seis para probar");
+    const hrefs = await page.locator('a[href^="/demo/"]').evaluateAll((as) => [...new Set(as.map((a) => a.getAttribute("href").split("?")[0]))]);
+    for (const f of ["", "mesas/", "ratonas/", "tv/", "bibliotecas/", "sillones/"]) assert(hrefs.includes(`/demo/${f}`), `falta /demo/${f}`);
+  });
+
+  await check("configurador: se abre como ventana sobre la página y se cierra volviendo a ella", async () => {
+    await page.locator('a[href="/demo/mesas/"]').first().click();
+    const win = page.getByRole("dialog", { name: /Configurador de mesas/ });
+    await win.waitFor();
+    assert(page.url() === base + "/", "la página de atrás no tiene que cambiar");
+    const frame = page.frameLocator("iframe");
+    await frame.getByRole("button", { name: "Enviar al taller" }).waitFor();
+    assert((await frame.getByRole("region", { name: "Aviso de cookies" }).count()) === 0, "la ventana no repite el aviso de cookies");
+    await page.keyboard.press("Escape");
+    await win.waitFor({ state: "hidden" });
   });
 
   await check("hero: el motor 3D no se baja con la página", async () => {
@@ -276,10 +289,11 @@ for (const [width, height] of [
 
   await check("abrir un diseño guardado trae sus medidas", async () => {
     await page.getByRole("link", { name: "Abrir y editar" }).click();
-    await page.waitForURL(/\/demo\/\?id=/);
-    await page.locator("#dim-Ancho").waitFor();
-    assert((await page.locator("#dim-Ancho").inputValue()) === "300" && (await page.locator("#dim-Alto").inputValue()) === "220", "no abrió con las medidas guardadas");
-    assert(await page.getByRole("button", { name: /Diseño guardado/ }).isVisible(), "no muestra que está guardado");
+    // se abre en la ventana, sobre Mis diseños
+    const frame = page.frameLocator("iframe");
+    await frame.locator("#dim-Ancho").waitFor();
+    assert((await frame.locator("#dim-Ancho").inputValue()) === "300" && (await frame.locator("#dim-Alto").inputValue()) === "220", "no abrió con las medidas guardadas");
+    assert(await frame.getByRole("button", { name: /Diseño guardado/ }).isVisible(), "no muestra que está guardado");
   });
 
   await check("configurador: sin errores de página en todo el recorrido", async () => assert(errors.length === 0, errors[0]));

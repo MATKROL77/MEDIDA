@@ -66,7 +66,8 @@ export const SPECS: FurnitureSpec[] = [
     label: "Mesa",
     title: "Mesas y escritorios",
     controls: [
-      { key: "width", type: "size", label: "Largo", min: 900, max: 2600 },
+      // la tapa es una sola pieza: tiene que entrar en la placa refilada (2580 mm)
+      { key: "width", type: "size", label: "Largo", min: 900, max: 2500 },
       { key: "depth", type: "size", label: "Ancho", min: 550, max: 1100 },
       { key: "height", type: "size", label: "Alto", min: 700, max: 1100 },
       { key: "legs", type: "choice", label: "Patas", options: choice(["madera", "De madera"], ["panel", "Laterales llenos"], ["metal", "De hierro"]) },
@@ -100,7 +101,7 @@ export const SPECS: FurnitureSpec[] = [
     label: "Mueble de TV",
     title: "Muebles para televisión",
     controls: [
-      { key: "width", type: "size", label: "Largo", min: 1000, max: 2800 },
+      { key: "width", type: "size", label: "Largo", min: 1000, max: 2500 },
       { key: "height", type: "size", label: "Alto", min: 350, max: 650 },
       { key: "depth", type: "size", label: "Profundidad", min: 320, max: 550 },
       { key: "fronts", type: "choice", label: "Frentes", options: choice(["mixto", "Puertas y cajones"], ["puertas", "Puertas"], ["cajones", "Cajones"], ["abierto", "Con nichos"]) },

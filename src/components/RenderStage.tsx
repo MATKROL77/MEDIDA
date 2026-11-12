@@ -13,6 +13,8 @@ declare global {
 
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import type { ViewName } from "@/components/viewer/Scene";
+import { buildFurniture, defaultFurniture, fabricById, normalizeFurniture, specById, type FurnitureConfig } from "@/lib/furniture";
+import { fromBase64Url } from "@/lib/base64url";
 import { DEFAULT_CONFIG, type WardrobeConfig } from "@/lib/model";
 import { drawerGroupsOf, leavesOf, openOffsets } from "@/lib/motion";
 import { quote } from "@/lib/quote";
@@ -40,6 +42,8 @@ export default function RenderStage() {
     wall: string;
     backdrop: string | undefined;
     framing: number;
+    /** otra familia (f=mesas…): se dibuja ese mueble en vez del placard */
+    furniture: FurnitureConfig | null;
   } | null>(null);
 
   // arranca liviana para que puertas, cajones y luces lleguen rápido a su lugar;
@@ -71,10 +75,25 @@ export default function RenderStage() {
       wall: WALL_COLORS.find((w) => w.id === q.get("pared"))?.hex ?? WALL_COLORS[0].hex,
       backdrop: backdrop && /^[0-9a-f]{6}$/i.test(backdrop) ? `#${backdrop}` : undefined,
       framing: Math.min(1.5, Math.max(0.5, Number(q.get("encuadre")) || 1)),
+      furniture: (() => {
+        const f = q.get("f");
+        if (!f || !specById(f)) return null;
+        try {
+          return q.get("c") ? normalizeFurniture(JSON.parse(fromBase64Url(q.get("c")!))) : defaultFurniture(f);
+        } catch {
+          return defaultFurniture(f);
+        }
+      })(),
     });
   }, []);
 
-  const result = useMemo(() => (state ? quote(state.config) : null), [state]);
+  const result = useMemo(() => {
+    if (!state) return null;
+    if (!state.furniture) return { assembly: quote(state.config).assembly, look: state.config, fabric: undefined as string | undefined };
+    const built = buildFurniture(state.furniture);
+    const look: WardrobeConfig = { ...DEFAULT_CONFIG, doors: built.doors ? "hinged" : "none", bodyMaterial: state.furniture.body, doorMaterial: state.furniture.front, led: { ...DEFAULT_CONFIG.led, sensor: false } };
+    return { assembly: built.assembly, look, fabric: fabricById(state.furniture.fabric).color };
+  }, [state]);
   if (!state || !result) return null;
   const leaves = leavesOf(result.assembly);
   const leafOffsets = state.open && leaves.length ? openOffsets(leaves, drawerGroupsOf(result.assembly)) : {};
@@ -82,8 +101,9 @@ export default function RenderStage() {
   return (
     <div className="fixed inset-0">
       <Viewer3D
-        config={state.config}
+        config={result.look}
         assembly={result.assembly}
+        fabric={result.fabric}
         selection={null}
         onSelect={() => {}}
         open={state.open}

@@ -10,7 +10,7 @@ import { HERO_FRAMING } from "@/lib/presets";
 import { quote } from "@/lib/quote";
 
 /** el fondo del 3D en la landing: el mismo gris de los bloques del sitio */
-export const HERO_BACKDROP = "#f5f5f6";
+export const HERO_BACKDROP = "#f6f1ea";
 
 const VIEW = { name: "three" as const, nonce: 0 };
 const noop = () => {};

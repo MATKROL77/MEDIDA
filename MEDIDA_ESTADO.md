@@ -18,6 +18,12 @@ responden, que `/api/me`, `/api/panel` y `/api/admin/overview` sin sesión dan
 **Fase 1 — landing y conversión.** Landing, catálogo, servicios, contacto por
 WhatsApp y email centralizado, cookies, legales, SEO.
 
+**Fase 2 — configuradores ampliados.** Mesas y escritorios, ratonas y mesas
+de luz, muebles de TV, bibliotecas y sillones modulares, sobre el motor del
+placard. Cada uno con medidas, opciones, terminaciones, precio de muestra,
+guardado y consulta. Además: paleta blanca y marrón, títulos con serif, vidrio
+en lo que flota y los configuradores abiertos como ventana sobre la página.
+
 **Fase 3 — favoritos y carrito.** Guardado en el dispositivo, Mis diseños,
 consulta conjunta, guardado automático, cuenta por email y sincronización.
 
@@ -31,7 +37,9 @@ empresa, administración.
 
 Evidencia, corrida en este repositorio:
 
-- `npm test`: 60 pruebas. 26 son de la API contra SQLite en memoria: acceso,
+- `npm test`: 67 pruebas. 7 arman los muebles nuevos en todos sus extremos y
+  comprueban medidas reales, que cada pieza entre en una placa y que el precio
+  no baje al agrandar. 26 son de la API contra SQLite en memoria: acceso,
   sesión, vencimientos, límites de pedidos, sincronización y aislamiento entre
   cuentas, recordatorios con el reloj adelantado, firma de notificaciones,
   medición sin identificadores, permisos de administración y aislamiento entre
@@ -39,7 +47,7 @@ Evidencia, corrida en este repositorio:
 - `npm run typecheck` (sitio, Worker y pruebas), `npm run lint`,
   `npm run build`: sin errores.
 - `node scripts/e2e.mjs` contra el runtime local de Cloudflare
-  (`npm run preview`): 48 comprobaciones en Chromium a 390 y 1440 px, todas en
+  (`npm run preview`): 59 comprobaciones en Chromium a 390 y 1440 px, todas en
   orden. Incluye entrar con el código, abrir el enlace en otro dispositivo,
   ver ahí los diseños, que un cambio en uno aparezca en el otro, crear una
   empresa, que el plan le ponga tope, y que el configurador embebido lleve su
@@ -66,9 +74,13 @@ Evidencia, corrida en este repositorio:
 
 ## Pendiente
 
-- **Fase 2 — configuradores de otras familias.** Solo existe el de placares.
-  Mesas, escritorios, ratonas, muebles de TV, bibliotecas y sillones figuran
-  como "en desarrollo" en el sitio.
+- **Despiece completo de las familias nuevas.** Listan sus piezas de placa,
+  pero no tienen PDF, plano de corte ni vista del taller como el placard. Sus
+  reglas de fabricación son más simples que las del placard y conviene
+  revisarlas con un fabricante antes de usarlas para producir.
+- **Realismo del 3D.** Usa los mismos materiales, luces y sombras del placard.
+  Es un render en tiempo real, no una foto: no llega a la calidad de un render
+  de estudio.
 - **Facturación recurrente.** No hay cobros ni suscripciones; el plan de una
   empresa es un nombre y un tope cargados a mano.
 - **Textos legales.** Describen lo que el sistema hace y citan la Ley 25.326;

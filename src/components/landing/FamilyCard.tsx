@@ -21,7 +21,7 @@ export function FamilyCard({ family, featured = false, placement }: { family: Fa
         <div className={`relative overflow-hidden ${featured ? "aspect-[4/3] lg:aspect-auto lg:flex-1" : "aspect-[4/3]"}`}>
           <img
             src={`/img/familia-${family.id}.webp`}
-            alt={`Configurador de ${family.name.toLowerCase()} con el mueble abierto y las luces prendidas`}
+            alt={`${family.name}: una imagen sacada del configurador`}
             width={1400}
             height={1050}
             loading="lazy"
@@ -30,7 +30,7 @@ export function FamilyCard({ family, featured = false, placement }: { family: Fa
           />
         </div>
         <div className="flex flex-col gap-3 p-6 sm:p-7">
-          <span className="badge badge-live self-start">Demo funcionando</span>
+          <span className="badge badge-live self-start">Para probar</span>
           <h3 className={`font-display font-semibold tracking-tight ${featured ? "text-2xl sm:text-3xl" : "text-xl"}`}>{family.name}</h3>
           <p className="max-w-xl text-[0.95rem] leading-relaxed text-ink-2">{family.summary}</p>
           <span className="link-arrow mt-1">Probar el configurador</span>

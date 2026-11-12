@@ -16,8 +16,9 @@ MEDIDA es el software. No fabrica ni vende muebles.
 | Parte | Estado |
 | --- | --- |
 | Landing, catálogo de configuradores y páginas de servicios | Funcionando |
-| Configurador de placares y vestidores | Demo funcionando |
-| Mesas, escritorios, ratonas, muebles de TV, bibliotecas, sillones | En desarrollo: el sitio lo dice y no los muestra como hechos |
+| Configurador de placares y vestidores | Demo funcionando: es el más completo, con despiece dibujado, plano de corte y PDF |
+| Mesas y escritorios, ratonas y mesas de luz, muebles de TV, bibliotecas, sillones modulares | Demo funcionando: medidas, opciones, terminaciones, precio de muestra, guardar y consultar. Sin PDF ni plano de corte |
+| Los configuradores se abren como ventana sobre la página | Funcionando; el enlace directo sigue abriendo a pantalla completa |
 | Favoritos, carrito de consulta y guardado automático | Funcionando, en el dispositivo |
 | Contacto comercial por WhatsApp y email | Funcionando; el número se cambia desde `/admin/` |
 | Aviso de cookies y páginas legales | Funcionando |
@@ -55,6 +56,7 @@ todavía no está activo y los diseños se siguen guardando en el dispositivo.
 | `/configuradores/` | Catálogo: lo que se puede probar hoy y lo que está en desarrollo |
 | `/servicios/` y `/servicios/<servicio>/` | Los tres servicios para empresas |
 | `/demo/` | El configurador de placares |
+| `/demo/<familia>/` | Los de `mesas`, `ratonas`, `tv`, `bibliotecas` y `sillones` |
 | `/demo/taller/` | Lo que recibe el fabricante: despiece, placas, herrajes, costos |
 | `/mis-disenos/` | Diseños guardados: favoritos y carrito de consulta |
 | `/cuenta/` y `/cuenta/verificar/` | Cuenta por email, preferencias y la llegada del enlace de acceso |
@@ -160,6 +162,31 @@ En ese modo los emails no se mandan: quedan en `/api/dev/outbox`, que solo
 existe ahí. `node scripts/e2e.mjs http://localhost:8787` recorre además la
 cuenta, la sincronización entre dos dispositivos, la administración, el panel
 de empresa y el configurador embebido.
+
+## Las otras familias
+
+`src/lib/furniture.ts` describe cada familia con parámetros (qué medidas y
+opciones tiene, con sus mínimos y máximos) y una función que la arma pieza por
+pieza, con el mismo tipo de pieza que usa el placard. Por eso comparten el 3D,
+los materiales, la habitación, los cajones y puertas que se abren, la vista
+explotada y la lista de piezas de placa: sumar una familia es describirla, no
+escribir otro motor. `src/components/FurnitureConfigurator.tsx` dibuja los
+controles a partir de esa descripción.
+
+Los máximos salen de lo fabricable: ninguna pieza supera la placa refilada, y
+hay una prueba que lo comprueba en todas las combinaciones. Los sillones
+llevan tapizado (material aparte, con trama) y sus valores son de muestra,
+como todos los precios de la demo.
+
+## Estilo
+
+Blanco y marrón chocolate (`src/app/globals.css`), títulos en la serif del
+sistema (Times New Roman y equivalentes: no se baja ninguna fuente) y texto en
+Inter. Lo que flota sobre la página (encabezado, barras, ventanas, hojas) usa
+vidrio: fondo translúcido con desenfoque (`.glass`, `.veil`).
+
+Los configuradores se abren en una ventana sobre la página
+(`src/components/site/ConfiguratorWindow.tsx`), que queda atrás fuera de foco.
 
 ## El configurador de placares
 
@@ -291,7 +318,7 @@ requiere adaptación. Los precios de la demo son de muestra
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 60 pruebas: despiece, precio, contacto, diseños y la API entera
+npm test           # 67 pruebas: despiece, precio, los otros muebles, contacto, diseños y la API entera
 npm run typecheck
 npm run lint
 npm run build      # export estático en out/
@@ -318,6 +345,8 @@ npm run capture -- http://localhost:4100
 | --- | --- |
 | Nombre, descripción, WhatsApp y email de MEDIDA, mensajes precargados | `src/lib/site.ts` |
 | Familias de producto y cuál tiene demo | `src/lib/families.ts` |
+| Medidas, opciones y armado de mesas, ratonas, TV, bibliotecas y sillones | `src/lib/furniture.ts` |
+| La ventana donde se abren los configuradores | `src/components/site/ConfiguratorWindow.tsx` |
 | Los servicios para empresas | `src/lib/services.ts` |
 | La landing | `src/app/(site)/page.tsx` y `src/components/landing/` |
 | Encabezado, pie, aviso de cookies | `src/components/site/` |
