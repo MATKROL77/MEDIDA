@@ -14,6 +14,9 @@
 #   CLOUDFLARE_API_TOKEN   obligatorio
 #   CLOUDFLARE_ACCOUNT_ID  opcional: hace falta solo si el token ve más de
 #                          una cuenta
+#   RESEND_API_KEY         opcional: la clave de Resend. Con ella se activan el
+#                          acceso por email y los recordatorios
+# Variable opcional: EMAIL_FROM, el remitente ("MEDIDA <acceso@tu-dominio.com>")
 name: Publicar MEDIDA
 
 on:
@@ -92,13 +95,23 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::error::No se encontró CLOUDFLARE_API_TOKEN. Cargalo como secreto del environment o del repositorio. MEDIDA no se publicó."
             exit 1
           fi
           if [ -n "$ACCOUNT_ID" ]; then export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID"; fi
-          npx wrangler deploy 2>&1 | tee deploy.log
+          if [ -n "$EMAIL_FROM" ]; then
+            npx wrangler deploy --var "EMAIL_FROM:$EMAIL_FROM" 2>&1 | tee deploy.log
+          else
+            npx wrangler deploy 2>&1 | tee deploy.log
+          fi
+          # la clave del proveedor de email, si está cargada, pasa al Worker como secreto
+          if [ -n "$RESEND_API_KEY" ]; then
+            printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY
+          fi
           url=$(grep -o -m1 'https://[a-z0-9.-]*workers\.dev' deploy.log || true)
           echo "url=$url" >> "$GITHUB_ENV"
 
@@ -109,7 +122,7 @@ jobs:
             exit 0
           fi
           # la primera publicación de un subdominio puede tardar unos segundos
-          for path in / /configuradores/ /servicios/ /demo/ /demo/taller/ /mis-disenos/ /privacidad/ /cookies/ /terminos/; do
+          for path in / /configuradores/ /servicios/ /demo/ /demo/taller/ /mis-disenos/ /cuenta/ /privacidad/ /cookies/ /terminos/ /api/health /api/public/site; do
             ok=""
             for attempt in 1 2 3 4 5 6; do
               code=$(curl -s -o /dev/null -w '%{http_code}' "$url$path" || true)
@@ -127,6 +140,10 @@ jobs:
             echo "::error::La portada publicada no es la de esta versión."
             exit 1
           fi
+          # el servidor: contesta, y sin sesión no entrega nada de nadie
+          curl -s "$url/api/public/site" | tee site.json; echo
+          [ "$(curl -s -o /dev/null -w '%{http_code}' "$url/api/me")" = "401" ] || { echo "::error::/api/me sin sesión no respondió 401"; exit 1; }
+          [ "$(curl -s -o /dev/null -w '%{http_code}' "$url/api/admin/overview")" = "401" ] || { echo "::error::la administración quedó abierta"; exit 1; }
           {
             echo "### MEDIDA publicado"
             echo "$url"

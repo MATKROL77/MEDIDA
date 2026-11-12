@@ -51,6 +51,9 @@ async function visit(width, height, { consent = true } = {}) {
     });
   }
   const page = await context.newPage();
+  // sin placa de video el 3D se dibuja por software y todo tarda más
+  page.setDefaultTimeout(90_000);
+  page.setDefaultNavigationTimeout(120_000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   return { context, page, errors };
@@ -204,7 +207,7 @@ for (const [width, height] of [
   await check("guardar: editar un diseño guardado lo actualiza solo", async () => {
     await page.locator("#dim-Alto").fill("220");
     await page.locator("#dim-Alto").blur();
-    await page.waitForFunction(() => JSON.parse(localStorage.getItem("medida.designs.v1")).designs[0].config.height === 2200, null, { timeout: 5000 });
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem("medida.designs.v1")).designs[0].config.height === 2200, null, { timeout: 30_000 });
     const d = await page.evaluate(() => JSON.parse(localStorage.getItem("medida.designs.v1")).designs[0]);
     assert(d.summary.dimensions === "300 × 220 × 60 cm" && d.updatedAt > d.createdAt, d.summary.dimensions);
   });
@@ -292,6 +295,82 @@ for (const [width, height] of [
     assert(await page.getByRole("button", { name: "Guardar este diseño" }).isVisible(), "no se ve Guardar");
   });
   await context.close();
+}
+
+// ---------------------------------------------------------------- cuenta y sincronización (solo con el servidor)
+
+const hasServer = await fetch(base + "/api/health").then((r) => r.ok && (r.headers.get("content-type") ?? "").includes("json")).catch(() => false);
+const outbox = await fetch(base + "/api/dev/outbox").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+if (hasServer && outbox) {
+  const email = `prueba-${Date.now()}@ejemplo.com`;
+  const lastMail = async () => (await (await fetch(base + "/api/dev/outbox")).json()).mails.find((m) => m.recipient === email);
+  const phone = await visit(390, 844);
+
+  await check("cuenta: se entra con el código que llega por email, sin contraseña", async () => {
+    const page = phone.page;
+    await page.goto(base + "/demo/?calidad=baja", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Guardar este diseño" }).click();
+    await page.getByRole("dialog").getByLabel("Nombre").fill("Placard sincronizado");
+    await page.getByRole("dialog").getByRole("button", { name: "Guardar", exact: true }).click();
+    await page.getByText("Guardado en tus favoritos.").waitFor();
+    await page.goto(base + "/cuenta/", { waitUntil: "networkidle" });
+    assert((await page.locator('input[type="password"]').count()) === 0, "no tiene que pedir contraseña");
+    const marketing = page.getByRole("checkbox");
+    assert(!(await marketing.isChecked()), "las novedades tienen que venir sin tildar");
+    await page.getByLabel("Tu email").fill(email);
+    await page.getByRole("button", { name: "Recibir mi acceso" }).click();
+    await page.getByLabel("Código").waitFor();
+    const code = /código en la página: (\d{6})/.exec((await lastMail()).body)[1];
+    await page.getByLabel("Código").fill(code);
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await page.getByRole("heading", { name: "Tu cuenta" }).waitFor();
+    assert(await page.getByText(email).isVisible(), "no muestra el email de la cuenta");
+    const cookies = await phone.context.cookies();
+    const session = cookies.find((c) => c.name === "medida_s");
+    assert(session && session.httpOnly && session.sameSite === "Lax", "la cookie de sesión no está protegida");
+  });
+
+  const laptop = await visit(1440, 900);
+  await check("cuenta: el enlace del email abre sesión en otro dispositivo y trae los diseños", async () => {
+    await fetch(base + "/api/auth/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email }) });
+    const link = /(http\S+\/cuenta\/verificar\/#t=[\w-]+)/.exec((await lastMail()).body)[1];
+    const page = laptop.page;
+    await page.goto(link);
+    await page.waitForURL(/\/mis-disenos\//, { timeout: 20000 });
+    await page.getByRole("heading", { name: "Placard sincronizado" }).waitFor();
+    assert(!page.url().includes("#t="), "el enlace quedó en la dirección");
+    await page.goto(link);
+    await page.getByRole("heading", { name: "Este enlace ya no sirve." }).waitFor();
+  });
+
+  await check("cuenta: lo que se cambia en un dispositivo aparece en el otro", async () => {
+    const page = laptop.page;
+    await page.goto(base + "/mis-disenos/", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Cambiar el nombre de Placard sincronizado" }).click();
+    await page.getByLabel("Nombre del diseño").fill("Renombrado en la compu");
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(3500);
+    await phone.page.goto(base + "/mis-disenos/", { waitUntil: "networkidle" });
+    await phone.page.getByRole("heading", { name: "Renombrado en la compu" }).waitFor({ timeout: 15000 });
+  });
+
+  await check("cuenta: recordatorios apagados de entrada; cerrar sesión saca los diseños del dispositivo", async () => {
+    const page = phone.page;
+    await page.goto(base + "/cuenta/", { waitUntil: "networkidle" });
+    const byEmail = page.getByRole("checkbox", { name: /Por email/ });
+    assert(!(await byEmail.isChecked()), "los recordatorios tienen que arrancar apagados");
+    await page.getByText("Por email", { exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('input[type="checkbox"]')?.checked === true);
+    await page.getByRole("button", { name: "Cerrar sesión" }).click();
+    await page.getByRole("heading", { name: /Guardá tu diseño/ }).waitFor();
+    const left = await page.evaluate(() => JSON.parse(localStorage.getItem("medida.designs.v1") ?? '{"designs":[]}').designs.length);
+    assert(left === 0, "quedaron diseños en el dispositivo");
+  });
+  await phone.context.close();
+  await laptop.context.close();
+} else {
+  results.push(hasServer ? "  --   cuenta: el servidor no está en modo de prueba (sin bandeja de emails)" : "  --   cuenta y sincronización: sin servidor, no se prueban");
 }
 
 await browser.close();
