@@ -15,6 +15,11 @@ const eslintConfig = [
     rules: { "@next/next/no-img-element": "off" },
   },
   {
+    // en las pruebas de la API las respuestas se leen sin tipar, a propósito
+    files: ["worker/test/**"],
+    rules: { "@typescript-eslint/no-explicit-any": "off" },
+  },
+  {
     ignores: [
       ".next/**",
       "out/**", // export estático: es salida del build, no código fuente
