@@ -53,7 +53,7 @@ const SHOTS = [
   },
   {
     name: "exp-materiales",
-    query: `c=${cfg({ doors: "sliding", doorStyle: "mirror", doorMaterial: "blanco", runs: run(2600, [mod("hanging"), mod("shelves", { shelves: 4 }), mod("double-hanging")]) })}&fondo=${FONDO}`,
+    query: `c=${cfg({ doorStyle: "grooved", doorMaterial: "nogal", bodyMaterial: "arena", handle: "none" })}&fondo=${FONDO}`,
   },
   { name: "exp-colores", query: `c=${cfg({ bodyMaterial: "grafito", doorMaterial: "salvia", handle: "knob" })}&fondo=${FONDO}` },
   { name: "exp-modulos", query: `c=${cfg({ bodyMaterial: "blanco", doorMaterial: "arena" })}&fondo=${FONDO}&abierto=1`, settle: 30_000 },
@@ -64,7 +64,7 @@ const SHOTS = [
   },
   {
     name: "familia-placares",
-    query: `c=${cfg({ shape: "l-left", runs: [{ width: 2800, modules: [mod("shelves", { shelves: 4 }), mod("drawers-hanging", { drawers: 3 }), mod("double-hanging")] }, { width: 2000, modules: [mod("hanging"), mod("shelves", { shelves: 4 })] }], doorMaterial: "roble" })}&ambiente=habitacion&abierto=1&luces=1`,
+    query: `c=${cfg({ shape: "l-left", runs: [{ width: 2800, modules: [mod("shelves", { shelves: 4 }), mod("drawers-hanging", { drawers: 3 }), mod("double-hanging")] }, { width: 2000, modules: [mod("hanging"), mod("shelves", { shelves: 4 })] }], doorMaterial: "roble" })}&ambiente=habitacion&abierto=1&luces=1&encuadre=0.82&pared=arena`,
     settle: 34_000,
   },
 ];
@@ -118,18 +118,23 @@ if (!only || only === "orden") {
 
 // imagen para compartir en redes (1200 × 630) e íconos, armados sobre la captura del hero
 if (!only || only === "og") {
-  const hero = await sharp(path.join(out, "hero.webp")).resize({ width: 1200, height: 630, fit: "cover", position: "centre" }).toBuffer();
+  // el mueble va a la derecha y el texto a la izquierda, sobre el mismo gris del fondo
+  const hero = await sharp(path.join(out, "hero.webp")).resize({ width: 1260, height: 630, fit: "cover", position: "centre" }).toBuffer();
+  const canvas = await sharp({ create: { width: 1200, height: 630, channels: 3, background: "#e9e9ea" } })
+    .composite([{ input: await sharp(hero).extract({ left: 0, top: 0, width: 900, height: 630 }).toBuffer(), left: 300, top: 0 }])
+    .png()
+    .toBuffer();
   const overlay = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
-    <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#f5f5f6" stop-opacity="0.97"/><stop offset="0.5" stop-color="#f5f5f6" stop-opacity="0.9"/><stop offset="0.78" stop-color="#f5f5f6" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ececed"/><stop offset="0.42" stop-color="#ececed"/><stop offset="0.62" stop-color="#ececed" stop-opacity="0"/></linearGradient></defs>
     <rect width="1200" height="630" fill="url(#g)"/>
     <g stroke="#111214" stroke-width="5" stroke-linecap="round" fill="none"><path d="M72 76v30M140 76v30M72 91h68"/></g>
     <text x="160" y="103" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" letter-spacing="6" fill="#111214">MEDIDA</text>
-    <text x="72" y="300" font-family="Helvetica, Arial, sans-serif" font-size="68" font-weight="700" letter-spacing="-2" fill="#111214">Tus productos.</text>
-    <text x="72" y="378" font-family="Helvetica, Arial, sans-serif" font-size="68" font-weight="700" letter-spacing="-2" fill="#111214">Infinitas</text>
-    <text x="72" y="456" font-family="Helvetica, Arial, sans-serif" font-size="68" font-weight="700" letter-spacing="-2" fill="#111214">configuraciones.</text>
-    <text x="72" y="530" font-family="Helvetica, Arial, sans-serif" font-size="27" fill="#5f6368">Configuradores 3D para productos a medida</text>
+    <text x="72" y="300" font-family="Helvetica, Arial, sans-serif" font-size="64" font-weight="700" letter-spacing="-2" fill="#111214">Tus productos.</text>
+    <text x="72" y="374" font-family="Helvetica, Arial, sans-serif" font-size="64" font-weight="700" letter-spacing="-2" fill="#111214">Infinitas</text>
+    <text x="72" y="448" font-family="Helvetica, Arial, sans-serif" font-size="64" font-weight="700" letter-spacing="-2" fill="#111214">configuraciones.</text>
+    <text x="72" y="522" font-family="Helvetica, Arial, sans-serif" font-size="26" fill="#5f6368">Configuradores 3D para productos a medida</text>
   </svg>`);
-  await sharp(hero).composite([{ input: overlay }]).jpeg({ quality: 86, mozjpeg: true }).toFile(path.join(root, "public/og.jpg"));
+  await sharp(canvas).composite([{ input: overlay }]).jpeg({ quality: 86, mozjpeg: true }).toFile(path.join(root, "public/og.jpg"));
 
   const icon = (size) =>
     Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">

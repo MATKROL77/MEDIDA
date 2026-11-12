@@ -16,7 +16,7 @@ const ITEMS = [
     id: "materiales",
     title: "Materiales",
     body: "Frentes lisos, ranurados, con espejo o de vidrio con perfil de aluminio. Cada uno se ve como es.",
-    alt: "Placard con puertas corredizas de espejo",
+    alt: "Placard con frentes ranurados en nogal, sin tiradores",
     Icon: IconLayers,
   },
   {

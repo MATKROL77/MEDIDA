@@ -1,39 +1,79 @@
-# Medida: configurador 3D de placares a medida
+# MEDIDA
 
-El cliente de un taller arma su placard en 3D, ve el precio al instante y manda
-el pedido por WhatsApp. Al taller le llega el despiece, el plano de corte de
-cada placa, los herrajes, las luces y la cuenta de costo y margen.
+Configuradores 3D de productos a medida para fabricantes, carpinterías y
+comercios. El cliente arma el producto en 3D, lo guarda o lo suma a un carrito
+de consulta y manda la consulta completa; a la empresa le llega con las
+medidas, los materiales, el despiece y el plano de corte.
 
-"Medida" es un nombre de trabajo: se cambia en `src/lib/product.ts`.
+MEDIDA es el software. No fabrica ni vende muebles.
 
-## Estado verificado — 30/10/2026
+- Sitio publicado: https://medida.matiascolimodio.workers.dev
+- Estado verificado y lo que falta: [`MEDIDA_ESTADO.md`](./MEDIDA_ESTADO.md)
+- Reglas del proyecto: [`CLAUDE.md`](./CLAUDE.md) y [`AGENTS.md`](./AGENTS.md)
 
-La interfaz lleva la marca MEDIDA, sin rótulo ni marca de agua DEMO, por pedido
-del usuario. Los precios siguen señalados como valores orientativos de muestra
-(`catalog.brand.samplePricing`), independientemente de la marca de agua.
-Las opciones de altillo, techo inclinado y terminales curvos se agrupan en
-«Opciones especiales» para simplificar el primer recorrido.
+## Qué hay
 
-Se verificaron 18 pruebas del modelo y despiece, tipos, lint y export estático.
-En navegador se probó a 390 y 1440 px: cambio de medidas, conservación en el
-enlace, vista del taller y descargas PDF/CSV, sin desborde horizontal.
+| Parte | Estado |
+| --- | --- |
+| Landing, catálogo de configuradores y páginas de servicios | Funcionando |
+| Configurador de placares y vestidores | Demo funcionando |
+| Mesas, escritorios, ratonas, muebles de TV, bibliotecas, sillones | En desarrollo: el sitio lo dice y no los muestra como hechos |
+| Favoritos, carrito de consulta y guardado automático | Funcionando, en el dispositivo |
+| Contacto comercial por WhatsApp y email | Funcionando, centralizado en `src/lib/site.ts` |
+| Aviso de cookies y páginas legales | Funcionando |
 
-El CSV sirve para una planilla; el formato de una seccionadora concreta requiere
-adaptación. No hay login ni servidor: el catálogo se descarga al navegador y la
-vista del taller puede abrirse con su enlace. No cargar costos confidenciales
-sin resolver el acceso y la arquitectura antes.
+## Rutas
 
-GitHub tenía verificaciones exitosas, pero la publicación anterior se omitió
-por falta de los secretos de Cloudflare. Una verificación exitosa no demuestra
-que exista una URL publicada. Las mejoras se entregan en una rama para revisión;
-publicar exige autorización del usuario.
+| Ruta | Qué es |
+| --- | --- |
+| `/` | Landing: el hero con el configurador vivo, lo que se puede cambiar, las familias, los servicios y el contacto |
+| `/configuradores/` | Catálogo: lo que se puede probar hoy y lo que está en desarrollo |
+| `/servicios/` y `/servicios/<servicio>/` | Los tres servicios para empresas |
+| `/demo/` | El configurador de placares |
+| `/demo/taller/` | Lo que recibe el fabricante: despiece, placas, herrajes, costos |
+| `/mis-disenos/` | Diseños guardados: favoritos y carrito de consulta |
+| `/privacidad/`, `/cookies/`, `/terminos/` | Textos legales |
+| `/render/` | El 3D solo, sin interfaz: lo usa `scripts/capture.mjs` |
 
-El 30/10/2026 el usuario autorizó expresamente publicar esta versión como
-archivos estáticos gratuitos. URL comprobada:
-https://medida.matiascolimodio.workers.dev/demo/ . Inicio, configurador y
-vista del taller responden HTTP200. Versión Cloudflare:
-`fca313e1-1629-4da3-b1cf-7f881a7080b6`. Se usó la sesión OAuth oficial ya
-existente, sin activar planes pagos ni guardar tokens en GitHub.
+La configuración viaja entera en el link (`?c=...`), así que un enlace
+compartido abre exactamente el mismo diseño en cualquier dispositivo.
+
+## Dos recorridos que no se mezclan
+
+- **Quien configura un mueble.** Prueba la demo, guarda diseños, arma un
+  carrito de consulta.
+- **La empresa que quiere MEDIDA.** Habla con quien lo vende, por WhatsApp o
+  por email, sin formularios ni registro.
+
+"Enviar al taller" en la demo pregunta cuál de las dos cosas busca la persona.
+La cotización muestra el resumen y aclara que es una demostración: no hay un
+taller asociado y el resumen no se le manda a nadie por defecto (la persona lo
+comparte con quien quiera). El contacto comercial abre WhatsApp con un mensaje
+que dice de qué servicio se trata. En el configurador de una empresa
+(`workshop` en `Configurator`), "Enviar al taller" va a esa empresa y nunca a
+MEDIDA.
+
+## Contacto comercial
+
+El número de WhatsApp y el email viven en un solo lugar: `src/lib/site.ts`
+(`defaultContact`). Todos los botones pasan por `ContactLink`, que arma el
+enlace con el mensaje del interés elegido (`INTERESTS`). Abrir WhatsApp se
+anota como intención de contacto, no como mensaje enviado, y solo si la
+persona aceptó la medición (`src/lib/track.ts`).
+
+## Diseños guardados
+
+`src/lib/designs.ts` (reglas, puras y con pruebas) y `src/lib/designStore.ts`
+(almacenamiento local). Cada diseño guarda la familia, la configuración
+completa, un resumen legible, el precio estimado, una vista previa, las fechas
+de creación y modificación y un identificador único. Se puede abrir, editar,
+renombrar, duplicar, eliminar y sumar al carrito. El carrito junta muebles
+para pedir cotización: no es una compra.
+
+Lo que se está armando se guarda solo (borrador): si se cierra el navegador,
+al volver a `/demo/` está ahí.
+
+## El configurador de placares
 
 ## Qué se puede armar
 
@@ -70,67 +110,21 @@ En el celular el PDF se comparte directo a WhatsApp. En la compu se abre
 WhatsApp con el resumen y el link a la orden (`/demo/taller/`), que muestra lo
 mismo y se puede bajar en PDF o en CSV.
 
-## Rutas
+## Lo que recibe el fabricante
 
-| Ruta | Qué es |
-| --- | --- |
-| `/` | Página para venderle el producto a los talleres |
-| `/demo/` | El configurador MEDIDA, con costos orientativos de muestra |
-| `/demo/taller/` | Lo que recibe el taller: despiece, placas, herrajes, costos |
+"Enviar al taller" arma en el navegador un PDF con:
 
-La configuración viaja entera en el link (`?c=...`), así que el pedido que llega
-por WhatsApp abre exactamente el placard que armó el cliente. No hay base de
-datos ni servidor.
+- tapa con una captura del 3D, las medidas, el precio y el resumen por tipo de
+  pieza ("10 × Estante con luz LED");
+- una tarjeta por grupo de piezas iguales con su dibujo acotado: tapacanto,
+  canal para el perfil LED, cazoletas de las bisagras, agujeros del tirador,
+  ranuras, espejo, cortes en ángulo, trapecios y curvas;
+- herrajes, luces y placas.
 
-## Cómo se corre
-
-```bash
-npm install
-npm run dev        # http://localhost:3000
-npm test           # pruebas del despiece y el precio
-npm run typecheck
-npm run lint
-npm run build      # export estático en out/
-```
-
-Para grabar un video sin marca de agua, el guion de grabación esconde los
-elementos con `data-watermark`; con `?calidad=alta` el 3D deja además en
-`window.__medidaAnim` el estado de puertas, cajones y luces, para sincronizar
-los sonidos con lo que se mueve.
-
-`/demo/?calidad=baja` fuerza el modo liviano del 3D (sin oclusión ambiental ni
-antialias por muestreo). Sirve para equipos muy viejos y para sacar capturas en
-máquinas sin placa de video. `/demo/?calidad=alta` hace lo contrario: deja todos
-los efectos aunque el equipo no llegue a 60 cuadros, para grabar video.
-
-## Marca de agua
-
-Mientras `catalog.brand.demo` sea `true`, el 3D, la vista del taller y cada hoja
-del PDF llevan "MEDIDA · DEMO" en diagonal, y arriba a la derecha aparece el
-contacto de quien vende el producto. Sirve para mandar el link o el video sin
-que se confunda con un placard real. El texto se cambia en `src/lib/product.ts`;
-en el sitio de un taller real se pone `demo: false` y desaparece.
-
-## Dónde tocar cada cosa
-
-| Quiero cambiar… | Archivo |
-| --- | --- |
-| Marca, WhatsApp, materiales, precios, margen del taller | `src/lib/catalog.ts` |
-| Nombre del producto y contacto del que lo vende | `src/lib/product.ts` |
-| Reglas de fabricación (medidas, cajones, maletero, curvas) | `src/lib/model.ts` |
-| Cómo se arma cada pieza | `src/lib/assembly.ts` |
-| Acomodo de piezas en la placa | `src/lib/nesting.ts` |
-| Cálculo de costo y precio | `src/lib/quote.ts` |
-| El mensaje de WhatsApp | `src/lib/share.ts` |
-| Dibujo técnico de cada pieza | `src/lib/drawings.ts` |
-| El PDF para el taller | `src/lib/orderPdf.ts` |
-| Escena 3D, cámara, luces, efectos | `src/components/viewer/Scene.tsx` |
-| Cómo se anima cada pieza | `src/components/viewer/PartNode.tsx` |
-| Habitación, paredes, ventana | `src/components/viewer/Room.tsx` |
-| Texturas y materiales del 3D | `src/components/viewer/materials.ts` |
-| Panel y barra del visor | `src/components/Configurator.tsx` |
-| La vista del taller | `src/components/Workshop.tsx` |
-| Paleta, tipografía, animaciones de la interfaz | `src/app/globals.css` |
+La orden (`/demo/taller/`) muestra lo mismo y se puede bajar en PDF o en CSV.
+El CSV sirve para una planilla; el formato de una seccionadora concreta
+requiere adaptación. Los precios de la demo son de muestra
+(`catalog.brand.samplePricing`).
 
 ## Cómo está pensado
 
@@ -191,32 +185,88 @@ en el sitio de un taller real se pone `demo: false` y desaparece.
   consumo, sensores, cortes en ángulo y curvos, mano de obra y margen. Los de la
   demo **son de ejemplo**.
 
+## Rendimiento
+
+- La landing no baja el motor 3D con la página: muestra una imagen ya
+  optimizada y, cuando la página quedó quieta y el hero está en pantalla, baja
+  el 3D y lo funde encima. Con ahorro de datos o movimiento reducido espera a
+  que la persona lo pida. Fuera de pantalla deja de dibujar.
+- Las imágenes del sitio son capturas reales del configurador en WebP
+  (`public/img/`), entre 10 y 45 KB cada una.
+- La calidad del 3D se adapta sola al equipo. `/demo/?calidad=baja` fuerza el
+  modo liviano y `?calidad=alta` deja todos los efectos (para grabar video; con
+  esa opción el 3D deja en `window.__medidaAnim` el estado de puertas, cajones
+  y luces).
+
+## Cómo se corre
+
+```bash
+npm install
+npm run dev        # http://localhost:3000
+npm test           # pruebas del despiece, el precio y los diseños guardados
+npm run typecheck
+npm run lint
+npm run build      # export estático en out/
+```
+
+Pruebas en el navegador (hacen falta Playwright y Chromium, que no son
+dependencias del proyecto):
+
+```bash
+npm run build && npx serve out -l 4100
+node scripts/e2e.mjs http://localhost:4100
+```
+
+Imágenes del sitio, cuando cambian los materiales o el motor (además hace
+falta sharp):
+
+```bash
+npm run capture -- http://localhost:4100
+```
+
+## Dónde tocar cada cosa
+
+| Quiero cambiar… | Archivo |
+| --- | --- |
+| Nombre, descripción, WhatsApp y email de MEDIDA, mensajes precargados | `src/lib/site.ts` |
+| Familias de producto y cuál tiene demo | `src/lib/families.ts` |
+| Los servicios para empresas | `src/lib/services.ts` |
+| La landing | `src/app/(site)/page.tsx` y `src/components/landing/` |
+| Encabezado, pie, aviso de cookies | `src/components/site/` |
+| Textos legales | `src/app/(site)/privacidad`, `cookies`, `terminos` |
+| Materiales, precios de muestra, margen | `src/lib/catalog.ts` |
+| Reglas de fabricación (medidas, cajones, maletero, curvas) | `src/lib/model.ts` |
+| Cómo se arma cada pieza | `src/lib/assembly.ts` |
+| Acomodo de piezas en la placa | `src/lib/nesting.ts` |
+| Cálculo de costo y precio | `src/lib/quote.ts` |
+| El mensaje de la consulta y el resumen de un diseño | `src/lib/share.ts`, `src/lib/inquiry.ts` |
+| Dibujo técnico de cada pieza | `src/lib/drawings.ts` |
+| El PDF | `src/lib/orderPdf.ts` |
+| Escena 3D, cámara, luces, efectos | `src/components/viewer/Scene.tsx` |
+| Cómo se anima cada pieza | `src/components/viewer/PartNode.tsx` |
+| Habitación, paredes, ventana | `src/components/viewer/Room.tsx` |
+| Panel y barra del configurador | `src/components/Configurator.tsx` |
+| "Enviar al taller" | `src/components/SendSheet.tsx` |
+| Mis diseños | `src/components/designs/` |
+| La vista del taller | `src/components/Workshop.tsx` |
+| Paleta, tipografía, animaciones de la interfaz | `src/app/globals.css` |
+
 ## Publicarlo
 
-Es un sitio estático: `npm run build` genera `out/`.
+`.github/workflows/deploy.yml` verifica (pruebas, tipos, lint), compila,
+publica en Cloudflare Workers (`wrangler.jsonc`, nombre `medida`) y comprueba
+que el sitio publicado responda, en cada push a `main` o a una rama
+`claude/**`. El token de Cloudflare (`CLOUDFLARE_API_TOKEN`) está cargado como
+secreto de un environment de GitHub; el archivo explica cómo lo encuentra. Si
+falta el token, la ejecución falla en vez de terminar en verde sin publicar.
 
-Está preparado para Cloudflare Workers (`wrangler.jsonc`, nombre `medida`):
+Un commit cuyo mensaje lleva `[skip ci]` no dispara la publicación: sirve para
+guardar trabajo a medio hacer.
 
-- **Solo, desde GitHub:** `.github/workflows/deploy.yml` verifica (pruebas,
-  tipos, lint, build), publica en cada push a `main` o a una rama `claude/**` y
-  comprueba que el sitio publicado responda. El token de Cloudflare
-  (`CLOUDFLARE_API_TOKEN`) está cargado como secreto de un environment de
-  GitHub; el archivo explica cómo lo encuentra. Si falta el token, la
-  ejecución falla en vez de terminar en verde sin publicar.
-- **A mano, desde la compu:** `npm run build` y después `npx wrangler deploy`
-  (la primera vez pide entrar a Cloudflare).
+A mano, desde la compu: `npm run build` y después `npx wrangler deploy`.
 
-Queda en `https://medida.<tu-subdominio>.workers.dev`: la página para talleres
-en `/` y el configurador en `/demo/`.
+## Textos legales
 
-Para probarlo sin dominio, `npm run artifact` arma una versión de un solo
-archivo (`artifact-out/index.html` y `app.js`) que se publica como página
-privada de Claude. Ahí todo funciona salvo bajar y compartir el PDF, que esos
-marcos bloquean: en esa versión los botones no aparecen.
-
-## Lo que falta para un taller real
-
-- Panel para que el taller edite sus precios sin tocar código.
-- Login para la vista del taller.
-- Más productos: cocinas, bajo mesada, vestidor con isla.
-- Exportar el despiece al formato de la seccionadora del taller.
+Las páginas de privacidad, cookies y términos describen lo que el sistema hace
+de verdad y citan la Ley 25.326. Conviene que las revise un profesional antes
+de operar comercialmente.

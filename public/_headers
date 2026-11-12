@@ -1,0 +1,16 @@
+# Los archivos de _next/static llevan un hash en el nombre: nunca cambian.
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/img/*
+  Cache-Control: public, max-age=604800
+
+# Nadie puede meter el sitio adentro de otra página…
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: frame-ancestors 'self'
+
+# …salvo el configurador embebible, que existe para eso.
+/embed/*
+  ! Content-Security-Policy

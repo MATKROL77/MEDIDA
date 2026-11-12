@@ -3,22 +3,11 @@
  * por WhatsApp abre el mismo placard que armó el cliente, sin base de datos.
  */
 
+import { fromBase64Url, toBase64Url } from "./base64url.ts";
 import { catalog, materialById } from "./catalog.ts";
+import type { DesignSummary } from "./designs.ts";
 import { DOOR_STYLE_LABELS, LAYOUT_LABELS, LED_COLORS, hasLeds, normalize, totalHeight, type WardrobeConfig } from "./model.ts";
 import { summaryByTitle, type CutRow } from "./quote.ts";
-
-function toBase64Url(text: string): string {
-  const bytes = new TextEncoder().encode(text);
-  let binary = "";
-  bytes.forEach((b) => (binary += String.fromCharCode(b)));
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(value: string): string {
-  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
-  const binary = atob(padded);
-  return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
-}
 
 export function encodeConfig(config: WardrobeConfig): string {
   return toBase64Url(JSON.stringify(config));
@@ -60,8 +49,8 @@ export function pieceLines(rows: CutRow[]): string[] {
   return summaryByTitle(rows).map((r) => `• ${r.qty} × ${r.title}`);
 }
 
-/** el resumen que el cliente manda al taller */
-export function orderMessage(config: WardrobeConfig, price: string, link: string, extra: { rows?: CutRow[]; workshopLink?: string } = {}): string {
+/** cómo es el placard, una línea por cosa: forma, medidas, módulos, frentes, extras y materiales */
+export function configLines(config: WardrobeConfig): string[] {
   const extras = [
     config.topBox.enabled ? `Altillo de ${cm(config.topBox.height)}` : "",
     config.slope.enabled ? `Techo inclinado: lado bajo de ${cm(config.slope.low)} a la ${config.slope.side === "left" ? "izquierda" : "derecha"}` : "",
@@ -75,14 +64,51 @@ export function orderMessage(config: WardrobeConfig, price: string, link: string
   const doors =
     config.doors === "none" ? DOOR_LABELS.none : `${DOOR_LABELS[config.doors]}, frente ${DOOR_STYLE_LABELS[config.doorStyle].toLowerCase()} (${HANDLE_LABELS[config.handle]})`;
   return [
-    `Hola ${catalog.brand.name}, armé este placard en la web:`,
-    "",
     `Forma: ${SHAPE_LABELS[config.shape]}`,
     `Alto ${cm(totalHeight(config))} · profundidad ${cm(config.depth)}`,
     runLines(config),
     doors,
     ...extras,
     `Cuerpo: ${materialById(config.bodyMaterial).name}. Frentes: ${materialById(config.doorMaterial).name}`,
+  ];
+}
+
+/** "240 × 240 × 60 cm"; en L, los dos tramos: "280 + 200 × 240 × 60 cm" */
+export function dimensionsLabel(config: WardrobeConfig): string {
+  return `${config.runs.map((r) => Math.round(r.width / 10)).join(" + ")} × ${Math.round(totalHeight(config) / 10)} × ${Math.round(config.depth / 10)} cm`;
+}
+
+/** el resumen corto que se guarda con el diseño, para listarlo sin cargar el motor */
+export function designSummary(config: WardrobeConfig): DesignSummary {
+  const modules = config.runs.reduce((n, r) => n + r.modules.length, 0);
+  const drawers = config.runs.reduce((n, r) => n + r.modules.reduce((m, mod) => m + mod.drawers, 0), 0);
+  const extras = [config.topBox.enabled ? "altillo" : "", config.slope.enabled ? "techo inclinado" : "", config.curved.left || config.curved.right ? "terminal curvo" : ""].filter(Boolean);
+  return {
+    dimensions: dimensionsLabel(config),
+    lines: [
+      `${SHAPE_LABELS[config.shape]} · ${modules} ${modules === 1 ? "módulo" : "módulos"}${drawers ? ` · ${drawers} ${drawers === 1 ? "cajón" : "cajones"}` : ""}`,
+      config.doors === "none" ? DOOR_LABELS.none : `${DOOR_LABELS[config.doors]}, frente ${DOOR_STYLE_LABELS[config.doorStyle].toLowerCase()}`,
+      `Cuerpo ${materialById(config.bodyMaterial).name.toLowerCase()} · frentes ${materialById(config.doorMaterial).name.toLowerCase()}`,
+      ...(hasLeds(config) ? [`Luz LED ${config.led.color === "rgb" ? "RGB" : LED_COLORS[config.led.color].label.toLowerCase()}`] : []),
+      ...(extras.length ? [`Con ${extras.join(", ")}`] : []),
+    ],
+  };
+}
+
+/**
+ * El resumen que el cliente le manda a quien fabrica. `recipient` es el nombre
+ * de la empresa; sin él, el saludo queda abierto (la demo no tiene taller).
+ */
+export function orderMessage(
+  config: WardrobeConfig,
+  price: string,
+  link: string,
+  extra: { rows?: CutRow[]; workshopLink?: string; recipient?: string } = {},
+): string {
+  return [
+    `Hola${extra.recipient ? ` ${extra.recipient}` : ""}, armé este placard en la web:`,
+    "",
+    ...configLines(config),
     `Precio estimado: ${price}`,
     ...(catalog.brand.samplePricing ? ["Valores orientativos de muestra; el fabricante debe validar medidas y costos."] : []),
     ...(extra.rows?.length ? ["", "Piezas:", ...pieceLines(extra.rows)] : []),
@@ -90,8 +116,4 @@ export function orderMessage(config: WardrobeConfig, price: string, link: string
     `Mi diseño: ${link}`,
     ...(extra.workshopLink ? [`Despiece con dibujos de cada pieza: ${extra.workshopLink}`] : []),
   ].join("\n");
-}
-
-export function whatsappLink(message: string): string {
-  return `https://wa.me/${catalog.brand.whatsapp}?text=${encodeURIComponent(message)}`;
 }

@@ -21,7 +21,6 @@ const eslintConfig = [
       "public/**",
       "next-env.d.ts", // lo genera Next en cada build
       "node_modules/**",
-      "artifact-out/**",
       ".wrangler/**",
     ],
   },

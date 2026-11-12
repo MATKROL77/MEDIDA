@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/lib/*.test.ts",
-    "artifact": "node scripts/build-artifact.mjs"
+    "capture": "node --experimental-strip-types scripts/capture.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -29,7 +29,6 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@types/three": "^0.180.0",
-    "esbuild": "^0.24.2",
     "eslint": "^9.36.0",
     "eslint-config-next": "^15.5.4",
     "postcss": "^8.5.6",

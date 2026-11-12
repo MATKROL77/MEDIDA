@@ -42,11 +42,6 @@ export function Footer() {
                 Mis diseños
               </Link>
             </li>
-            <li>
-              <Link href="/cuenta/" className="hover:text-ink">
-                Mi cuenta
-              </Link>
-            </li>
           </ul>
         </nav>
 
@@ -60,11 +55,6 @@ export function Footer() {
                 </Link>
               </li>
             ))}
-            <li>
-              <Link href="/panel/" className="hover:text-ink">
-                Panel de empresa
-              </Link>
-            </li>
           </ul>
         </nav>
 

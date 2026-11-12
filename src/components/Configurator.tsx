@@ -17,7 +17,12 @@ import {
 } from "@/components/icons";
 import { LayoutIcon } from "@/components/LayoutIcon";
 import { Poster } from "@/components/Poster";
-import { Watermark, WatermarkNote } from "@/components/Watermark";
+import { SendSheet } from "@/components/SendSheet";
+import { Watermark } from "@/components/Watermark";
+import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
+import { ContactLink } from "@/components/site/ContactLink";
+import { IconCheck, IconClose, IconHeart, IconWhatsapp } from "@/components/site/icons";
+import { Logo } from "@/components/site/Logo";
 import { Dimension, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import type { ViewName } from "@/components/viewer/Scene";
@@ -48,11 +53,21 @@ import {
   type Shape,
   type WardrobeConfig,
 } from "@/lib/model";
-import { EMBEDDED, currentQuery, rememberQuery } from "@/lib/embed";
+import { addDesign, clearDraft, getDesign, nextName, readDraft, updateDesign, useDesigns, writeDraft } from "@/lib/designStore";
 import { drawerGroupsOf, leavesOf, openOffsets, toggleLeaf } from "@/lib/motion";
 import { buildOrderPdf, type OrderPdf } from "@/lib/orderPdf";
-import { money, quote, summaryByTitle } from "@/lib/quote";
-import { decodeConfig, encodeConfig, orderMessage, whatsappLink } from "@/lib/share";
+import { shrinkImage } from "@/lib/preview";
+import { currentQuery, rememberQuery } from "@/lib/query";
+import { money, quote } from "@/lib/quote";
+import { decodeConfig, designSummary, encodeConfig, orderMessage } from "@/lib/share";
+import type { Workshop } from "@/lib/workshop";
+
+/** la familia de producto de este configurador, para guardar y recuperar sus diseños */
+const FAMILY = "placares";
+/** después de cuántos cambios se le cuenta a la persona que esto se puede tener en su empresa */
+const PITCH_AFTER_CHANGES = 8;
+
+type Toast = { text: string; href?: string; hrefLabel?: string; action?: { label: string; run: () => void } };
 
 type Tab = "forma" | "interior" | "frentes" | "luz" | "color";
 const TABS: { id: Tab; label: string }[] = [
@@ -71,7 +86,13 @@ function shareLink(config: WardrobeConfig, path = "/demo/") {
   return `${origin}${path}?c=${encodeConfig(config)}`;
 }
 
-export default function Configurator() {
+/**
+ * El configurador de placares. `workshop` es la empresa dueña del configurador:
+ * a ella le llegan las consultas. Sin `workshop` es la demo de MEDIDA, donde
+ * además se pueden guardar diseños y armar un carrito de consulta.
+ */
+export default function Configurator({ workshop = null, onInquiry }: { workshop?: Workshop | null; onInquiry?: (channel: string, config: WardrobeConfig, price: number) => void }) {
+  const demo = workshop === null;
   const [config, setConfig] = useState<WardrobeConfig>(DEFAULT_CONFIG);
   const [tab, setTab] = useState<Tab>("forma");
   const [selection, setSelection] = useState({ run: 0, module: 0 });
@@ -88,20 +109,127 @@ export default function Configurator() {
   const [sheet, setSheet] = useState<{ open: boolean; pdf: OrderPdf | null; failed: boolean }>({ open: false, pdf: null, failed: false });
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
   const [ready, setReady] = useState(false);
+  // el diseño guardado que se está editando, si se abrió uno
+  const [designId, setDesignId] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [changes, setChanges] = useState(0);
+  const [pitchClosed, setPitchClosed] = useState(true);
+  const saved = useDesigns().designs.find((d) => d.id === designId) ?? null;
+  const savedCount = useDesigns().designs.length;
 
-  // un link compartido abre el placard que armó el cliente
+  // qué se abre, en orden: un diseño guardado (?id=), un enlace compartido
+  // (?c=), o lo último que se estaba armando en este dispositivo
   useEffect(() => {
-    const fromUrl = decodeConfig(new URLSearchParams(currentQuery()).get("c"));
-    if (fromUrl) setConfig(fromUrl);
+    const q = new URLSearchParams(currentQuery());
+    const stored = demo ? getDesign(q.get("id") ?? "") : null;
+    const fromUrl = decodeConfig(q.get("c"));
+    if (stored && stored.type === FAMILY) {
+      setConfig(normalize(stored.config as Partial<WardrobeConfig>));
+      setDesignId(stored.id);
+    } else if (fromUrl) {
+      setConfig(fromUrl);
+    } else if (demo && q.get("nuevo") !== "1") {
+      const draft = readDraft<Partial<WardrobeConfig>>(FAMILY);
+      if (draft) {
+        try {
+          const restored = normalize(draft.config);
+          if (JSON.stringify(restored) !== JSON.stringify(DEFAULT_CONFIG)) {
+            setConfig(restored);
+            setToast({
+              text: "Recuperamos el diseño que estabas armando.",
+              action: {
+                label: "Empezar de cero",
+                run: () => {
+                  clearDraft(FAMILY);
+                  setConfig(DEFAULT_CONFIG);
+                },
+              },
+            });
+          }
+        } catch {
+          clearDraft(FAMILY);
+        }
+      }
+    }
+    try {
+      setPitchClosed(sessionStorage.getItem("medida.pitch") === "cerrado");
+    } catch {
+      setPitchClosed(false);
+    }
+    setLoaded(true);
+    // solo al abrir la página
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // la barra de direcciones siempre reproduce lo que se ve, por si la copian
-  useEffect(() => {
-    const id = setTimeout(() => rememberQuery(`?c=${encodeConfig(config)}`), 300);
-    return () => clearTimeout(id);
-  }, [config]);
-
   const result = useMemo(() => quote(config), [config]);
+
+  /** una vista previa chica del 3D, tal como se ve ahora */
+  const capturePreview = async (wait = 1500): Promise<string | null> => {
+    const shot = captureRef.current ? await Promise.race([captureRef.current(), new Promise<null>((r) => setTimeout(() => r(null), wait))]) : null;
+    return shot ? shrinkImage(shot) : null;
+  };
+
+  // guardado automático: la dirección reproduce lo que se ve, el borrador queda
+  // en el dispositivo y, si se está editando un diseño guardado, se actualiza
+  useEffect(() => {
+    if (!loaded) return;
+    const id = setTimeout(() => {
+      rememberQuery(`?${designId ? `id=${designId}&` : ""}c=${encodeConfig(config)}`);
+      if (!demo) return;
+      writeDraft(FAMILY, config);
+      const current = designId ? getDesign(designId) : null;
+      if (current && JSON.stringify(current.config) !== JSON.stringify(config)) {
+        updateDesign(current.id, { config, summary: designSummary(config), price: result.price });
+      }
+    }, 350);
+    return () => clearTimeout(id);
+    // result sale de config: no hace falta en la lista
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, designId, loaded, demo]);
+
+  // la vista previa del diseño guardado se rehace cuando la persona deja de cambiar cosas
+  const firstPreview = useRef(true);
+  useEffect(() => {
+    if (!loaded || !designId) return;
+    if (firstPreview.current) {
+      firstPreview.current = false;
+      return;
+    }
+    const id = setTimeout(async () => {
+      const preview = await capturePreview();
+      if (preview && getDesign(designId)) updateDesign(designId, { preview });
+    }, 2600);
+    return () => clearTimeout(id);
+  }, [config, designId, loaded]);
+
+  // cuenta los cambios para ofrecer, sin interrumpir, tener esto en la propia empresa
+  const firstChange = useRef(true);
+  useEffect(() => {
+    if (!loaded) return;
+    if (firstChange.current) {
+      firstChange.current = false;
+      return;
+    }
+    setChanges((n) => n + 1);
+  }, [config, loaded]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), 7000);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  const save = async ({ name, favorite, cart }: SaveChoice) => {
+    // al guardar a pedido se espera más: en un equipo lento un cuadro del 3D puede tardar
+    const preview = await capturePreview(4000);
+    const data = { name, favorite, cart, config, summary: designSummary(config), price: result.price };
+    if (saved) updateDesign(saved.id, { ...data, preview: preview ?? saved.preview });
+    else setDesignId(addDesign({ type: FAMILY, ...data, preview }).id);
+    setSaveOpen(false);
+    setToast({ text: cart ? "Agregado a tu carrito de consulta." : "Guardado en tus favoritos.", href: "/mis-disenos/", hrefLabel: "Ver mis diseños" });
+  };
 
   // corredizas: dónde dejó cada hoja el cliente; se vuelve a empezar si cambian las hojas
   const leaves = useMemo(() => leavesOf(result.assembly), [result.assembly]);
@@ -169,8 +297,9 @@ export default function Configurator() {
   const message = orderMessage(config, money(result.price), shareLink(config), {
     rows: result.rows,
     workshopLink: shareLink(config, "/demo/taller/"),
+    recipient: workshop?.name,
   });
-  const orderHref = whatsappLink(message);
+  const showPitch = demo && !pitchClosed && changes >= PITCH_AFTER_CHANGES;
 
   // abre la hoja de envío y arma el PDF con una captura del 3D en la tapa
   const openSend = async () => {
@@ -220,11 +349,27 @@ export default function Configurator() {
         <Watermark />
 
         <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
-          <div className="pointer-events-auto rounded-2xl bg-surface/90 px-4 py-2.5 shadow-sm backdrop-blur">
-            <p className="font-display text-base font-semibold leading-tight">{catalog.brand.name}</p>
-            <p className="text-xs text-ink-2">{catalog.brand.tagline}</p>
-          </div>
-          <WatermarkNote className="mt-1 hidden rounded-full bg-surface/70 px-3 py-1.5 backdrop-blur sm:block" />
+          {workshop ? (
+            <div className="pointer-events-auto rounded-2xl bg-surface/90 px-4 py-2.5 shadow-sm backdrop-blur">
+              <p className="font-display text-base font-semibold leading-tight">{workshop.name}</p>
+              <p className="text-xs text-ink-2">{catalog.brand.tagline}</p>
+            </div>
+          ) : (
+            <Link href="/" className="pointer-events-auto rounded-2xl bg-surface/90 px-4 py-2.5 shadow-sm backdrop-blur transition-colors hover:bg-surface" aria-label="MEDIDA, volver al inicio">
+              <Logo />
+              <p className="mt-0.5 text-xs text-ink-2">{catalog.brand.tagline}</p>
+            </Link>
+          )}
+          {demo && (
+            <Link
+              href="/mis-disenos/"
+              className="pointer-events-auto flex items-center gap-2 rounded-full bg-surface/90 px-3.5 py-2 text-sm font-medium shadow-sm backdrop-blur transition-colors hover:bg-surface"
+            >
+              <IconHeart width={17} height={17} />
+              <span className="hidden sm:inline">Mis diseños</span>
+              {savedCount > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-ink px-1.5 text-[0.68rem] font-semibold leading-5 text-surface">{savedCount}</span>}
+            </Link>
+          )}
         </header>
 
         <div className="absolute inset-x-0 bottom-3 z-10 flex justify-center px-3">
@@ -727,21 +872,61 @@ export default function Configurator() {
             </>
           )}
 
-          <Link href={`/demo/taller/?c=${encodeConfig(config)}`} className="block text-sm font-medium text-accent underline-offset-4 hover:underline">
-            Ver lo que le llega al taller →
+          <Link href={`/demo/taller/?c=${encodeConfig(config)}`} className="link-arrow text-sm">
+            Ver lo que le llega al taller
           </Link>
+
+          {showPitch && (
+            <aside className="fade-in relative rounded-2xl bg-paper p-4 pr-10" aria-label="MEDIDA para empresas">
+              <p className="text-sm font-semibold">¿Tenés una empresa?</p>
+              <p className="mt-1 text-sm leading-relaxed text-ink-2">Podés tener un configurador como este en tu propia web.</p>
+              <ContactLink channel="whatsapp" interest="demo" placement="demo-panel" className="btn btn-primary btn-sm mt-3">
+                <IconWhatsapp width={15} height={15} />
+                Hablemos
+              </ContactLink>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                className="absolute right-2 top-2 grid size-8 place-items-center rounded-full text-ink-2 hover:bg-surface hover:text-ink"
+                onClick={() => {
+                  setPitchClosed(true);
+                  try {
+                    sessionStorage.setItem("medida.pitch", "cerrado");
+                  } catch {
+                    // sin almacenamiento de sesión vuelve a aparecer al recargar
+                  }
+                }}
+              >
+                <IconClose width={16} height={16} />
+              </button>
+            </aside>
+          )}
         </div>
 
         {/* precio y pedido: fijos abajo en el teléfono, al pie del panel en pantalla grande */}
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur lg:static">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
               <p className="text-xs text-ink-2">Precio estimado</p>
-              <p className="font-display text-2xl font-semibold tabular-nums">{money(Math.round(price / 1000) * 1000)}</p>
+              <p className="font-display text-xl font-semibold tabular-nums sm:text-2xl">{money(Math.round(price / 1000) * 1000)}</p>
             </div>
-            <button type="button" onClick={openSend} className="btn btn-whatsapp shrink-0 text-sm">
-              Enviar al taller
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {demo && (
+                <button
+                  type="button"
+                  onClick={() => setSaveOpen(true)}
+                  className={`btn btn-sm h-11 px-3.5 ${saved ? "btn-secondary" : "btn-ghost"}`}
+                  aria-label={saved ? "Diseño guardado: cambiar nombre o dónde está" : "Guardar este diseño"}
+                  title={saved ? "Guardado" : "Guardar"}
+                >
+                  {saved ? <IconCheck /> : <IconHeart />}
+                  <span className="hidden min-[420px]:inline">{saved ? "Guardado" : "Guardar"}</span>
+                </button>
+              )}
+              <button type="button" onClick={openSend} className="btn btn-whatsapp btn-sm h-11 px-4">
+                Enviar al taller
+              </button>
+            </div>
           </div>
           <p className="mt-2 text-[11px] leading-snug text-ink-2">
             {catalog.brand.samplePricing
@@ -753,132 +938,47 @@ export default function Configurator() {
 
       {sheet.open && (
         <SendSheet
+          workshop={workshop}
+          summary={designSummary(config)}
+          price={result.price}
           pdf={sheet.pdf}
           failed={sheet.failed}
           rows={result.rows}
           message={message}
-          orderHref={orderHref}
+          designLink={shareLink(config)}
+          workshopHref={`/demo/taller/?c=${encodeConfig(config)}`}
+          onInquiry={(channel) => onInquiry?.(channel, config, result.price)}
           onClose={() => setSheet({ open: false, pdf: null, failed: false })}
         />
       )}
-    </div>
-  );
-}
 
-/**
- * Hoja para mandar el pedido. En el celular el PDF se comparte directo a
- * WhatsApp; en la compu se baja el PDF y se abre WhatsApp con el resumen y el
- * link al despiece con dibujos.
- */
-function SendSheet({ pdf, failed, rows, message, orderHref, onClose }: {
-  pdf: OrderPdf | null;
-  failed: boolean;
-  rows: ReturnType<typeof quote>["rows"];
-  message: string;
-  orderHref: string;
-  onClose: () => void;
-}) {
-  const [canShare] = useState(() => {
-    if (EMBEDDED) return false;
-    try {
-      return typeof navigator !== "undefined" && !!navigator.canShare?.({ files: [new File([""], "x.pdf", { type: "application/pdf" })] });
-    } catch {
-      return false;
-    }
-  });
-  const fileName = `pedido-${catalog.brand.name.toLowerCase().replace(/\s+/g, "-")}.pdf`;
-  const file = pdf ? new File([pdf.blob], fileName, { type: "application/pdf" }) : null;
+      {saveOpen && <SaveSheet saved={saved} suggestedName={nextName("Placard")} onSave={save} onClose={() => setSaveOpen(false)} />}
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const share = async () => {
-    if (!file) return;
-    try {
-      await navigator.share({ files: [file], text: message, title: `Pedido para ${catalog.brand.name}` });
-    } catch {
-      // si la persona cancela no pasa nada; queda la hoja abierta
-    }
-  };
-  const download = () => {
-    if (!file) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(file);
-    a.download = fileName;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  };
-
-  const summary = summaryByTitle(rows);
-  const shown = summary.slice(0, 6);
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label="Enviar el pedido al taller">
-      <button type="button" aria-label="Cerrar" className="sheet-backdrop absolute inset-0 bg-ink/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="sheet-panel relative max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-[1.75rem] bg-surface p-5 shadow-2xl sm:rounded-[1.75rem] sm:p-6">
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-line sm:hidden" />
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="eyebrow">Pedido para {catalog.brand.name}</p>
-            <h2 className="mt-1 font-display text-xl font-semibold">Todo listo para el taller</h2>
-          </div>
-          <button type="button" onClick={onClose} className="tool -mr-2 -mt-1" aria-label="Cerrar">
-            ✕
+      {toast && (
+        <div role="status" className="toast fixed inset-x-3 bottom-28 z-40 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-surface shadow-xl lg:bottom-6 lg:left-6 lg:right-auto lg:mx-0">
+          <span className="flex-1">{toast.text}</span>
+          {toast.href && (
+            <Link href={toast.href} className="shrink-0 font-semibold underline underline-offset-4">
+              {toast.hrefLabel}
+            </Link>
+          )}
+          {toast.action && (
+            <button
+              type="button"
+              className="shrink-0 font-semibold underline underline-offset-4"
+              onClick={() => {
+                toast.action!.run();
+                setToast(null);
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
+          <button type="button" aria-label="Cerrar el aviso" className="-mr-1 grid size-7 shrink-0 place-items-center rounded-full hover:bg-white/15" onClick={() => setToast(null)}>
+            <IconClose width={15} height={15} />
           </button>
         </div>
-
-        <div className="mt-4 grid grid-cols-[110px_1fr] gap-4">
-          <div className="aspect-[1/1.414] overflow-hidden rounded-lg border border-line bg-paper">
-            {pdf ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={pdf.preview} alt="Tapa del PDF del pedido" className="fade-in h-full w-full object-cover" />
-            ) : (
-              <div className="shimmer h-full w-full" />
-            )}
-          </div>
-          <div className="text-sm">
-            <p className="font-medium">{pdf ? `PDF de ${pdf.pages} hojas` : failed ? "No se pudo armar el PDF" : "Armando el PDF…"}</p>
-            <p className="mt-1 text-xs leading-relaxed text-ink-2">Con el dibujo de cada pieza, sus cortes, cantos, canales de luz y agujeros.</p>
-            <ul className="mt-3 space-y-1 text-xs">
-              {shown.map((r) => (
-                <li key={r.title}>
-                  <span className="font-semibold text-accent">{r.qty} ×</span> {r.title}
-                </li>
-              ))}
-              {summary.length > shown.length && <li className="text-ink-2">y {summary.length - shown.length} tipos de pieza más</li>}
-            </ul>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-2">
-          {canShare && (
-            <button type="button" onClick={share} disabled={!file} className="btn btn-whatsapp disabled:opacity-60">
-              Mandar el PDF por WhatsApp
-            </button>
-          )}
-          <a href={orderHref} target="_blank" rel="noopener noreferrer" className={`btn ${canShare ? "btn-ghost" : "btn-whatsapp"}`}>
-            {canShare ? "Mandar solo el resumen" : "Abrir WhatsApp con el resumen"}
-          </a>
-          {!EMBEDDED && (
-            <button type="button" onClick={download} disabled={!file} className="btn btn-ghost disabled:opacity-60">
-              Descargar el PDF
-            </button>
-          )}
-        </div>
-        {EMBEDDED && (
-          <p className="mt-3 text-xs leading-relaxed text-ink-2">
-            En esta vista de prueba el PDF no se puede bajar ni compartir. En la versión publicada en el sitio del taller, este botón lo
-            manda directo por WhatsApp.
-          </p>
-        )}
-        {!canShare && !EMBEDDED && (
-          <p className="mt-3 text-xs leading-relaxed text-ink-2">
-            El resumen lleva el link al despiece con los dibujos. Si querés, adjuntá también el PDF en el chat.
-          </p>
-        )}
-      </div>
+      )}
     </div>
   );
 }

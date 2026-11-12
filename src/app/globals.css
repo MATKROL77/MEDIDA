@@ -508,6 +508,34 @@ body {
     border-collapse: collapse;
     font-size: 0.9rem;
   }
+  .prose td,
+  .prose th {
+    overflow-wrap: anywhere;
+  }
+  /* en el teléfono una tabla de varias columnas no entra: cada fila pasa a ser un bloque */
+  @media (max-width: 639px) {
+    .prose table,
+    .prose tbody,
+    .prose tr,
+    .prose td {
+      display: block;
+    }
+    .prose thead {
+      display: none;
+    }
+    .prose tr {
+      border-bottom: 1px solid var(--color-line);
+      padding: 0.75rem 0;
+    }
+    .prose td {
+      border: 0;
+      padding: 0.15rem 0;
+    }
+    .prose td:first-child {
+      color: var(--color-ink);
+      font-weight: 600;
+    }
+  }
   .prose th,
   .prose td {
     border-bottom: 1px solid var(--color-line);

@@ -27,8 +27,6 @@ export const catalog = {
     name: "MEDIDA",
     tagline: "Placares y vestidores a medida",
     city: "Pilar, Buenos Aires",
-    /** wa.me sin + ni espacios. En la demo apunta al número de Matías. */
-    whatsapp: "5492324582614",
     demo: false,
     /** independiente de la marca de agua: los costos aún son orientativos */
     samplePricing: true,
