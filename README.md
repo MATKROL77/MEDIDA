@@ -330,7 +330,7 @@ requiere adaptación. Los precios de la demo son de muestra
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 69 pruebas: despiece, precio, los otros muebles, contacto, diseños y la API entera
+npm test           # 71 pruebas: despiece, precio, los otros muebles, contacto, diseños y la API entera
 npm run typecheck
 npm run lint
 npm run build      # export estático en out/

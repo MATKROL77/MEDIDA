@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { IconBack, IconBulb, IconDoor, IconExplode, IconFront, IconSide, IconThree, IconTop } from "@/components/icons";
+import { IconBulb, IconDoor, IconExplode, IconFront, IconThree } from "@/components/icons";
 import { SendSheet } from "@/components/SendSheet";
 import { Dimension, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
@@ -150,6 +150,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
             environment={environment}
             view={view}
             fabric={fabricById(config.fabric).color}
+            confine
             onReady={() => setTimeout(() => setReady(true), 120)}
             captureRef={captureRef}
           />
@@ -173,12 +174,9 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
               [
                 ["front", "Frente", IconFront],
                 ["three", "3/4", IconThree],
-                ["side", "Costado", IconSide],
-                ["top", "Arriba", IconTop],
-                ["back", "Atrás", IconBack],
               ] as const
             ).map(([id, label, Icon]) => (
-              <button key={id} type="button" className={`tool px-2.5 ${id === "top" || id === "back" ? "hidden sm:inline-flex" : ""}`} title={`Vista ${label.toLowerCase()}`} aria-label={`Vista ${label.toLowerCase()}`} onClick={() => goView(id)}>
+              <button key={id} type="button" className="tool px-2.5" title={`Vista ${label.toLowerCase()}`} aria-label={`Vista ${label.toLowerCase()}`} onClick={() => goView(id)}>
                 <Icon />
               </button>
             ))}

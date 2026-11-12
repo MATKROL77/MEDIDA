@@ -258,7 +258,18 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9") {
     /** qué terminación va en los frentes: las piezas que la nombran la usan aunque no sean un frente */
     doorId,
     /** tapizado: mate, sin brillo, con un tejido apenas marcado */
-    fabric: new THREE.MeshStandardMaterial({ color: fabric, roughness: 0.96, metalness: 0, envMapIntensity: 0.35, bumpMap: weaveTexture(), bumpScale: 0.6 }),
+    fabric: new THREE.MeshPhysicalMaterial({
+      color: fabric,
+      roughness: 0.92,
+      metalness: 0,
+      envMapIntensity: 0.3,
+      bumpMap: weaveTexture(),
+      bumpScale: 1.4,
+      // el brillo rasante de una tela: los bordes se aclaran, como en la pana o el bouclé
+      sheen: 0.45,
+      sheenRoughness: 0.6,
+      sheenColor: new THREE.Color(fabric).lerp(new THREE.Color("#ffffff"), 0.22),
+    }),
     /** hierro pintado de negro: marcos y patas */
     iron: new THREE.MeshStandardMaterial({ color: "#1d1c1b", metalness: 0.55, roughness: 0.48, envMapIntensity: 0.8 }),
     body: { v: surface(bodyId, "v"), u: surface(bodyId, "u") },
@@ -327,6 +338,7 @@ function weaveTexture(): THREE.CanvasTexture {
   }
   weave = new THREE.CanvasTexture(canvas);
   weave.wrapS = weave.wrapT = THREE.RepeatWrapping;
-  weave.repeat.set(18, 18);
+  weave.repeat.set(26, 26);
+  weave.anisotropy = 4;
   return weave;
 }

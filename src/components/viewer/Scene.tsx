@@ -50,6 +50,8 @@ export type ViewerProps = {
   paused?: boolean;
   /** color del fondo liso */
   backdrop?: string;
+  /** la cámara no sale de la habitación: no se ve el ambiente desde arriba ni desde atrás de las paredes */
+  confine?: boolean;
   /** color del tapizado, para los muebles que lo llevan */
   fabric?: string;
   /** tope de resolución del lienzo */
@@ -310,7 +312,7 @@ function Centered({ assembly, children }: { assembly: Assembly; children: React.
  * Cámara: vuela suave a cada vista y se reencuadra cuando cambia el tamaño.
  * Si la persona agarra la cámara, el vuelo se corta y manda ella.
  */
-function CameraRig({ assembly, view, intro, sway, framing }: { assembly: Assembly; view: ViewerProps["view"]; intro: boolean; sway: boolean; framing: number }) {
+function CameraRig({ assembly, view, intro, sway, framing, minRadius }: { assembly: Assembly; view: ViewerProps["view"]; intro: boolean; sway: boolean; framing: number; minRadius: number }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const size = useThree((s) => s.size);
@@ -323,7 +325,8 @@ function CameraRig({ assembly, view, intro, sway, framing }: { assembly: Assembl
   const key = dims.map((d) => Math.round(d / 50)).join("x");
 
   const fit = (dir: THREE.Vector3) => {
-    const radius = 0.5 * Math.hypot(dims[0], dims[1], dims[2]) * MM;
+    // un mueble chico no se mira con la cámara pegada: se ve con algo de su ambiente
+    const radius = Math.max(minRadius, 0.5 * Math.hypot(dims[0], dims[1], dims[2]) * MM);
     const fov = THREE.MathUtils.degToRad(camera.fov);
     const aspect = size.width / size.height;
     // margen para la barra de arriba y la de abajo del visor
@@ -483,8 +486,8 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   return (
     <Centered assembly={props.assembly}>
       <Room
-        min={props.assembly.bounds.min}
-        max={props.assembly.bounds.max}
+        min={(props.assembly.room ?? props.assembly.bounds).min}
+        max={(props.assembly.room ?? props.assembly.bounds).max}
         shape={props.config.shape}
         wall={props.environment.wall}
         floor={props.environment.floor}
@@ -527,7 +530,7 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
       </Environment>
       <KeyLight span={span} shape={props.config.shape} />
       <Wardrobe props={props} kit={kit} />
-      <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway} framing={props.framing ?? 1} />
+      <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
       <OrbitControls
         makeDefault
         enabled={props.orbit !== "none"}
@@ -538,9 +541,11 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
         rotateSpeed={0.75}
         zoomSpeed={0.8}
         minDistance={0.6}
-        maxDistance={18}
-        minPolarAngle={0}
-        maxPolarAngle={Math.PI}
+        maxDistance={props.confine ? 9 : 18}
+        minPolarAngle={props.confine ? 0.5 : 0}
+        maxPolarAngle={props.confine ? 1.52 : Math.PI}
+        minAzimuthAngle={props.confine ? -1.05 : -Infinity}
+        maxAzimuthAngle={props.confine ? 1.05 : Infinity}
       />
       <Effects hq={props.hq} studio={props.environment.mode === "studio"} />
       <Capturer captureRef={props.captureRef} countFrames={props.countFrames} />

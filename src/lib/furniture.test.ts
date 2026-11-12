@@ -64,8 +64,8 @@ test("las medidas que se piden son las del mueble armado", () => {
   assert.deepEqual([mesa.max[0] - mesa.min[0], mesa.max[1], mesa.max[2] - mesa.min[2]], [2000, 760, 900]);
   const biblio = buildFurniture(normalizeFurniture({ family: "bibliotecas", values: { width: 2400, height: 2200, depth: 320 } })).assembly.bounds;
   assert.deepEqual([biblio.max[0] - biblio.min[0], biblio.max[1]], [2400, 2200]);
-  const sillon = normalizeFurniture({ family: "sillones", values: { seats: 3, seatWidth: 900, arms: true, chaise: "no" } });
-  assert.equal(furnitureSummary(sillon).dimensions.split(" × ")[0], "306", "tres cuerpos de 90 más dos apoyabrazos de 18");
+  const sillon = normalizeFurniture({ family: "sillones", values: { style: "recto", seats: 3, seatWidth: 900, arms: true, chaise: "no", ottoman: false } });
+  assert.equal(furnitureSummary(sillon).dimensions.split(" × ")[0], "308", "tres cuerpos de 90 más dos apoyabrazos de 19");
 });
 
 test("agrandar o sumar cosas nunca abarata, y el precio es un número redondo", () => {
@@ -128,4 +128,23 @@ test("un sillón al piso no tiene patas, y con patas quedan debajo del cuerpo", 
   const legs = patas.parts.filter((p) => p.label === "Pata");
   assert.ok(legs.length >= 4);
   for (const l of legs) assert.ok(l.position[0] > min[0] + 40 && l.position[0] + l.size[0] < max[0] - 40 && l.position[2] > min[2] + 40, `${l.id} asoma`);
+});
+
+test("la habitación envuelve al mueble y a lo que lo acompaña", () => {
+  for (const spec of SPECS) {
+    const { assembly } = buildFurniture(defaultFurniture(spec.id));
+    const room = assembly.room!;
+    for (const p of assembly.runs[0].parts) {
+      if (p.kind === "glow") continue;
+      assert.ok(p.position[0] >= room.min[0] && p.position[0] + p.size[0] <= room.max[0], `${spec.id} ${p.id}: una pared lo atraviesa`);
+    }
+  }
+});
+
+test("el sillón curvo gira cada cuerpo hacia el centro", () => {
+  const curvo = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "curvo", seats: 4 } }));
+  const bases = curvo.parts.filter((p) => p.id.startsWith("base:"));
+  assert.equal(bases.length, 4);
+  assert.ok((bases[0].rotationY ?? 0) > 0 && (bases[3].rotationY ?? 0) < 0, "los extremos miran hacia adentro");
+  assert.ok(bases[0].position[2] > bases[1].position[2], "y vienen hacia adelante");
 });

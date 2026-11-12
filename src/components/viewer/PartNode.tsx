@@ -163,6 +163,16 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
   const trapGeo = useMemo(() => (trap ? makeTrapezoid() : null), [trap]);
   useEffect(() => () => trapGeo?.dispose(), [trapGeo]);
 
+  // un almohadón se modela a su tamaño real: así el redondeo es parejo en todos los cantos
+  const cushion = useMemo(() => {
+    if (part.geometry !== "cushion") return null;
+    const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
+    const radius = Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) * MM;
+    return new RoundedBoxGeometry(sx, sy, sz, 7, radius);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [part.geometry, part.size[0], part.size[1], part.size[2], part.radius]);
+  useEffect(() => () => cushion?.dispose(), [cushion]);
+
   const geometry = useMemo(() => {
     const g = geometries();
     if (part.geometry === "quarter") return part.quarter === "left" ? g.quarterLeft : g.quarterRight;
@@ -214,7 +224,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
       if (door) {
         const angle = (part.openAngle ?? Math.PI / 2) * doorProgress(anim.open.v, part.openDelay);
         rot.current.rotation.set(0, (door === "left" ? -1 : 1) * angle, 0);
-      } else rot.current.rotation.set(0, 0, rz);
+      } else rot.current.rotation.set(0, part.rotationY ?? 0, rz);
     }
 
     const m = mesh.current;
@@ -237,7 +247,9 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
         else m.scale.set(sx * MM * a, sy * MM * a, 1);
       } else {
         if (door) m.position.set(((door === "left" ? sx : -sx) / 2) * MM, (sy / 2) * MM, (-sz / 2) * MM);
-        m.scale.set(Math.max(sx, 0.01) * MM * a, Math.max(sy, 0.01) * MM * a, Math.max(sz, 0.01) * MM * a);
+        // el almohadón ya tiene su medida: solo acompaña la animación
+        if (cushion) m.scale.set((sx / Math.max(part.size[0], 1)) * a, (sy / Math.max(part.size[1], 1)) * a, (sz / Math.max(part.size[2], 1)) * a);
+        else m.scale.set(Math.max(sx, 0.01) * MM * a, Math.max(sy, 0.01) * MM * a, Math.max(sz, 0.01) * MM * a);
       }
     }
     if (details.current) {
@@ -275,7 +287,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
         {material && (
           <mesh
             ref={mesh}
-            geometry={trap && trapGeo ? trapGeo : geometry}
+            geometry={trap && trapGeo ? trapGeo : (cushion ?? geometry)}
             material={material}
             rotation={part.geometry === "glow" ? glowRotation : undefined}
             castShadow={castShadow}

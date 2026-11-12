@@ -61,7 +61,7 @@ export type PartKind =
   | "glow";
 
 /** "soft": caja de cantos redondeados, para almohadones y tapizados */
-export type Geometry = "box" | "soft" | "puff" | "cyl" | "cone" | "trapezoid" | "quarter" | "knob" | "glow" | "none";
+export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "trapezoid" | "quarter" | "knob" | "glow" | "none";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
@@ -114,6 +114,10 @@ export type Part = {
   quarter?: "left" | "right";
   /** tarjeta de luz: hacia dónde mira */
   glow?: "x+" | "x-" | "y" | "z";
+  /** giro sobre el eje vertical, en radianes (módulos de un sillón curvo) */
+  rotationY?: number;
+  /** radio de los cantos de un almohadón ("cushion"), en mm */
+  radius?: number;
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */
@@ -180,6 +184,8 @@ export type Assembly = {
   ledMeters: number;
   /** caja que encierra todo el placard, en coordenadas de mundo (mm) */
   bounds: { min: Vec3; max: Vec3 };
+  /** lo que tiene que entrar en la habitación: el mueble y lo que lo acompaña */
+  room?: { min: Vec3; max: Vec3 };
 };
 
 /** bisagras por puerta según su alto: lo que recomiendan los fabricantes de herrajes */
