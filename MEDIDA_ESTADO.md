@@ -74,8 +74,11 @@ Evidencia, corrida en este repositorio:
 - **Textos legales.** Describen lo que el sistema hace y citan la Ley 25.326;
   conviene que los revise un profesional.
 - **Investig.** En la rama `claude/dreamy-franklin-wxoz6q` de ese repositorio
-  se quitó `configurador/` y su workflow y quedó el puntero a este. El PR #1
-  de Investig (rama de Codex) quedó superado por la migración.
+  quedó el puntero a este y se quitó el workflow que publicaba desde allá,
+  para que no pueda pisar esta publicación. La carpeta `configurador/` sigue
+  ahí como copia congelada: borrarla por git fue rechazado por el servidor
+  desde el entorno de trabajo, así que queda para hacer a mano. El PR #1 de
+  Investig (rama de Codex) quedó superado por la migración.
 
 ## Informado por otros agentes, sin volver a verificar
 
