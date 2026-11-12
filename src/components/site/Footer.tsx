@@ -42,6 +42,11 @@ export function Footer() {
                 Mis diseños
               </Link>
             </li>
+            <li>
+              <Link href="/cuenta/" className="hover:text-ink">
+                Mi cuenta
+              </Link>
+            </li>
           </ul>
         </nav>
 

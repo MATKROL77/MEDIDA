@@ -13,7 +13,8 @@ export const site = {
   description:
     "Convertí tus productos personalizados en experiencias interactivas de compra: tus clientes configuran medidas, materiales y módulos en 3D y te llega la consulta completa.",
   /** dirección pública, para enlaces canónicos y para compartir en redes */
-  url: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://medida.matiascolimodio.workers.dev").replace(/\/+$/, ""),
+  // el servidor también lee este archivo, y en Cloudflare no existe `process`
+  url: ((typeof process !== "undefined" && process.env.NEXT_PUBLIC_SITE_URL) || "https://medida.matiascolimodio.workers.dev").replace(/\/+$/, ""),
   maker: "Matías Colimodio",
   makerCity: "Pilar, Buenos Aires",
   locale: "es-AR",

@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { EmailAccess } from "@/components/account/EmailAccess";
 import { ContactLink } from "@/components/site/ContactLink";
+import { useSite } from "@/components/site/SiteProvider";
+import { useAccount } from "@/lib/account";
 import { Sheet } from "@/components/site/Sheet";
 import { IconBag, IconCheck, IconCopy, IconDuplicate, IconEdit, IconHeart, IconMail, IconPlus, IconShare, IconTrash, IconWhatsapp } from "@/components/site/icons";
 import { toBase64Url } from "@/lib/base64url";
@@ -52,6 +55,9 @@ export function MyDesigns() {
   const state = useDesigns();
   const [tab, setTab] = useState<Tab>("todos");
   const [inquiry, setInquiry] = useState(false);
+  const [access, setAccess] = useState(false);
+  const { status, account } = useAccount();
+  const { features } = useSite();
   // la hora se fija al montar: así el servidor y el navegador dibujan lo mismo
   const [now, setNow] = useState(0);
   useEffect(() => {
@@ -59,6 +65,14 @@ export function MyDesigns() {
     if (window.location.hash === "#carrito") setTab("carrito");
     if (window.location.hash === "#favoritos") setTab("favoritos");
   }, []);
+
+  // una notificación trae ?abrir=<diseño>: en cuanto ese diseño está en el dispositivo, se abre
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("abrir");
+    const target = id ? state.designs.find((d) => d.id === id) : null;
+    const href = target ? editHref(target) : null;
+    if (href) window.location.replace(href);
+  }, [state.designs]);
 
   const favorites = favoritesOf(state);
   const cart = cartOf(state);
@@ -137,10 +151,38 @@ export function MyDesigns() {
         </div>
       )}
 
-      {state.designs.length > 0 && (
+      {status === "activo" && account ? (
         <p className="mt-12 max-w-2xl text-sm leading-relaxed text-ink-2">
-          Tus diseños están guardados en este dispositivo: siguen acá aunque cierres el navegador, pero no se ven desde otro teléfono o computadora.
+          Tus diseños están guardados en tu cuenta ({account.email}) y se sincronizan entre tus dispositivos.{" "}
+          <Link href="/cuenta/" className="underline underline-offset-4 hover:text-ink">
+            Recordatorios y preferencias
+          </Link>
         </p>
+      ) : (
+        state.designs.length > 0 && (
+          <div className="tile mt-12 flex flex-wrap items-center justify-between gap-5 p-6 sm:p-8">
+            <div className="max-w-xl">
+              <h2 className="font-display text-xl font-semibold tracking-tight">Guardá tu diseño y continuá cuando quieras.</h2>
+              <p className="mt-2 text-sm leading-relaxed text-ink-2">
+                Hoy tus diseños están en este dispositivo: siguen acá aunque cierres el navegador, pero no se ven desde otro.
+                {features?.email ? " Con tu email los abrís desde cualquier lado." : ""}
+              </p>
+            </div>
+            {features?.email && (
+              <button type="button" className="btn btn-primary" onClick={() => setAccess(true)}>
+                Guardar con mi email
+              </button>
+            )}
+          </div>
+        )
+      )}
+
+      {access && (
+        <Sheet title="Guardá tu diseño y continuá cuando quieras" onClose={() => setAccess(false)}>
+          <div className="mt-5">
+            <EmailAccess onDone={() => setAccess(false)} />
+          </div>
+        </Sheet>
       )}
 
       {inquiry && <InquirySheet designs={cart} onClose={() => setInquiry(false)} />}

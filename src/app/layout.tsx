@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 
 import { CookieConsent } from "@/components/site/CookieConsent";
 import { SiteProvider } from "@/components/site/SiteProvider";
+import { SyncAgent } from "@/components/site/SyncAgent";
 import { site } from "@/lib/site";
 import "./globals.css";
 
@@ -56,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteProvider>
           {children}
           <CookieConsent />
+          <SyncAgent />
         </SiteProvider>
       </body>
     </html>

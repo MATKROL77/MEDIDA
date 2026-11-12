@@ -82,7 +82,7 @@ export default function PrivacyPage() {
       <p>
         Los datos de la cuenta se tratan porque hacen falta para darte la función que pediste (guardar y recuperar tus diseños). La medición, los recordatorios, las
         notificaciones y las novedades comerciales se basan en tu consentimiento, que es libre y se puede retirar en cualquier momento desde{" "}
-        Mi cuenta o desde las preferencias de cookies.
+        <Link href="/cuenta/">Mi cuenta</Link> o desde las preferencias de cookies.
       </p>
 
       <h2>Con quién se comparten</h2>
@@ -118,7 +118,7 @@ export default function PrivacyPage() {
 
       <h2>Tus derechos</h2>
       <p>
-        Podés pedir en cualquier momento el acceso a tus datos, su rectificación, actualización o supresión. Desde Mi cuenta podés eliminar tu
+        Podés pedir en cualquier momento el acceso a tus datos, su rectificación, actualización o supresión. Desde <Link href="/cuenta/">Mi cuenta</Link> podés eliminar tu
         cuenta con todos sus diseños en el acto; para lo demás, escribí a <a href={`mailto:${email}`}>{email}</a> y vas a tener respuesta dentro de los plazos legales.
       </p>
       <p>
