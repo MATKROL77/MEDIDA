@@ -369,6 +369,83 @@ if (hasServer && outbox) {
   });
   await phone.context.close();
   await laptop.context.close();
+
+  // ---- administración, empresa y configurador embebido
+  const mailTo = async (to) => (await (await fetch(base + "/api/dev/outbox")).json()).mails.find((m) => m.recipient === to);
+  async function signIn(page, address) {
+    await fetch(base + "/api/auth/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: address }) });
+    await page.goto(/(http\S+#t=[\w-]+)/.exec((await mailTo(address)).body)[1]);
+    await page.waitForURL(/\/mis-disenos\//);
+  }
+  const slug = `taller-${Date.now()}`;
+  const member = `socio-${Date.now()}@ejemplo.com`;
+  const owner = await visit(1440, 900);
+
+  await check("administración: cerrada para quien no es el dueño", async () => {
+    const guest = await visit(1440, 900);
+    await guest.page.goto(base + "/admin/", { waitUntil: "networkidle" });
+    await guest.page.getByRole("heading", { name: /Entrá con tu cuenta/ }).waitFor();
+    await guest.context.close();
+  });
+
+  await check("administración: se crea una empresa con su plan", async () => {
+    const page = owner.page;
+    await signIn(page, "matiascolimodio@gmail.com");
+    await page.goto(base + "/admin/", { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Contacto comercial" }).waitFor();
+    await page.getByLabel("Nombre de la empresa").fill("Carpintería de Prueba");
+    await page.getByLabel(/Dirección corta/).fill(slug);
+    await page.getByLabel("Nombre del plan").fill("Piloto");
+    await page.getByLabel(/Emails con acceso/).fill(member);
+    await page.getByRole("button", { name: "Crear" }).click();
+    await page.getByText(`/embed/?t=${slug}`).waitFor();
+  });
+
+  const company = await visit(1440, 900);
+  await check("empresa: carga su WhatsApp, crea su configurador y el plan le pone tope", async () => {
+    const page = company.page;
+    await signIn(page, member);
+    await page.goto(base + "/panel/", { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Carpintería de Prueba" }).waitFor();
+    await page.getByLabel("WhatsApp con código de país").fill("+54 9 11 4444-0000");
+    await page.getByLabel("Frase bajo tu nombre").fill("Placares de prueba");
+    await page.getByRole("button", { name: "Guardar", exact: true }).click();
+    await page.getByText("Datos guardados.").waitFor();
+    await page.getByLabel("Nombre del configurador nuevo").fill("Placares de la casa");
+    await page.getByRole("button", { name: "Crear configurador de placares" }).click();
+    await page.getByText("Configurador creado.").waitFor();
+    assert(await page.getByText(/ya los usaste/).isVisible(), "no avisa que el plan llegó al tope");
+    assert((await page.getByText(/<iframe src=/).count()) === 1, "falta el código para poner en la web");
+  });
+
+  await check("configurador de la empresa: lleva su marca y la consulta va a su WhatsApp", async () => {
+    const visitor = await visit(1440, 900);
+    const page = visitor.page;
+    await page.goto(`${base}/embed/?t=${slug}&calidad=baja`, { waitUntil: "networkidle" });
+    await page.getByText("Carpintería de Prueba").first().waitFor();
+    assert((await page.getByRole("region", { name: "Aviso de cookies" }).count()) === 0, "el embebido no lleva el aviso de MEDIDA");
+    assert((await page.getByRole("button", { name: "Guardar este diseño" }).count()) === 0, "el embebido no guarda en MEDIDA");
+    await page.getByRole("button", { name: "Enviar al taller" }).click();
+    const dialog = page.getByRole("dialog");
+    const wa = await dialog.locator('a[href^="https://wa.me/"]').first().getAttribute("href");
+    assert(wa.startsWith("https://wa.me/5491144440000?text="), `va a ${wa.slice(0, 40)}`);
+    assert(decodeURIComponent(wa).includes("Hola Carpintería de Prueba"), "el mensaje no nombra a la empresa");
+    assert((await dialog.getByText(/configurador como este para mi empresa/).count()) === 0, "ofrece MEDIDA dentro del sitio de la empresa");
+    await dialog.locator('a[href^="https://wa.me/"]').first().evaluate((a) => { a.addEventListener("click", (e) => e.preventDefault()); a.click(); });
+    await page.waitForTimeout(1500);
+    await visitor.context.close();
+    await company.page.reload({ waitUntil: "networkidle" });
+    await company.page.getByText(/por WhatsApp/).first().waitFor();
+    assert(await company.page.getByText(/1 aperturas y 1 consultas/).isVisible(), "no contó la apertura y la consulta");
+  });
+
+  await check("un configurador que no existe no muestra nada de otra empresa", async () => {
+    const page = owner.page;
+    await page.goto(`${base}/embed/?t=no-existe`, { waitUntil: "networkidle" });
+    await page.getByRole("heading", { name: "Este configurador no está disponible." }).waitFor();
+  });
+  await owner.context.close();
+  await company.context.close();
 } else {
   results.push(hasServer ? "  --   cuenta: el servidor no está en modo de prueba (sin bandeja de emails)" : "  --   cuenta y sincronización: sin servidor, no se prueban");
 }

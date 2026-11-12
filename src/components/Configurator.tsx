@@ -91,9 +91,14 @@ function shareLink(config: WardrobeConfig, path = "/demo/") {
  * a ella le llegan las consultas. Sin `workshop` es la demo de MEDIDA, donde
  * además se pueden guardar diseños y armar un carrito de consulta.
  */
-export default function Configurator({ workshop = null, onInquiry }: { workshop?: Workshop | null; onInquiry?: (channel: string, config: WardrobeConfig, price: number) => void }) {
+export default function Configurator({ workshop = null, initial, onInquiry }: {
+  workshop?: Workshop | null;
+  /** con qué arranca; el configurador de una empresa parte de sus propias terminaciones */
+  initial?: WardrobeConfig;
+  onInquiry?: (channel: string, config: WardrobeConfig, price: number) => void;
+}) {
   const demo = workshop === null;
-  const [config, setConfig] = useState<WardrobeConfig>(DEFAULT_CONFIG);
+  const [config, setConfig] = useState<WardrobeConfig>(initial ?? DEFAULT_CONFIG);
   const [tab, setTab] = useState<Tab>("forma");
   const [selection, setSelection] = useState({ run: 0, module: 0 });
   const [open, setOpen] = useState(false);

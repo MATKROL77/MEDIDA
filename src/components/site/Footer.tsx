@@ -60,6 +60,11 @@ export function Footer() {
                 </Link>
               </li>
             ))}
+            <li>
+              <Link href="/panel/" className="hover:text-ink">
+                Panel de empresa
+              </Link>
+            </li>
           </ul>
         </nav>
 

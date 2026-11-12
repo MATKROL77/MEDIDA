@@ -122,7 +122,7 @@ jobs:
             exit 0
           fi
           # la primera publicación de un subdominio puede tardar unos segundos
-          for path in / /configuradores/ /servicios/ /demo/ /demo/taller/ /mis-disenos/ /cuenta/ /privacidad/ /cookies/ /terminos/ /api/health /api/public/site; do
+          for path in / /configuradores/ /servicios/ /demo/ /demo/taller/ /mis-disenos/ /cuenta/ /admin/ /panel/ /embed/ /privacidad/ /cookies/ /terminos/ /api/health /api/public/site; do
             ok=""
             for attempt in 1 2 3 4 5 6; do
               code=$(curl -s -o /dev/null -w '%{http_code}' "$url$path" || true)
@@ -144,6 +144,8 @@ jobs:
           curl -s "$url/api/public/site" | tee site.json; echo
           [ "$(curl -s -o /dev/null -w '%{http_code}' "$url/api/me")" = "401" ] || { echo "::error::/api/me sin sesión no respondió 401"; exit 1; }
           [ "$(curl -s -o /dev/null -w '%{http_code}' "$url/api/admin/overview")" = "401" ] || { echo "::error::la administración quedó abierta"; exit 1; }
+          [ "$(curl -s -o /dev/null -w '%{http_code}' "$url/api/public/embed?t=no-existe")" = "404" ] || { echo "::error::el configurador embebido respondió por una empresa que no existe"; exit 1; }
+          [ "$(curl -s -o /dev/null -w '%{http_code}' "$url/api/panel")" = "401" ] || { echo "::error::el panel de empresa quedó abierto"; exit 1; }
           {
             echo "### MEDIDA publicado"
             echo "$url"

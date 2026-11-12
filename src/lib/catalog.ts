@@ -120,3 +120,22 @@ export type Catalog = typeof catalog;
 export function materialById(id: string): Material {
   return catalog.materials.find((m) => m.id === id) ?? catalog.materials[0];
 }
+
+/**
+ * Lo que una empresa cambia del catálogo de su configurador: su nombre, su
+ * margen, qué terminaciones ofrece y a qué precio. Se aplica una vez, antes de
+ * dibujar el configurador embebido; el motor es el mismo para todas.
+ */
+export type CatalogOverrides = { brandName?: string; tagline?: string; margin?: number; materials?: string[]; boardPrices?: Record<string, number> };
+
+const BASE_MATERIALS: readonly Material[] = [...catalog.materials];
+
+export function configureCatalog(o: CatalogOverrides) {
+  const c = catalog as unknown as { brand: { name: string; tagline: string }; margin: number; materials: Material[] };
+  if (o.brandName) c.brand.name = o.brandName;
+  if (o.tagline) c.brand.tagline = o.tagline;
+  if (typeof o.margin === "number" && o.margin >= 0 && o.margin <= 5) c.margin = o.margin;
+  const wanted = o.materials?.length ? BASE_MATERIALS.filter((m) => o.materials!.includes(m.id)) : [...BASE_MATERIALS];
+  // sin ninguna terminación válida se dejan todas: un configurador vacío no sirve
+  c.materials = (wanted.length ? wanted : [...BASE_MATERIALS]).map((m) => ({ ...m, boardPrice: o.boardPrices?.[m.id] ?? m.boardPrice }));
+}
