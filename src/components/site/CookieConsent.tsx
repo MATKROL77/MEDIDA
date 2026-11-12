@@ -47,7 +47,10 @@ export function CookieConsent() {
     void api("/api/consent", { body: { id: consent.id, version: consent.version, analytics: consent.analytics, marketing: consent.marketing }, keepalive: true }).catch(() => {});
   };
 
-  if (SILENT.some((p) => pathname.startsWith(p))) return null;
+  // dentro de la ventana del configurador ya está el aviso de la página de atrás
+  const [framed, setFramed] = useState(false);
+  useEffect(() => setFramed(window.self !== window.top), []);
+  if (framed || SILENT.some((p) => pathname.startsWith(p))) return null;
   const top = TOP.some((p) => pathname.startsWith(p));
 
   return (
@@ -55,7 +58,7 @@ export function CookieConsent() {
       {pending && !prefs && (
         <section
           aria-label="Aviso de cookies"
-          className={`toast fixed z-[45] mx-auto w-[calc(100%-1.5rem)] max-w-md rounded-2xl border border-line bg-surface p-4 shadow-[0_12px_40px_rgb(17_18_20/0.14)] sm:w-full ${
+          className={`toast fixed z-[45] mx-auto w-[calc(100%-1.5rem)] max-w-md glass-strong rounded-2xl p-4 shadow-[0_12px_40px_rgb(43_26_16/0.16)] sm:w-full ${
             top ? "left-3 right-3 top-3 sm:left-auto sm:right-4 sm:top-4" : "bottom-3 left-3 right-3 sm:bottom-5 sm:left-5 sm:right-auto"
           }`}
         >

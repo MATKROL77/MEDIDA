@@ -57,11 +57,11 @@ export function Sheet({ title, eyebrow, onClose, children, wide = false }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={title}>
-      <button type="button" aria-label="Cerrar" tabIndex={-1} className="sheet-backdrop absolute inset-0 bg-ink/45" onClick={onClose} />
+      <button type="button" aria-label="Cerrar" tabIndex={-1} className="sheet-backdrop veil absolute inset-0" onClick={onClose} />
       <div
         ref={panel}
         tabIndex={-1}
-        className={`sheet-panel relative max-h-[92dvh] w-full overflow-y-auto rounded-t-[1.75rem] bg-surface p-5 shadow-2xl outline-none sm:rounded-[1.75rem] sm:p-7 ${
+        className={`sheet-panel relative max-h-[92dvh] w-full overflow-y-auto rounded-t-[1.75rem] glass-strong p-5 shadow-2xl outline-none sm:rounded-[1.75rem] sm:p-7 ${
           wide ? "sm:max-w-2xl" : "sm:max-w-lg"
         }`}
       >

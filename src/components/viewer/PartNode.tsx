@@ -3,6 +3,7 @@
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 
 import type { Part } from "@/lib/assembly";
 
@@ -14,6 +15,7 @@ export const MM = 0.001;
 // geometrías unitarias compartidas: cada pieza es una de estas escalada
 let shared: {
   box: THREE.BoxGeometry;
+  soft: THREE.BufferGeometry;
   plane: THREE.PlaneGeometry;
   sphere: THREE.SphereGeometry;
   quarterLeft: THREE.CylinderGeometry;
@@ -23,6 +25,7 @@ function geometries() {
   if (!shared) {
     shared = {
       box: new THREE.BoxGeometry(1, 1, 1),
+      soft: new RoundedBoxGeometry(1, 1, 1, 5, 0.13),
       plane: new THREE.PlaneGeometry(1, 1),
       sphere: new THREE.SphereGeometry(0.5, 28, 18),
       // cuartos de cilindro de radio 1: escalados en x y z quedan elipses
@@ -93,8 +96,10 @@ function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
       return kit.led;
     case "glow":
       return kit.glow[p.glow ?? "z"];
+    case "fabric":
+      return kit.fabric;
     default:
-      if (p.front) return kit.door[along];
+      if (p.front || (p.material === kit.doorId && p.kind !== "drawer-front")) return kit.door[along];
       return p.kind === "drawer-front" ? kit.bodyFront[along] : kit.body[along];
   }
 }
@@ -140,6 +145,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     if (part.geometry === "quarter") return part.quarter === "left" ? g.quarterLeft : g.quarterRight;
     if (part.geometry === "knob") return g.sphere;
     if (part.geometry === "glow") return g.plane;
+    if (part.geometry === "soft") return g.soft;
     return g.box;
   }, [part.geometry, part.quarter]);
 

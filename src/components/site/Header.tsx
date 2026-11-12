@@ -45,9 +45,7 @@ export function Header() {
 
   return (
     <header
-      className={`sticky top-0 z-40 border-b bg-surface/85 backdrop-blur-md transition-colors duration-300 ${
-        scrolled || menu ? "border-line" : "border-transparent"
-      }`}
+      className={`sticky top-0 z-40 transition-all duration-300 ${scrolled || menu ? "glass !border-x-0 !border-t-0" : "border-b border-transparent"}`}
     >
       <div className="wrap flex h-14 items-center justify-between gap-4">
         <Link href="/" aria-label="MEDIDA, inicio" className="-ml-1 rounded-md px-1 py-1">

@@ -10,7 +10,7 @@ export function Logo({ className = "" }: { className?: string }) {
       <svg viewBox="0 0 26 14" width="26" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
         <path d="M1.5 1.5v11M24.5 1.5v11M1.5 7h23" />
       </svg>
-      <span className="font-display text-[0.95rem] font-semibold tracking-[0.16em]">{site.name}</span>
+      <span className="font-display text-[1.12rem] tracking-[0.2em]">{site.name}</span>
     </span>
   );
 }

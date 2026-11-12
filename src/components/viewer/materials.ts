@@ -241,7 +241,7 @@ export type MaterialKit = ReturnType<typeof createKit>;
  * Un juego de materiales por combinación de terminaciones. Los frentes tienen
  * su propia copia transparente para la vista de rayos X.
  */
-export function createKit(bodyId: string, doorId: string) {
+export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9") {
   const surface = (id: string, along: "u" | "v", transparent = false) => {
     const m = materialById(id);
     return new THREE.MeshStandardMaterial({
@@ -255,6 +255,10 @@ export function createKit(bodyId: string, doorId: string) {
   };
   const body = materialById(bodyId);
   const kit = {
+    /** qué terminación va en los frentes: las piezas que la nombran la usan aunque no sean un frente */
+    doorId,
+    /** tapizado: mate, sin brillo, con un tejido apenas marcado */
+    fabric: new THREE.MeshStandardMaterial({ color: fabric, roughness: 0.96, metalness: 0, envMapIntensity: 0.35, bumpMap: weaveTexture(), bumpScale: 0.6 }),
     body: { v: surface(bodyId, "v"), u: surface(bodyId, "u") },
     door: { v: surface(doorId, "v", true), u: surface(doorId, "u", true) },
     /** frentes de cajón con el color del cuerpo (van detrás de las puertas) */
@@ -300,6 +304,27 @@ export function frontMaterials(kit: MaterialKit): THREE.Material[] {
 }
 
 export function disposeKit(kit: MaterialKit) {
-  const all = [kit.body.u, kit.body.v, kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.back, kit.metal, kit.handle, kit.groove, kit.mirror, kit.glass, kit.frame, kit.led, ...Object.values(kit.glow)];
+  const all = [kit.body.u, kit.body.v, kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.back, kit.metal, kit.handle, kit.groove, kit.mirror, kit.glass, kit.frame, kit.led, kit.fabric, ...Object.values(kit.glow)];
   all.forEach((m) => m.dispose());
+}
+
+let weave: THREE.CanvasTexture | null = null;
+/** trama de tela: un relieve fino que se repite, para que el tapizado no parezca plástico */
+function weaveTexture(): THREE.CanvasTexture {
+  if (weave) return weave;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const v = 120 + ((x % 4 < 2) !== (y % 4 < 2) ? 46 : 0) + Math.random() * 40;
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  weave = new THREE.CanvasTexture(canvas);
+  weave.wrapS = weave.wrapT = THREE.RepeatWrapping;
+  weave.repeat.set(18, 18);
+  return weave;
 }

@@ -50,6 +50,8 @@ export type ViewerProps = {
   paused?: boolean;
   /** color del fondo liso */
   backdrop?: string;
+  /** color del tapizado, para los muebles que lo llevan */
+  fabric?: string;
   /** tope de resolución del lienzo */
   maxDpr?: number;
   /** encuadre: menos de 1 acerca la cámara (sin barras encima del visor sobra margen) */
@@ -505,7 +507,7 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
 }
 
 function SceneContents(props: ViewerProps & { hq: boolean }) {
-  const kit = useMemo(() => createKit(props.config.bodyMaterial, props.config.doorMaterial), [props.config.bodyMaterial, props.config.doorMaterial]);
+  const kit = useMemo(() => createKit(props.config.bodyMaterial, props.config.doorMaterial, props.fabric), [props.config.bodyMaterial, props.config.doorMaterial, props.fabric]);
   useEffect(() => () => disposeKit(kit), [kit]);
   const { min, max } = props.assembly.bounds;
   const span = Math.max(max[0] - min[0], max[2] - min[2], max[1]);

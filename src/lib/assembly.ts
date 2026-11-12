@@ -60,7 +60,8 @@ export type PartKind =
   | "led"
   | "glow";
 
-export type Geometry = "box" | "trapezoid" | "quarter" | "knob" | "glow" | "none";
+/** "soft": caja de cantos redondeados, para almohadones y tapizados */
+export type Geometry = "box" | "soft" | "trapezoid" | "quarter" | "knob" | "glow" | "none";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar

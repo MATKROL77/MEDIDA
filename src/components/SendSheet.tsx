@@ -13,6 +13,10 @@ import { mailtoLink, whatsappLink } from "@/lib/site";
 import type { Workshop } from "@/lib/workshop";
 
 type Props = {
+  /** qué mueble es: "Placard a medida" */
+  title?: string;
+  /** esta familia no arma PDF de despiece: se comparte el resumen */
+  noPdf?: boolean;
   /** a quién le llega; null en la demo de MEDIDA, que no tiene taller */
   workshop: Workshop | null;
   summary: DesignSummary;
@@ -128,29 +132,33 @@ function Option({ title, body, onClick }: { title: string; body: string; onClick
 }
 
 /** el mueble, sus medidas, materiales y módulos, y la tapa del PDF */
-function Summary({ summary, price, pdf, failed, rows }: Props) {
+function Summary({ summary, price, pdf, failed, rows, title = "Placard a medida", noPdf }: Props) {
   const pieces = summaryByTitle(rows);
   const total = pieces.reduce((n, p) => n + p.qty, 0);
   return (
-    <div className="mt-5 grid grid-cols-[104px_1fr] gap-4 sm:grid-cols-[120px_1fr]">
-      <div className="aspect-[1/1.414] overflow-hidden rounded-lg border border-line bg-paper">
-        {pdf ? <img src={pdf.preview} alt="Tapa del PDF con el diseño" className="fade-in h-full w-full object-cover" /> : <div className={`h-full w-full ${failed ? "" : "shimmer"}`} />}
-      </div>
+    <div className={`mt-5 grid gap-4 ${noPdf ? "" : "grid-cols-[104px_1fr] sm:grid-cols-[120px_1fr]"}`}>
+      {!noPdf && (
+        <div className="aspect-[1/1.414] overflow-hidden rounded-lg border border-line bg-paper">
+          {pdf ? <img src={pdf.preview} alt="Tapa del PDF con el diseño" className="fade-in h-full w-full object-cover" /> : <div className={`h-full w-full ${failed ? "" : "shimmer"}`} />}
+        </div>
+      )}
       <div className="min-w-0 text-sm">
-        <p className="font-display text-lg font-semibold leading-tight tracking-tight">Placard a medida</p>
+        <p className="font-display text-lg font-semibold leading-tight tracking-tight">{title}</p>
         <p className="mt-0.5 tabular-nums text-ink-2">{summary.dimensions}</p>
         <ul className="mt-3 space-y-1 text-[0.82rem] leading-snug text-ink-2">
           {summary.lines.map((line) => (
             <li key={line}>{line}</li>
           ))}
-          <li>
-            {total} piezas en {pieces.length} tipos
-          </li>
+          {total > 0 && (
+            <li>
+              {total} piezas de placa en {pieces.length} tipos
+            </li>
+          )}
         </ul>
         <p className="mt-3">
           <span className="font-semibold tabular-nums">{money(price)}</span> <span className="text-xs text-ink-2">estimado</span>
         </p>
-        <p className="mt-1 text-xs text-ink-2">{pdf ? `PDF de ${pdf.pages} hojas con el dibujo de cada pieza.` : failed ? "No se pudo armar el PDF." : "Armando el PDF…"}</p>
+        {!noPdf && <p className="mt-1 text-xs text-ink-2">{pdf ? `PDF de ${pdf.pages} hojas con el dibujo de cada pieza.` : failed ? "No se pudo armar el PDF." : "Armando el PDF…"}</p>}
       </div>
     </div>
   );
@@ -170,8 +178,8 @@ function usePdfFile(pdf: OrderPdf | null, fileName: string) {
 }
 
 /** en la demo no hay a quién mandarlo: la persona lo comparte con quien quiera, o se lo lleva */
-function DemoActions({ pdf, message, designLink, workshopHref }: Props) {
-  const [shareable] = useState(canSharePdf);
+function DemoActions({ pdf, message, designLink, workshopHref, noPdf }: Props) {
+  const [shareable] = useState(() => !noPdf && canSharePdf());
   const [copied, setCopied] = useState(false);
   const { file, download } = usePdfFile(pdf, "diseno-medida.pdf");
 
@@ -208,18 +216,22 @@ function DemoActions({ pdf, message, designLink, workshopHref }: Props) {
             Compartir por WhatsApp
           </a>
         )}
-        <button type="button" onClick={download} disabled={!file} className="btn btn-ghost disabled:opacity-50">
-          <IconDownload />
-          Descargar el PDF
-        </button>
-        <button type="button" onClick={copy} className="btn btn-ghost">
+        {!noPdf && (
+          <button type="button" onClick={download} disabled={!file} className="btn btn-ghost disabled:opacity-50">
+            <IconDownload />
+            Descargar el PDF
+          </button>
+        )}
+        <button type="button" onClick={copy} className={`btn btn-ghost ${noPdf ? "sm:col-span-2" : ""}`}>
           {copied ? <IconCheck /> : <IconCopy />}
           {copied ? "Enlace copiado" : "Copiar el enlace"}
         </button>
       </div>
-      <Link href={workshopHref} className="link-arrow mt-4 text-sm">
-        Ver lo que recibiría el fabricante
-      </Link>
+      {!noPdf && (
+        <Link href={workshopHref} className="link-arrow mt-4 text-sm">
+          Ver lo que recibiría el fabricante
+        </Link>
+      )}
     </>
   );
 }

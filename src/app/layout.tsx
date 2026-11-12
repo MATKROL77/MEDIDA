@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 
 import { CookieConsent } from "@/components/site/CookieConsent";
 import { SiteProvider } from "@/components/site/SiteProvider";
+import { ConfiguratorWindow } from "@/components/site/ConfiguratorWindow";
 import { SyncAgent } from "@/components/site/SyncAgent";
 import { site } from "@/lib/site";
 import "./globals.css";
@@ -14,12 +15,6 @@ const inter = localFont({
   variable: "--font-inter",
   display: "swap",
 });
-const interTight = localFont({
-  src: "./fonts/inter-tight-latin-variable.woff2",
-  variable: "--font-inter-tight",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: { default: `${site.name} · ${site.tagline}`, template: `%s · ${site.name}` },
@@ -48,7 +43,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es-AR" className={`${inter.variable} ${interTight.variable}`}>
+    <html lang="es-AR" className={inter.variable}>
       <head>
         {/* marca que hay JavaScript antes de pintar: sin él, nada queda escondido esperando una animación */}
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
@@ -58,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <CookieConsent />
           <SyncAgent />
+          <ConfiguratorWindow />
         </SiteProvider>
       </body>
     </html>
