@@ -19,8 +19,33 @@ MEDIDA es el software. No fabrica ni vende muebles.
 | Configurador de placares y vestidores | Demo funcionando |
 | Mesas, escritorios, ratonas, muebles de TV, bibliotecas, sillones | En desarrollo: el sitio lo dice y no los muestra como hechos |
 | Favoritos, carrito de consulta y guardado automático | Funcionando, en el dispositivo |
-| Contacto comercial por WhatsApp y email | Funcionando, centralizado en `src/lib/site.ts` |
+| Contacto comercial por WhatsApp y email | Funcionando; el número se cambia desde `/admin/` |
 | Aviso de cookies y páginas legales | Funcionando |
+| Servidor (API, base de datos) | Funcionando en Cloudflare |
+| Cuenta por email y sincronización entre dispositivos | Hecho y probado; **en producción falta cargar la clave del proveedor de email** |
+| Recordatorios por email y notificaciones del navegador | Hecho y probado en local; dependen de la cuenta |
+| Administración (`/admin/`) y panel de empresa (`/panel/`) | Funcionando; se entra con la cuenta |
+| Configurador embebible por empresa (`/embed/?t=…`) | Funcionando |
+| Facturación recurrente | No existe. Los planes se acuerdan y se cobran por fuera; nada lo simula |
+
+## Para activar el acceso por email
+
+Es lo único que falta para que en producción anden la cuenta, los
+recordatorios y el ingreso a `/admin/` y `/panel/`:
+
+1. Crear una cuenta en [Resend](https://resend.com) y generar una clave de API.
+2. En GitHub, en el mismo environment donde está `CLOUDFLARE_API_TOKEN`,
+   agregar el secreto `RESEND_API_KEY` con esa clave.
+3. Volver a correr el workflow "Publicar MEDIDA" (o hacer cualquier push).
+
+Sin dominio propio, Resend solo deja mandar al email del dueño de la cuenta de
+Resend: alcanza para entrar a `/admin/` con `matiascolimodio@gmail.com`. Para
+mandarle a cualquier persona hay que verificar un dominio en Resend y cargar la
+variable `EMAIL_FROM` (por ejemplo `MEDIDA <acceso@tu-dominio.com>`) en
+Settings → Secrets and variables → Actions → Variables.
+
+Mientras no esté la clave, el sitio lo dice: Mi cuenta muestra que el acceso
+todavía no está activo y los diseños se siguen guardando en el dispositivo.
 
 ## Rutas
 
@@ -32,8 +57,13 @@ MEDIDA es el software. No fabrica ni vende muebles.
 | `/demo/` | El configurador de placares |
 | `/demo/taller/` | Lo que recibe el fabricante: despiece, placas, herrajes, costos |
 | `/mis-disenos/` | Diseños guardados: favoritos y carrito de consulta |
+| `/cuenta/` y `/cuenta/verificar/` | Cuenta por email, preferencias y la llegada del enlace de acceso |
+| `/admin/` | Administración de MEDIDA: contacto, oportunidades, empresas |
+| `/panel/` | Panel de cada empresa: sus configuradores, consultas y uso |
+| `/embed/?t=<empresa>` | El configurador de una empresa, para insertar en su web |
 | `/privacidad/`, `/cookies/`, `/terminos/` | Textos legales |
 | `/render/` | El 3D solo, sin interfaz: lo usa `scripts/capture.mjs` |
+| `/api/*` | El servidor |
 
 La configuración viaja entera en el link (`?c=...`), así que un enlace
 compartido abre exactamente el mismo diseño en cualquier dispositivo.
@@ -72,6 +102,64 @@ para pedir cotización: no es una compra.
 
 Lo que se está armando se guarda solo (borrador): si se cierra el navegador,
 al volver a `/demo/` está ahí.
+
+## El servidor
+
+Un Worker de Cloudflare (`worker/`) con SQLite en Durable Objects. El sitio
+sigue siendo estático: solo `/api/*` pasa por el Worker.
+
+- **Dos bases.** `PlatformDO` guarda cuentas, diseños sincronizados,
+  consentimientos, clics de contacto, el contacto vigente y la lista de
+  empresas. `TenantDO` es una base **por empresa**, con sus configuradores,
+  las consultas de sus clientes y su uso: los datos de una empresa no
+  comparten almacenamiento con los de otra.
+- **La lógica no depende de Cloudflare.** Está en `worker/core/` y recibe la
+  base, el reloj y los envíos desde afuera; por eso las pruebas la ejercitan
+  entera con el SQLite de Node (`worker/test/app.test.ts`).
+- **Acceso sin contraseña.** Enlace y código de un solo uso que vencen a los 15
+  minutos; de ninguno se guarda el valor, solo su huella. El enlace lleva el
+  valor después del `#`, así que no viaja a ningún servidor al abrirse. La
+  sesión va en una cookie `HttpOnly; Secure; SameSite=Lax`.
+- **Sincronización.** Para cada diseño gana la versión modificada más tarde;
+  un borrado viaja a los otros dispositivos. Navegador y servidor validan con
+  las mismas reglas (`src/lib/designs.ts`).
+- **Recordatorios.** Solo para quien los activa: uno al día y otro a los tres
+  días de la última edición, y ninguno más. Editar reinicia la cuenta; borrar
+  el diseño o desactivarlos los cancela. Cada uno lleva un enlace de un solo
+  uso que vuelve al diseño. El servidor se despierta solo (alarma del Durable
+  Object) y además limpia lo vencido.
+- **Notificaciones del navegador.** Se piden recién cuando la persona las
+  activa en Mi cuenta. El aviso viaja sin contenido, firmado con claves que el
+  servidor genera y guarda; el texto lo pide el navegador con la sesión
+  (`public/sw.js`).
+- **Medición.** Se anota qué botón de contacto se tocó, dónde y cuándo, sin
+  identificadores y solo con permiso. En `/admin/` los clics van separados de
+  las consultas recibidas, las reuniones y los clientes, que se cargan a mano.
+
+### Empresas y planes
+
+Quien administra MEDIDA crea la empresa en `/admin/` con su dirección corta,
+los emails que pueden entrar y cuántos configuradores incluye su plan. La
+empresa entra a `/panel/`, carga el WhatsApp donde quiere recibir las
+consultas, crea sus configuradores (hasta el tope del plan) y ajusta margen,
+terminaciones y precios. Todas usan el mismo motor: lo que cambia son
+parámetros (`configureCatalog` en `src/lib/catalog.ts`), no una solución
+distinta por cliente.
+
+La facturación recurrente no está hecha. El plan es un nombre y un tope que se
+cargan a mano; para sumar cobros hay que agregar el proveedor de pagos y atar
+el tope al estado de la suscripción.
+
+### Probar el servidor en la compu
+
+```bash
+npm run preview    # compila y levanta sitio + servidor en http://localhost:8787
+```
+
+En ese modo los emails no se mandan: quedan en `/api/dev/outbox`, que solo
+existe ahí. `node scripts/e2e.mjs http://localhost:8787` recorre además la
+cuenta, la sincronización entre dos dispositivos, la administración, el panel
+de empresa y el configurador embebido.
 
 ## El configurador de placares
 
@@ -203,7 +291,7 @@ requiere adaptación. Los precios de la demo son de muestra
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # pruebas del despiece, el precio y los diseños guardados
+npm test           # 60 pruebas: despiece, precio, contacto, diseños y la API entera
 npm run typecheck
 npm run lint
 npm run build      # export estático en out/
@@ -250,6 +338,11 @@ npm run capture -- http://localhost:4100
 | Mis diseños | `src/components/designs/` |
 | La vista del taller | `src/components/Workshop.tsx` |
 | Paleta, tipografía, animaciones de la interfaz | `src/app/globals.css` |
+| La API y sus reglas | `worker/core/app.ts` y el resto de `worker/core/` |
+| Emails de acceso y de recordatorio | `worker/core/email.ts` |
+| Cuenta, sincronización y notificaciones en el navegador | `src/lib/account.ts`, `src/lib/push.ts`, `public/sw.js` |
+| Administración y panel de empresa | `src/components/admin/` |
+| Quién puede entrar a `/admin/` | `ADMIN_EMAILS` en `wrangler.jsonc` |
 
 ## Publicarlo
 

@@ -2,61 +2,80 @@
 
 Actualizado: 2026-11-12 (Argentina).
 
-## Verificado en esta etapa
+## Verificado
 
 **Migración.** MEDIDA vivía en `configurador/` de `MATKROL77/Investig`. Se
 migró a `MATKROL77/MEDIDA` con su historial, tomando la versión de la rama
 `codex/medida-demo-validation`, que era la publicada.
 
-**Publicación.** `.github/workflows/deploy.yml` publica desde este
-repositorio. La primera ejecución (11/11/2026) encontró el environment de
-GitHub con el token de Cloudflare, publicó en
-https://medida.matiascolimodio.workers.dev y comprobó HTTP 200 en `/`,
-`/demo/` y `/demo/taller/`.
+**Publicación.** `.github/workflows/deploy.yml` publica desde este repositorio
+en https://medida.matiascolimodio.workers.dev. Cuatro ejecuciones en verde
+(11 y 12/11/2026). La última comprobó en producción: HTTP 200 de las páginas,
+que la portada es la de esta versión, que `/api/health` y `/api/public/site`
+responden, que `/api/me`, `/api/panel` y `/api/admin/overview` sin sesión dan
+401, y que el configurador embebido de una empresa inexistente da 404.
 
-**Fase 1 — landing y conversión.** Landing nueva, catálogo de configuradores,
-páginas de servicios, contacto por WhatsApp y email centralizado, aviso de
-cookies, páginas legales, sitemap, robots, imagen para redes e íconos.
+**Fase 1 — landing y conversión.** Landing, catálogo, servicios, contacto por
+WhatsApp y email centralizado, cookies, legales, SEO.
 
-**Fase 3, parte local — favoritos y carrito.** Guardado de diseños en el
-dispositivo, Mis diseños (favoritos y carrito de consulta), abrir, editar,
-renombrar, duplicar, eliminar, consulta conjunta y guardado automático.
+**Fase 3 — favoritos y carrito.** Guardado en el dispositivo, Mis diseños,
+consulta conjunta, guardado automático, cuenta por email y sincronización.
+
+**Fase 4 — recordatorios.** Consentimiento aparte, dos recordatorios como
+máximo con cancelación automática, notificaciones del navegador, enlaces de un
+solo uso.
+
+**Fase 5 — base SaaS.** Empresas con datos separados, tope de configuradores
+por plan, panel de empresa, configurador embebible que le escribe a la
+empresa, administración.
 
 Evidencia, corrida en este repositorio:
 
-- `npm test`: 34 pruebas (despiece, precio, contacto, diseños, consulta,
-  consentimiento). `npm run typecheck`, `npm run lint` y `npm run build` sin
-  errores.
-- `node scripts/e2e.mjs`: 39 comprobaciones en Chromium a 390 y 1440 px. Las
-  diez páginas cargan sin scroll horizontal ni errores; el aviso de cookies
-  no bloquea, guarda la elección y se puede cambiar; el diseño sobrevive a
-  recargar y a volver a entrar; guardar, editar, duplicar, renombrar, carrito
-  y eliminar; "Enviar al taller" ofrece los dos caminos y la cotización de la
-  demo no apunta a ningún número.
-- Encabezados de caché y de seguridad (`public/_headers`) probados con
-  `wrangler dev`.
-- Revisión visual de landing, configurador, hoja de envío y Mis diseños.
+- `npm test`: 60 pruebas. 26 son de la API contra SQLite en memoria: acceso,
+  sesión, vencimientos, límites de pedidos, sincronización y aislamiento entre
+  cuentas, recordatorios con el reloj adelantado, firma de notificaciones,
+  medición sin identificadores, permisos de administración y aislamiento entre
+  empresas.
+- `npm run typecheck` (sitio, Worker y pruebas), `npm run lint`,
+  `npm run build`: sin errores.
+- `node scripts/e2e.mjs` contra el runtime local de Cloudflare
+  (`npm run preview`): 48 comprobaciones en Chromium a 390 y 1440 px, todas en
+  orden. Incluye entrar con el código, abrir el enlace en otro dispositivo,
+  ver ahí los diseños, que un cambio en uno aparezca en el otro, crear una
+  empresa, que el plan le ponga tope, y que el configurador embebido lleve su
+  marca y su WhatsApp.
 
-## Sin verificar todavía
+## Hecho pero sin poder verificarlo en producción
 
-- El sitio publicado no se puede abrir desde el entorno donde trabajó el
-  agente (la red de ese entorno no lo permite). La comprobación de producción
-  es la del workflow: HTTP 200 de cada página y que la portada sea la de esta
-  versión. Conviene mirarlo en un teléfono real.
-- El 3D se probó con render por software. En ese modo la vista previa de un
-  diseño guardado puede no llegar a capturarse; en un equipo con placa de
-  video debería, pero no se pudo comprobar acá.
-- No se probó en iPhone ni en Android reales.
+- **Acceso por email.** En producción no hay proveedor de email configurado:
+  falta el secreto `RESEND_API_KEY` (ver README, "Para activar el acceso por
+  email"). Hasta entonces nadie puede entrar a una cuenta, ni a `/admin/`, ni
+  a `/panel/`; el sitio lo muestra como no disponible. El flujo completo se
+  probó en local, donde los emails quedan en una bandeja de prueba.
+- **Envío real de emails y de notificaciones.** La lógica y la firma están
+  probadas; que Resend y los servicios de notificaciones de los navegadores
+  entreguen el mensaje no se pudo comprobar desde el entorno de trabajo.
+- **El sitio publicado en un navegador.** Ese entorno no puede abrir la
+  dirección pública: la comprobación de producción es la del workflow.
+  Conviene mirarlo en un teléfono real.
+- **Vista previa de un diseño guardado.** Con render por software (el del
+  entorno de trabajo) no llega a capturarse; en un equipo con placa de video
+  debería.
+- **iPhone y Android reales.** No se probaron. En iPhone las notificaciones
+  solo existen si el sitio se agrega a la pantalla de inicio.
 
 ## Pendiente
 
-- Cuenta por email, sincronización entre dispositivos y panel de
-  administración (necesitan el servidor).
-- Recordatorios por email y notificaciones del navegador.
-- Cuentas de empresas, configurador embebible y planes.
-- Configuradores de las otras familias: hoy solo existe el de placares.
-- Los textos legales describen el sistema completo; conviene que los revise un
-  profesional antes de operar comercialmente.
+- **Fase 2 — configuradores de otras familias.** Solo existe el de placares.
+  Mesas, escritorios, ratonas, muebles de TV, bibliotecas y sillones figuran
+  como "en desarrollo" en el sitio.
+- **Facturación recurrente.** No hay cobros ni suscripciones; el plan de una
+  empresa es un nombre y un tope cargados a mano.
+- **Textos legales.** Describen lo que el sistema hace y citan la Ley 25.326;
+  conviene que los revise un profesional.
+- **Investig.** En la rama `claude/dreamy-franklin-wxoz6q` de ese repositorio
+  se quitó `configurador/` y su workflow y quedó el puntero a este. El PR #1
+  de Investig (rama de Codex) quedó superado por la migración.
 
 ## Informado por otros agentes, sin volver a verificar
 
