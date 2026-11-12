@@ -8,9 +8,10 @@
     "build": "next build",
     "start": "npx serve out",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/lib/*.test.ts",
-    "capture": "node --experimental-strip-types scripts/capture.mjs"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p worker && tsc --noEmit -p worker/test",
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts worker/test/*.test.ts",
+    "capture": "node --experimental-strip-types scripts/capture.mjs",
+    "preview": "next build && wrangler dev --port 8787 --var DEV_OUTBOX:1"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -23,6 +24,7 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261112.1",
     "@eslint/eslintrc": "^3.3.6",
     "@tailwindcss/postcss": "^4.1.13",
     "@types/node": "^24.5.2",

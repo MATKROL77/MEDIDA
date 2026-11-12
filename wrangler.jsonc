@@ -2,12 +2,28 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // queda en medida.<tu-subdominio>.workers.dev
   "name": "medida",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-08-03",
-  // sitio estático: no hay script de Worker, sólo los archivos de `out/`
+  // el sitio: los archivos de `out/`. Cloudflare los sirve directo; solo /api pasa por el Worker
   "assets": {
     "directory": "./out",
+    "binding": "ASSETS",
     // cada ruta es una carpeta con index.html (trailingSlash en Next)
     "html_handling": "auto-trailing-slash",
-    "not_found_handling": "404-page"
-  }
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+  // el servidor: una base para la plataforma y una por empresa
+  "durable_objects": {
+    "bindings": [
+      { "name": "PLATFORM", "class_name": "PlatformDO" },
+      { "name": "TENANT", "class_name": "TenantDO" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PlatformDO", "TenantDO"] }],
+  "vars": {
+    // quién puede entrar al panel de administración (separados por coma)
+    "ADMIN_EMAILS": "matiascolimodio@gmail.com"
+  },
+  "observability": { "enabled": true }
 }
