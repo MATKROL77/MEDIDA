@@ -131,7 +131,8 @@ export function Room({ min, max, shape, wall, floor }: Props) {
       }
     }
     mats.glass.color.copy(daylight).multiplyScalar(2.2 * night);
-    mats.shadow.opacity = 0.16 * (1 - room);
+    // sobre fondo liso la sombra es lo único que apoya el mueble en el piso
+    mats.shadow.opacity = 0.3 * (1 - room);
 
     const w = r - l;
     const cx = (l + r) / 2;

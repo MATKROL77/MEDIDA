@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 
-import { product } from "@/lib/product";
+import { CookieConsent } from "@/components/site/CookieConsent";
+import { SiteProvider } from "@/components/site/SiteProvider";
+import { site } from "@/lib/site";
 import "./globals.css";
 
 // tipografías locales: next/font/google baja los archivos en el build y lo
@@ -18,18 +20,44 @@ const interTight = localFont({
 });
 
 export const metadata: Metadata = {
-  title: `${product.name}: configurador 3D para placares a medida`,
-  description: product.pitch,
+  metadataBase: new URL(site.url),
+  title: { default: `${site.name} · ${site.tagline}`, template: `%s · ${site.name}` },
+  description: site.description,
+  applicationName: site.name,
+  authors: [{ name: site.maker }],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: site.name,
+    locale: "es_AR",
+    title: `${site.name} · ${site.tagline}`,
+    description: site.description,
+    url: "/",
+    images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "Un placard configurado en 3D con MEDIDA" }],
+  },
+  twitter: { card: "summary_large_image", title: `${site.name} · ${site.tagline}`, description: site.description, images: ["/og.jpg"] },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#f5f2ec",
+  themeColor: "#ffffff",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es-AR" className={`${inter.variable} ${interTight.variable}`}>
-      <body className="min-h-dvh">{children}</body>
+      <head>
+        {/* marca que hay JavaScript antes de pintar: sin él, nada queda escondido esperando una animación */}
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
+      </head>
+      <body className="min-h-dvh">
+        <SiteProvider>
+          {children}
+          <CookieConsent />
+        </SiteProvider>
+      </body>
     </html>
   );
 }

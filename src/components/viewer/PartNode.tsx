@@ -120,7 +120,8 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
   const rot = useRef<THREE.Group>(null);
   const mesh = useRef<THREE.Mesh>(null);
   const details = useRef<THREE.Group>(null);
-  const appear = useRef(spring(0));
+  // crece al aparecer, salvo en una escena que arranca ya armada
+  const appear = useRef(spring(typeof performance !== "undefined" && performance.now() < anim.settledUntil ? 1 : 0));
   const born = useRef<number | null>(null);
   const door = part.kind === "door" && part.hinge ? part.hinge : null;
   const trap = part.geometry === "trapezoid";

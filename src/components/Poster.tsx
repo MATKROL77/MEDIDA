@@ -21,7 +21,7 @@ export function Poster({ config, assembly }: { config: WardrobeConfig; assembly:
     .sort((a, b) => a.position[2] + a.size[2] - (b.position[2] + b.size[2]));
 
   return (
-    <div className="absolute inset-0 grid place-items-center bg-[#ebe6df]">
+    <div className="absolute inset-0 grid place-items-center bg-[#f0efed]">
       <svg
         viewBox={`${min[0] - pad} ${-h - pad * 0.6} ${w + 2 * pad} ${h + pad * 1.2}`}
         className="h-[78%] w-[78%] drop-shadow-[0_18px_24px_rgba(60,40,20,0.12)]"

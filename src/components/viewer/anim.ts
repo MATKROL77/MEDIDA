@@ -90,6 +90,8 @@ export type SceneAnim = {
   room: Spring;
   /** cuándo arrancó la escena: las piezas del primer cuadro entran escalonadas */
   bornAt: number;
+  /** hasta este momento, lo que se monta aparece armado en vez de crecer (escenas sin entrada) */
+  settledUntil: number;
 };
 
 export const SceneAnimContext = createContext<SceneAnim | null>(null);

@@ -37,7 +37,33 @@ export type ViewerProps = {
   onLeaf?: (id: string) => void;
   /** se llena con una función que devuelve una captura del 3D (JPEG, data URL) */
   captureRef?: React.MutableRefObject<(() => Promise<string | null>) | null>;
+  /**
+   * false: sin vuelo de cámara ni armado escalonado al cargar. La landing lo usa
+   * para que el 3D aparezca igual a la imagen fija que había antes.
+   */
+  intro?: boolean;
+  /** cuánto puede mover la cámara la persona: todo, solo girar, o nada */
+  orbit?: "full" | "rotate" | "none";
+  /** vaivén lento de la cámara mientras nadie la toca */
+  sway?: boolean;
+  /** deja de dibujar: el visor salió de la pantalla */
+  paused?: boolean;
+  /** color del fondo liso */
+  backdrop?: string;
+  /** tope de resolución del lienzo */
+  maxDpr?: number;
+  /** encuadre: menos de 1 acerca la cámara (sin barras encima del visor sobra margen) */
+  framing?: number;
+  /** fija la calidad, como ?calidad= en la dirección; la herramienta de capturas la cambia en vivo */
+  quality?: "alta" | "baja";
+  /** cuenta los cuadros dibujados en window.__medidaFrames, para la herramienta de capturas */
+  countFrames?: boolean;
 };
+
+/** fondo liso de partida: un gris apenas cálido, para que la madera no se enfríe */
+export const STUDIO_BACKDROP = "#f0efed";
+/** cuánto más intenso entra el fondo liso para compensar el mapeo de tonos */
+const STUDIO_GAIN = 1.75;
 
 const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
   front: [0, 0.14, 1],
@@ -61,7 +87,12 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
 
   const led = useMemo(() => new THREE.Color(ledHex(props.config)), [props.config]);
   const fronts = useMemo(() => frontMaterials(kit), [kit]);
-  const bg = useMemo(() => ({ studio: new THREE.Color("#ebe6df"), room: new THREE.Color("#e9e4dc"), cur: new THREE.Color("#ebe6df") }), []);
+  const backdrop = props.backdrop ?? STUDIO_BACKDROP;
+  // el mapeo de tonos oscurece los claros: el fondo liso entra con ganancia para salir del color pedido
+  const bg = useMemo(() => {
+    const studio = new THREE.Color(backdrop).multiplyScalar(STUDIO_GAIN);
+    return { studio, room: new THREE.Color("#e9e4dc"), cur: studio.clone() };
+  }, [backdrop]);
 
   const motion = useMemo(
     () => ({ leaves: leavesOf(props.assembly), groups: drawerGroupsOf(props.assembly) }),
@@ -277,12 +308,14 @@ function Centered({ assembly, children }: { assembly: Assembly; children: React.
  * Cámara: vuela suave a cada vista y se reencuadra cuando cambia el tamaño.
  * Si la persona agarra la cámara, el vuelo se corta y manda ella.
  */
-function CameraRig({ assembly, view }: { assembly: Assembly; view: ViewerProps["view"] }) {
+function CameraRig({ assembly, view, intro, sway, framing }: { assembly: Assembly; view: ViewerProps["view"]; intro: boolean; sway: boolean; framing: number }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const size = useThree((s) => s.size);
-  const flight = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const flight = useRef<{ pos: THREE.Vector3; target: THREE.Vector3; snap?: boolean } | null>(null);
   const first = useRef(true);
+  // vaivén: desde qué ángulo oscila, desde cuándo, y si la persona tiene la cámara
+  const swing = useRef({ base: 0, since: 0, held: false, releasedAt: -Infinity, flying: true });
   const { min, max } = assembly.bounds;
   const dims = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
   const key = dims.map((d) => Math.round(d / 50)).join("x");
@@ -292,7 +325,7 @@ function CameraRig({ assembly, view }: { assembly: Assembly; view: ViewerProps["
     const fov = THREE.MathUtils.degToRad(camera.fov);
     const aspect = size.width / size.height;
     // margen para la barra de arriba y la de abajo del visor
-    let dist = (radius / Math.sin(fov / 2)) * 1.1;
+    let dist = (radius / Math.sin(fov / 2)) * 1.1 * framing;
     if (aspect < 1) dist /= Math.pow(aspect, 0.85);
     const target = new THREE.Vector3(0, dims[1] * 0.46 * MM, 0);
     return { pos: target.clone().addScaledVector(dir.clone().normalize(), dist), target };
@@ -308,10 +341,17 @@ function CameraRig({ assembly, view }: { assembly: Assembly; view: ViewerProps["
   // cambio de tamaño: mismo ángulo, nueva distancia
   useEffect(() => {
     if (first.current) {
-      // entrada: arranca lejos y alto y llega volando
-      const f = fit(new THREE.Vector3(...VIEW_DIRS.three));
-      camera.position.copy(f.pos.clone().multiplyScalar(1.9).add(new THREE.Vector3(1.5, 1.2, 0)));
-      flight.current = f;
+      const f = fit(new THREE.Vector3(...VIEW_DIRS[view.name]));
+      if (intro) {
+        // entrada: arranca lejos y alto y llega volando
+        camera.position.copy(f.pos.clone().multiplyScalar(1.9).add(new THREE.Vector3(1.5, 1.2, 0)));
+        flight.current = f;
+      } else {
+        // sin entrada: la cámara ya está en su lugar desde el primer cuadro
+        camera.position.copy(f.pos);
+        camera.lookAt(f.target);
+        flight.current = { ...f, snap: true };
+      }
       first.current = false;
       return;
     }
@@ -322,19 +362,58 @@ function CameraRig({ assembly, view }: { assembly: Assembly; view: ViewerProps["
 
   useEffect(() => {
     if (!controls) return;
-    const stop = () => (flight.current = null);
+    const stop = () => {
+      flight.current = null;
+      swing.current.held = true;
+    };
+    const release = () => {
+      swing.current.held = false;
+      swing.current.releasedAt = performance.now();
+    };
     controls.addEventListener("start", stop);
-    return () => controls.removeEventListener("start", stop);
+    controls.addEventListener("end", release);
+    return () => {
+      controls.removeEventListener("start", stop);
+      controls.removeEventListener("end", release);
+    };
   }, [controls]);
 
-  useFrame((_, dt) => {
+  useFrame((state, dt) => {
+    if (!controls) return;
     const f = flight.current;
-    if (!f || !controls) return;
-    const k = 1 - Math.exp(-clampDt(dt) * 3.2);
-    camera.position.lerp(f.pos, k);
-    controls.target.lerp(f.target, k);
+    const w = swing.current;
+    if (f) {
+      w.flying = true;
+      if (f.snap) {
+        camera.position.copy(f.pos);
+        controls.target.copy(f.target);
+        controls.update();
+        flight.current = null;
+        return;
+      }
+      const k = 1 - Math.exp(-clampDt(dt) * 3.2);
+      camera.position.lerp(f.pos, k);
+      controls.target.lerp(f.target, k);
+      controls.update();
+      if (camera.position.distanceTo(f.pos) < 0.003 && controls.target.distanceTo(f.target) < 0.003) flight.current = null;
+      return;
+    }
+    if (!sway) return;
+    // después de que la persona suelta la cámara, espera un rato antes de volver a moverla
+    const idle = !w.held && performance.now() - w.releasedAt > 3500;
+    if (!idle) {
+      w.flying = true;
+      return;
+    }
+    const t = state.clock.elapsedTime;
+    if (w.flying) {
+      // retoma desde donde quedó la cámara, sin salto
+      w.base = controls.getAzimuthalAngle();
+      w.since = t;
+      w.flying = false;
+    }
+    controls.setAzimuthalAngle(w.base + Math.sin((t - w.since) * 0.32) * 0.26);
     controls.update();
-    if (camera.position.distanceTo(f.pos) < 0.003 && controls.target.distanceTo(f.target) < 0.003) flight.current = null;
   });
   return null;
 }
@@ -343,7 +422,7 @@ function CameraRig({ assembly, view }: { assembly: Assembly; view: ViewerProps["
  * Captura del 3D para la tapa del PDF. Se lee justo después de que el
  * compositor dibuja el cuadro, antes de que el navegador limpie el lienzo.
  */
-function Capturer({ captureRef }: { captureRef?: ViewerProps["captureRef"] }) {
+function Capturer({ captureRef, countFrames }: { captureRef?: ViewerProps["captureRef"]; countFrames?: boolean }) {
   const gl = useThree((s) => s.gl);
   const pending = useRef<((url: string | null) => void)[]>([]);
   useEffect(() => {
@@ -354,6 +433,10 @@ function Capturer({ captureRef }: { captureRef?: ViewerProps["captureRef"] }) {
     };
   }, [captureRef]);
   useFrame(() => {
+    if (countFrames) {
+      const w = window as unknown as { __medidaFrames?: number };
+      w.__medidaFrames = (w.__medidaFrames ?? 0) + 1;
+    }
     if (!pending.current.length) return;
     let url: string | null = null;
     try {
@@ -366,22 +449,26 @@ function Capturer({ captureRef }: { captureRef?: ViewerProps["captureRef"] }) {
   return null;
 }
 
-function Effects({ hq }: { hq: boolean }) {
+function Effects({ hq, studio }: { hq: boolean; studio: boolean }) {
+  // sobre fondo liso el fondo es más brillante que cualquier superficie: el
+  // umbral del brillo sube para que solo brillen los LED, y la viñeta se afloja
+  const threshold = studio ? 2.4 : 0.92;
+  const darkness = studio ? 0.24 : 0.45;
   // dos composiciones fijas: el compositor no admite hijos que aparecen y desaparecen
   if (hq)
     return (
       <EffectComposer multisampling={4} enableNormalPass={false}>
         <N8AO aoRadius={0.45} intensity={2.4} distanceFalloff={0.9} quality="medium" />
-        <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.92} luminanceSmoothing={0.25} radius={0.7} />
-        <Vignette offset={0.3} darkness={0.45} />
+        <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
+        <Vignette offset={0.3} darkness={darkness} />
         <ToneMapping mode={ToneMappingMode.AGX} />
       </EffectComposer>
     );
   // en equipos chicos se va la oclusión, que es lo más caro; el brillo de los LED queda
   return (
     <EffectComposer multisampling={0} enableNormalPass={false}>
-      <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.92} luminanceSmoothing={0.25} radius={0.7} />
-      <Vignette offset={0.3} darkness={0.45} />
+      <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
+      <Vignette offset={0.3} darkness={darkness} />
       <ToneMapping mode={ToneMappingMode.AGX} />
       <SMAA />
     </EffectComposer>
@@ -406,7 +493,7 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
             {(p, gone) => {
               // al cargar, el placard se arma de abajo hacia arriba
               const age = typeof performance === "undefined" ? 0 : (performance.now() - anim.bornAt) / 1000;
-              const delay = age < 1.2 ? 0.15 + (p.position[1] / totalH) * 0.55 + run.index * 0.12 : 0;
+              const delay = props.intro !== false && age < 1.2 ? 0.15 + (p.position[1] / totalH) * 0.55 + run.index * 0.12 : 0;
               return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={delay} onSelect={props.onSelect} onLeaf={props.onLeaf} />;
             }}
           </Presence>
@@ -438,9 +525,12 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
       </Environment>
       <KeyLight span={span} shape={props.config.shape} />
       <Wardrobe props={props} kit={kit} />
-      <CameraRig assembly={props.assembly} view={props.view} />
+      <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway} framing={props.framing ?? 1} />
       <OrbitControls
         makeDefault
+        enabled={props.orbit !== "none"}
+        enableZoom={!props.orbit || props.orbit === "full"}
+        enablePan={!props.orbit || props.orbit === "full"}
         enableDamping
         dampingFactor={0.08}
         rotateSpeed={0.75}
@@ -450,8 +540,8 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
         minPolarAngle={0}
         maxPolarAngle={Math.PI}
       />
-      <Effects hq={props.hq} />
-      <Capturer captureRef={props.captureRef} />
+      <Effects hq={props.hq} studio={props.environment.mode === "studio"} />
+      <Capturer captureRef={props.captureRef} countFrames={props.countFrames} />
     </>
   );
 }
@@ -460,10 +550,19 @@ export default function Scene(props: ViewerProps) {
   // ?calidad=baja fuerza el modo liviano, para equipos muy viejos;
   // ?calidad=alta la deja fija arriba (para grabar videos cuadro a cuadro)
   const [forced] = useState(() => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("calidad")));
-  const forcedLow = forced === "baja";
-  const forcedHigh = forced === "alta";
+  const wanted = props.quality ?? forced;
+  const forcedLow = wanted === "baja";
+  const forcedHigh = wanted === "alta";
   const [hq, setHq] = useState(!forcedLow);
-  const [dpr, setDpr] = useState(forcedLow || forcedHigh ? 1 : 1.5);
+  const maxDpr = props.maxDpr ?? 2;
+  const [dpr, setDpr] = useState(forcedLow || forcedHigh ? 1 : Math.min(1.5, maxDpr));
+  const intro = props.intro !== false;
+  // la calidad fijada puede cambiar con la escena ya andando
+  useEffect(() => {
+    if (!forcedLow && !forcedHigh) return;
+    setHq(forcedHigh);
+    setDpr(1);
+  }, [forcedLow, forcedHigh]);
   const anim = useMemo<SceneAnim>(
     () => ({
       open: spring(),
@@ -472,9 +571,13 @@ export default function Scene(props: ViewerProps) {
       explode: spring(),
       xray: spring(),
       lights: spring(),
-      room: spring(1),
+      room: spring(props.environment.mode === "room" ? 1 : 0),
       bornAt: typeof performance === "undefined" ? 0 : performance.now(),
+      // sin entrada: lo que se monta en el primer momento aparece ya armado
+      settledUntil: intro || typeof performance === "undefined" ? 0 : performance.now() + 500,
     }),
+    // el estado de la escena se crea una sola vez
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
   const { onReady } = props;
@@ -490,6 +593,7 @@ export default function Scene(props: ViewerProps) {
         shadows="soft"
         flat
         dpr={dpr}
+        frameloop={props.paused ? "never" : "always"}
         gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
         camera={{ position: [4, 3, 7], fov: 34, near: 0.05, far: 80 }}
         onCreated={() => onReady?.()}
@@ -499,7 +603,7 @@ export default function Scene(props: ViewerProps) {
           onIncline={() => {
             if (forcedLow || forcedHigh) return;
             setHq(true);
-            setDpr(Math.min(2, window.devicePixelRatio));
+            setDpr(Math.min(maxDpr, window.devicePixelRatio));
           }}
           onDecline={() => {
             if (forcedHigh) return;
