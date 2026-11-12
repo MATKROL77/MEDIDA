@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { IconBack, IconDoor, IconExplode, IconFront, IconSide, IconThree, IconTop } from "@/components/icons";
+import { IconBack, IconBulb, IconDoor, IconExplode, IconFront, IconSide, IconThree, IconTop } from "@/components/icons";
 import { SendSheet } from "@/components/SendSheet";
 import { Dimension, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
@@ -14,7 +14,7 @@ import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constan
 import type { ViewName } from "@/components/viewer/Scene";
 import { fromBase64Url, toBase64Url } from "@/lib/base64url";
 import { addDesign, clearDraft, getDesign, nextName, readDraft, updateDesign, useDesigns, writeDraft } from "@/lib/designStore";
-import { FABRICS, buildFurniture, defaultFurniture, fabricById, furniturePrice, furnitureSummary, normalizeFurniture, specById, type FurnitureConfig, type Value } from "@/lib/furniture";
+import { FABRICS, buildFurniture, defaultFurniture, fabricById, furniturePrice, hasLed, furnitureSummary, normalizeFurniture, specById, type FurnitureConfig, type Value } from "@/lib/furniture";
 import { DEFAULT_CONFIG, type WardrobeConfig } from "@/lib/model";
 import { shrinkImage } from "@/lib/preview";
 import { currentQuery, rememberQuery } from "@/lib/query";
@@ -45,6 +45,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const [config, setConfig] = useState<FurnitureConfig>(() => defaultFurniture(family));
   const [open, setOpen] = useState(false);
   const [explode, setExplode] = useState(false);
+  const [lights, setLights] = useState(false);
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
   const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "madera" });
   const [ready, setReady] = useState(false);
@@ -113,7 +114,11 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
     return () => clearTimeout(id);
   }, [toast]);
 
-  const set = (key: string, value: Value) => setConfig((c) => normalizeFurniture({ ...c, values: { ...c.values, [key]: value } }));
+  const set = (key: string, value: Value) => {
+    setConfig((c) => normalizeFurniture({ ...c, values: { ...c.values, [key]: value } }));
+    // al sumar la luz, se prende: así se ve lo que se acaba de agregar
+    if (key === "led") setLights(value === true);
+  };
   const goView = (name: ViewName) => setView((v) => ({ name, nonce: v.nonce + 1 }));
 
   const save = async ({ name, favorite, cart }: SaveChoice) => {
@@ -141,7 +146,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
             leafOffsets={{}}
             xray={false}
             explode={explode}
-            lights={false}
+            lights={lights && hasLed(config)}
             environment={environment}
             view={view}
             fabric={fabricById(config.fabric).color}
@@ -182,6 +187,12 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
               <button type="button" className="tool" aria-pressed={open} onClick={() => setOpen((o) => !o)}>
                 <IconDoor />
                 <span>{open ? "Cerrar" : "Abrir"}</span>
+              </button>
+            )}
+            {hasLed(config) && (
+              <button type="button" className="tool" aria-pressed={lights} onClick={() => setLights((l) => !l)} title="Encender las luces">
+                <IconBulb />
+                <span>Luces</span>
               </button>
             )}
             <button type="button" className="tool" aria-pressed={explode} onClick={() => setExplode((x) => !x)} title="Separar las piezas">

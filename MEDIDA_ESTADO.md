@@ -78,9 +78,11 @@ Evidencia, corrida en este repositorio:
   pero no tienen PDF, plano de corte ni vista del taller como el placard. Sus
   reglas de fabricación son más simples que las del placard y conviene
   revisarlas con un fabricante antes de usarlas para producir.
-- **Realismo del 3D.** Usa los mismos materiales, luces y sombras del placard.
-  Es un render en tiempo real, no una foto: no llega a la calidad de un render
-  de estudio.
+- **Realismo del 3D.** Cada mueble se ve en un ambiente armado (alfombra,
+  tele, cama, libros, lámpara), con nogal, vidrio, hierro, tapizados y luz
+  LED. Sigue siendo 3D en tiempo real en el navegador: no llega a la calidad
+  de un render de estudio o de una foto. Para eso hacen falta modelos y
+  texturas hechos por un artista 3D, o imágenes pre-renderizadas.
 - **Facturación recurrente.** No hay cobros ni suscripciones; el plan de una
   empresa es un nombre y un tope cargados a mano.
 - **Textos legales.** Describen lo que el sistema hace y citan la Ley 25.326;

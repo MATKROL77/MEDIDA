@@ -16,6 +16,9 @@ export const MM = 0.001;
 let shared: {
   box: THREE.BoxGeometry;
   soft: THREE.BufferGeometry;
+  puff: THREE.BufferGeometry;
+  cyl: THREE.BufferGeometry;
+  cone: THREE.BufferGeometry;
   plane: THREE.PlaneGeometry;
   sphere: THREE.SphereGeometry;
   quarterLeft: THREE.CylinderGeometry;
@@ -26,6 +29,11 @@ function geometries() {
     shared = {
       box: new THREE.BoxGeometry(1, 1, 1),
       soft: new RoundedBoxGeometry(1, 1, 1, 5, 0.13),
+      // almohadón inflado: casi una píldora
+      puff: new RoundedBoxGeometry(1, 1, 1, 8, 0.34),
+      cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 40),
+      // pata cónica: más fina abajo
+      cone: new THREE.CylinderGeometry(0.5, 0.28, 1, 32),
       plane: new THREE.PlaneGeometry(1, 1),
       sphere: new THREE.SphereGeometry(0.5, 28, 18),
       // cuartos de cilindro de radio 1: escalados en x y z quedan elipses
@@ -75,7 +83,20 @@ function isVertical(p: Part) {
   return p.cut ? Math.abs(p.cut.length - p.size[1]) < 1 : true;
 }
 
+const tints = new Map<string, THREE.MeshStandardMaterial>();
+/** color liso para la ambientación ("tint:#rrggbb" o "gloss:#rrggbb"); se comparte entre piezas */
+function tinted(spec: string): THREE.MeshStandardMaterial {
+  let m = tints.get(spec);
+  if (!m) {
+    const gloss = spec.startsWith("gloss:");
+    m = new THREE.MeshStandardMaterial({ color: spec.slice(spec.indexOf(":") + 1), roughness: gloss ? 0.12 : 0.92, metalness: gloss ? 0.35 : 0, envMapIntensity: gloss ? 1.1 : 0.4 });
+    tints.set(spec, m);
+  }
+  return m;
+}
+
 function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
+  if (p.material.startsWith("tint:") || p.material.startsWith("gloss:")) return tinted(p.material);
   const along = isVertical(p) ? "v" : "u";
   switch (p.material) {
     case "none":
@@ -98,6 +119,8 @@ function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
       return kit.glow[p.glow ?? "z"];
     case "fabric":
       return kit.fabric;
+    case "iron":
+      return kit.iron;
     default:
       if (p.front || (p.material === kit.doorId && p.kind !== "drawer-front")) return kit.door[along];
       return p.kind === "drawer-front" ? kit.bodyFront[along] : kit.body[along];
@@ -146,6 +169,9 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     if (part.geometry === "knob") return g.sphere;
     if (part.geometry === "glow") return g.plane;
     if (part.geometry === "soft") return g.soft;
+    if (part.geometry === "puff") return g.puff;
+    if (part.geometry === "cyl") return g.cyl;
+    if (part.geometry === "cone") return g.cone;
     return g.box;
   }, [part.geometry, part.quarter]);
 

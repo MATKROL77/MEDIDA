@@ -173,6 +173,18 @@ explotada y la lista de piezas de placa: sumar una familia es describirla, no
 escribir otro motor. `src/components/FurnitureConfigurator.tsx` dibuja los
 controles a partir de esa descripción.
 
+Cada familia tiene estilos para mostrar lo que da el motor: tapas rectas,
+redondeadas o de vidrio; patas rectas, cónicas, pórticos de hierro, laterales
+llenos o cajonera; ratonas tipo puente, losa o con tapa de vidrio; muebles de
+TV flotantes; bibliotecas con estructura de hierro o puertas de vidrio;
+sillones rectos o tipo puff, al piso o con patas. A todas menos el sillón se
+les puede sumar luz LED, que se prende en la escena.
+
+Cada mueble se dibuja en un ambiente con sentido: la mesa y la ratona en el
+medio, sobre una alfombra; el mueble de TV bajo una tele colgada; la mesa de
+luz al lado de una cama; la biblioteca con libros. Esa ambientación
+(`decor`) se dibuja pero no se mide, no se corta ni se cobra.
+
 Los máximos salen de lo fabricable: ninguna pieza supera la placa refilada, y
 hay una prueba que lo comprueba en todas las combinaciones. Los sillones
 llevan tapizado (material aparte, con trama) y sus valores son de muestra,
@@ -318,7 +330,7 @@ requiere adaptación. Los precios de la demo son de muestra
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 67 pruebas: despiece, precio, los otros muebles, contacto, diseños y la API entera
+npm test           # 69 pruebas: despiece, precio, los otros muebles, contacto, diseños y la API entera
 npm run typecheck
 npm run lint
 npm run build      # export estático en out/

@@ -61,7 +61,7 @@ export type PartKind =
   | "glow";
 
 /** "soft": caja de cantos redondeados, para almohadones y tapizados */
-export type Geometry = "box" | "soft" | "trapezoid" | "quarter" | "knob" | "glow" | "none";
+export type Geometry = "box" | "soft" | "puff" | "cyl" | "cone" | "trapezoid" | "quarter" | "knob" | "glow" | "none";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
@@ -114,6 +114,8 @@ export type Part = {
   quarter?: "left" | "right";
   /** tarjeta de luz: hacia dónde mira */
   glow?: "x+" | "x-" | "y" | "z";
+  /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
+  decor?: boolean;
   /** null para lo que no sale de placa */
   cut: Cut | null;
   /** las puertas batientes giran sobre este borde al abrir */

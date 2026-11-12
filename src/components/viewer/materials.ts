@@ -259,6 +259,8 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9") {
     doorId,
     /** tapizado: mate, sin brillo, con un tejido apenas marcado */
     fabric: new THREE.MeshStandardMaterial({ color: fabric, roughness: 0.96, metalness: 0, envMapIntensity: 0.35, bumpMap: weaveTexture(), bumpScale: 0.6 }),
+    /** hierro pintado de negro: marcos y patas */
+    iron: new THREE.MeshStandardMaterial({ color: "#1d1c1b", metalness: 0.55, roughness: 0.48, envMapIntensity: 0.8 }),
     body: { v: surface(bodyId, "v"), u: surface(bodyId, "u") },
     door: { v: surface(doorId, "v", true), u: surface(doorId, "u", true) },
     /** frentes de cajón con el color del cuerpo (van detrás de las puertas) */
@@ -304,7 +306,7 @@ export function frontMaterials(kit: MaterialKit): THREE.Material[] {
 }
 
 export function disposeKit(kit: MaterialKit) {
-  const all = [kit.body.u, kit.body.v, kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.back, kit.metal, kit.handle, kit.groove, kit.mirror, kit.glass, kit.frame, kit.led, kit.fabric, ...Object.values(kit.glow)];
+  const all = [kit.body.u, kit.body.v, kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.back, kit.metal, kit.handle, kit.groove, kit.mirror, kit.glass, kit.frame, kit.led, kit.fabric, kit.iron, ...Object.values(kit.glow)];
   all.forEach((m) => m.dispose());
 }
 

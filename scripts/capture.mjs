@@ -67,12 +67,12 @@ const SHOTS = [
     query: `c=${cfg({ shape: "l-left", runs: [{ width: 2800, modules: [mod("shelves", { shelves: 4 }), mod("drawers-hanging", { drawers: 3 }), mod("double-hanging")] }, { width: 2000, modules: [mod("hanging"), mod("shelves", { shelves: 4 })] }], doorMaterial: "roble" })}&ambiente=habitacion&abierto=1&luces=1&encuadre=0.82&pared=arena`,
     settle: 34_000,
   },
-  // las otras familias, cada una en una habitación
-  { name: "familia-mesas", query: "f=mesas&ambiente=habitacion&encuadre=0.8&pared=tiza", settle: 14_000 },
-  { name: "familia-ratonas", query: "f=ratonas&ambiente=habitacion&encuadre=0.9&pared=salvia&piso=pinotea", settle: 14_000 },
-  { name: "familia-tv", query: "f=tv&ambiente=habitacion&encuadre=0.8&pared=perla", settle: 14_000 },
-  { name: "familia-bibliotecas", query: "f=bibliotecas&ambiente=habitacion&encuadre=0.85&pared=arena", settle: 14_000 },
-  { name: "familia-sillones", query: "f=sillones&ambiente=habitacion&encuadre=0.78&pared=tiza&piso=pinotea", settle: 14_000 },
+  // las otras familias, cada una en su ambiente
+  { name: "familia-mesas", query: "f=mesas&ambiente=habitacion&encuadre=0.82&pared=tiza", settle: 14_000 },
+  { name: "familia-ratonas", query: "f=ratonas&ambiente=habitacion&encuadre=0.85&pared=arena&piso=cemento", settle: 14_000 },
+  { name: "familia-tv", query: "f=tv&ambiente=habitacion&encuadre=0.7&pared=arena&luces=1", settle: 18_000 },
+  { name: "familia-bibliotecas", query: "f=bibliotecas&ambiente=habitacion&encuadre=0.8&pared=tiza", settle: 14_000 },
+  { name: "familia-sillones", query: "f=sillones&ambiente=habitacion&encuadre=0.75&pared=tiza&piso=cemento", settle: 14_000 },
 ];
 
 await mkdir(out, { recursive: true });

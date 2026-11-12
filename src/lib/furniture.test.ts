@@ -34,7 +34,7 @@ test("todo mueble se arma con piezas de medidas reales, sin superponer identific
   for (const spec of SPECS) {
     for (const config of variants(spec.id)) {
       const { parts, assembly } = buildFurniture(config);
-      assert.ok(parts.length >= 4, `${spec.id}: muy pocas piezas`);
+      assert.ok(parts.length >= 3, `${spec.id}: muy pocas piezas`);
       assert.equal(new Set(parts.map((p) => p.id)).size, parts.length, `${spec.id}: identificadores repetidos`);
       for (const p of parts) {
         for (const n of [...p.position, ...p.size]) assert.ok(Number.isFinite(n), `${spec.id} ${p.id}: medida no finita`);
@@ -75,9 +75,12 @@ test("agrandar o sumar cosas nunca abarata, y el precio es un número redondo", 
     assert.ok(prices[0] <= prices[1] && prices[1] <= prices[2], `${spec.id}: ${prices}`);
     assert.ok(prices.every((p) => p > 0 && p % 1000 === 0));
   }
-  const sin = furniturePrice(normalizeFurniture({ family: "mesas", values: { drawers: false } }));
-  const con = furniturePrice(normalizeFurniture({ family: "mesas", values: { drawers: true } }));
+  const sin = furniturePrice(normalizeFurniture({ family: "mesas", values: { legs: "panel" } }));
+  const con = furniturePrice(normalizeFurniture({ family: "mesas", values: { legs: "pedestal" } }));
   assert.ok(con > sin, "la cajonera suma");
+  const apagada = furniturePrice(normalizeFurniture({ family: "tv", values: { led: false } }));
+  const prendida = furniturePrice(normalizeFurniture({ family: "tv", values: { led: true } }));
+  assert.ok(prendida > apagada, "la luz LED suma");
 });
 
 test("un enlace editado a mano no rompe nada", () => {
@@ -96,7 +99,33 @@ test("cajones y puertas se cuentan como lo que se ve", () => {
   const tv = buildFurniture(normalizeFurniture({ family: "tv", values: { width: 1800, fronts: "puertas" } }));
   assert.equal(tv.doors, 3);
   assert.equal(tv.parts.filter((p) => p.kind === "door").length, 3);
-  const luz = buildFurniture(normalizeFurniture({ family: "ratonas", values: { kind: "luz", height: 600, drawers: 2 } }));
+  const luz = buildFurniture(normalizeFurniture({ family: "ratonas", values: { kind: "luz", style: "clasica", height: 600, drawers: 2 } }));
   assert.equal(luz.drawers, 2);
   assert.ok(luz.parts.filter((p) => p.kind === "drawer-front").every((p) => p.openShift && p.openShift[2] > 0), "los cajones salen hacia adelante");
+});
+
+test("la ambientación no es parte del mueble: ni se mide, ni se corta, ni se cobra", () => {
+  for (const spec of SPECS) {
+    const config = defaultFurniture(spec.id);
+    const { parts, assembly } = buildFurniture(config);
+    assert.ok(parts.every((p) => !p.decor), `${spec.id}: la lista de piezas trae ambientación`);
+    const drawn = assembly.runs[0].parts;
+    assert.ok(drawn.some((p) => p.decor), `${spec.id}: se dibuja sin ningún contexto`);
+    assert.ok(drawn.filter((p) => p.decor).every((p) => p.cut === null));
+  }
+  // la mesa y la ratona van en el medio del ambiente; lo demás, contra la pared
+  assert.ok(buildFurniture(defaultFurniture("mesas")).assembly.bounds.min[2] > 1500);
+  assert.ok(buildFurniture(defaultFurniture("ratonas")).assembly.bounds.min[2] > 1500);
+  assert.equal(buildFurniture(defaultFurniture("tv")).assembly.bounds.min[2], 0);
+  assert.equal(buildFurniture(defaultFurniture("bibliotecas")).assembly.bounds.min[2], 0);
+});
+
+test("un sillón al piso no tiene patas, y con patas quedan debajo del cuerpo", () => {
+  const piso = buildFurniture(normalizeFurniture({ family: "sillones", values: { base: "piso" } }));
+  assert.equal(piso.parts.filter((p) => p.label === "Pata").length, 0);
+  const patas = buildFurniture(normalizeFurniture({ family: "sillones", values: { base: "patas" } }));
+  const { min, max } = patas.assembly.bounds;
+  const legs = patas.parts.filter((p) => p.label === "Pata");
+  assert.ok(legs.length >= 4);
+  for (const l of legs) assert.ok(l.position[0] > min[0] + 40 && l.position[0] + l.size[0] < max[0] - 40 && l.position[2] > min[2] + 40, `${l.id} asoma`);
 });
