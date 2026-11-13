@@ -26,6 +26,7 @@ import { IconCheck, IconClose, IconDecor, IconHeart, IconWhatsapp } from "@/comp
 import { Logo } from "@/components/site/Logo";
 import { Dimension, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
+import { PhotoBadge, PhotoToggle, usePhotoMode } from "@/components/PhotoControls";
 import type { ViewName } from "@/components/viewer/Scene";
 import { catalog, type HandleType } from "@/lib/catalog";
 import {
@@ -107,6 +108,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
   const [xray, setXray] = useState(false);
   const [explode, setExplode] = useState(false);
   const [lights, setLights] = useState(false);
+  const photo = usePhotoMode();
   const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({
     mode: "room",
     wall: WALL_COLORS[0].hex,
@@ -354,8 +356,11 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
             view={view}
             onReady={() => setTimeout(() => setReady(true), 120)}
             captureRef={captureRef}
+            photo={photo.on}
+            onPhoto={photo.onStatus}
           />
         </div>
+        <PhotoBadge status={photo.status} />
 
         <Watermark />
 
@@ -390,7 +395,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
             >
               <IconHeart width={17} height={17} />
               <span className="hidden sm:inline">Mis diseños</span>
-              {savedCount > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-ink px-1.5 text-[0.68rem] font-semibold leading-5 text-surface">{savedCount}</span>}
+              {savedCount > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-ink px-1.5 text-[0.68rem] font-semibold leading-5 text-on-dark">{savedCount}</span>}
             </Link>
           )}
         </header>
@@ -431,6 +436,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                 <span className="hidden sm:inline">Ver adentro</span>
               </button>
             )}
+            <PhotoToggle on={photo.on} toggle={photo.toggle} />
             <button type="button" className="tool" aria-pressed={explode} onClick={() => setExplode((x) => !x)} title="Separar las piezas">
               <IconExplode />
               <span className="hidden sm:inline">Explotar</span>
@@ -454,7 +460,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
           ))}
         </nav>
 
-        <div key={tab} className="fade-in flex-1 space-y-8 overflow-y-auto px-5 pb-36 pt-6 lg:pb-8">
+        <div key={tab} className="fade-in flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 lg:pb-8">
           {tab === "forma" && (
             <>
               <Section title="Forma">
@@ -929,18 +935,18 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
         </div>
 
         {/* precio y pedido: fijos abajo en el teléfono, al pie del panel en pantalla grande */}
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur lg:static">
+        <div className="price-bar fixed inset-x-0 bottom-0 z-30 px-4 py-2.5 lg:static">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs text-ink-2">Precio estimado</p>
-              <p className="font-display text-xl font-semibold tabular-nums sm:text-2xl">{money(Math.round(price / 1000) * 1000)}</p>
+              <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-ink-2">Precio estimado</p>
+              <p className="font-display text-lg leading-tight tabular-nums">{money(Math.round(price / 1000) * 1000)}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               {demo && (
                 <button
                   type="button"
                   onClick={() => setSaveOpen(true)}
-                  className={`btn btn-sm h-11 px-3.5 ${saved ? "btn-secondary" : "btn-ghost"}`}
+                  className={`btn btn-sm h-9 px-3 text-[0.8rem] ${saved ? "btn-secondary" : "btn-ghost"}`}
                   aria-label={saved ? "Diseño guardado: cambiar nombre o dónde está" : "Guardar este diseño"}
                   title={saved ? "Guardado" : "Guardar"}
                 >
@@ -948,12 +954,12 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                   <span className="hidden min-[420px]:inline">{saved ? "Guardado" : "Guardar"}</span>
                 </button>
               )}
-              <button type="button" onClick={openSend} className="btn btn-whatsapp btn-sm h-11 px-4">
+              <button type="button" onClick={openSend} className="btn btn-primary btn-sm h-9 px-3.5 text-[0.8rem]">
                 Enviar al taller
               </button>
             </div>
           </div>
-          <p className="mt-2 text-[11px] leading-snug text-ink-2">
+          <p className="mt-1 text-[10px] leading-snug text-ink-2">
             {catalog.brand.samplePricing
               ? "Valores orientativos de muestra. El fabricante debe confirmar medidas y costos antes de cotizar."
               : "Incluye materiales, luces y fabricación. El precio final se confirma al medir en tu casa."}
@@ -980,7 +986,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
       {saveOpen && <SaveSheet saved={saved} suggestedName={nextName("Placard")} onSave={save} onClose={() => setSaveOpen(false)} />}
 
       {toast && (
-        <div role="status" className="toast fixed inset-x-3 bottom-28 z-40 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-surface shadow-xl lg:bottom-6 lg:left-6 lg:right-auto lg:mx-0">
+        <div role="status" className="toast fixed inset-x-3 bottom-28 z-40 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-on-dark shadow-xl lg:bottom-6 lg:left-6 lg:right-auto lg:mx-0">
           <span className="flex-1">{toast.text}</span>
           {toast.href && (
             <Link href={toast.href} className="shrink-0 font-semibold underline underline-offset-4">

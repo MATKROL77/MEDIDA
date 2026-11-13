@@ -9,7 +9,7 @@ import type { Part } from "@/lib/assembly";
 
 import { BOUNCY, clampDt, doorProgress, FIRM, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
 import type { MaterialKit } from "./materials";
-import { dressWith, tintFor } from "./photo";
+import { dressWith, meterUvs, tintFor } from "./photo";
 
 export const MM = 0.001;
 
@@ -54,7 +54,6 @@ function makeTrapezoid() {
 }
 
 function updateTrapezoid(g: THREE.BufferGeometry, w: number, hl: number, hr: number, d: number) {
-  const hm = Math.max(hl, hr, 1);
   const v = [
     [0, 0, 0], [w, 0, 0], [w, hr, 0], [0, hl, 0],
     [0, 0, d], [w, 0, d], [w, hr, d], [0, hl, d],
@@ -70,7 +69,8 @@ function updateTrapezoid(g: THREE.BufferGeometry, w: number, hl: number, hr: num
     for (const k of [a, b, c, a, c, e]) {
       const p = v[k];
       pos.setXYZ(i, p[0] * MM, p[1] * MM, p[2] * MM);
-      uv.setXY(i, w ? p[0] / w : 0, p[1] / hm);
+      // en metros, con la veta vertical: la foto no se estira con la medida
+      uv.setXY(i, p[0] * MM, p[1] * MM);
       i++;
     }
   }
@@ -180,12 +180,14 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
   // un almohadón se modela a su tamaño real: así el redondeo es parejo en todos los cantos.
   // Las placas también: un canto vivo perfecto no existe, y el redondeo de 2 mm
   // es lo que agarra el brillo a lo largo del borde, como en un mueble de verdad
-  const edged = part.geometry === "box" && !part.decor && part.kind !== "led" && Math.min(...part.size) >= 2;
+  const edged = part.geometry === "box" && part.kind !== "led" && part.kind !== "glow" && Math.min(...part.size) >= 2;
   const cushion = useMemo(() => {
     if (part.geometry !== "cushion" && !edged) return null;
     const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
     const radius = part.geometry === "cushion" ? Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) : Math.min(2.2, Math.min(...part.size) * 0.22);
-    return new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
+    const g = new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
+    meterUvs(g, [sx, sy, sz], part.id);
+    return g;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
@@ -314,6 +316,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
             renderOrder={part.kind === "glow" ? 2 : part.front ? 1 : 0}
           />
         )}
+        {part.kind === "led" && <LedLight part={part} kit={kit} />}
         {part.details && part.details.length > 0 && (
           <group ref={details}>
             <Presence parts={part.details}>
@@ -324,6 +327,45 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
       </group>
     </group>
   );
+}
+
+/** brillo de una tira LED encendida en el modo foto (luminancia, como en una lámpara real) */
+const LED_NITS = 34;
+
+/**
+ * La luz de una tira LED en el modo foto: un rectángulo que emite del lado
+ * hacia donde apunta la tira. Las tiras horizontales iluminan hacia abajo; los
+ * perfiles verticales de un placard, hacia el centro del módulo. El 3D rápido
+ * no la dibuja (ahí la luz es la mancha pintada).
+ */
+function LedLight({ part, kit }: { part: Part; kit: MaterialKit }) {
+  const anim = useSceneAnim();
+  const ref = useRef<THREE.RectAreaLight>(null);
+  const [sx, sy, sz] = part.size;
+  const vertical = sy > sx && sy > sz;
+  const toRight = /L$/.test(part.id);
+  useEffect(() => {
+    const l = ref.current;
+    if (!l) return;
+    if (vertical) {
+      l.position.set(((toRight ? 1 : -1) * (sx / 2 + 1)) * MM, 0, 0);
+      l.rotation.set(0, toRight ? -Math.PI / 2 : Math.PI / 2, 0);
+      l.width = sz * MM;
+      l.height = sy * MM;
+    } else {
+      l.position.set(0, -(sy / 2 + 1) * MM, 0);
+      l.rotation.set(-Math.PI / 2, 0, 0);
+      l.width = sx * MM;
+      l.height = sz * MM;
+    }
+  }, [vertical, toRight, sx, sy, sz]);
+  useFrame(() => {
+    const l = ref.current;
+    if (!l) return;
+    l.color.copy(kit.led.emissive);
+    l.intensity = LED_NITS * anim.lights.v;
+  });
+  return <rectAreaLight ref={ref} visible={false} userData={{ photoOnly: true }} />;
 }
 
 /**

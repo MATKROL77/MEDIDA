@@ -1,32 +1,47 @@
 @import "tailwindcss";
 
 /*
- * MEDIDA: blanco y marrón. El marrón es oscuro, de chocolate o de roble
- * tostado: es el color del texto, de los botones y del acento. Los nombres
- * dicen qué son, no qué color tienen, para poder cambiar la marca sin tocar
- * componentes.
+ * MEDIDA: cuero beige, luz azul marino y madera rojiza.
  *
- * Contraste medido contra blanco: ink 15:1, ink-2 6,4:1, accent 7,6:1.
+ * El fondo es un cuero beige iluminado (public/img/cuero.webp, ver
+ * scripts/leather.mjs) con dos luces encima: una cálida y una azul marino. El
+ * texto es azul noche, casi negro. Lo que se toca (botones, el tramo de una
+ * medida, la opción elegida) es de madera rojiza. Las superficies son vidrio:
+ * dejan ver el cuero, apenas desenfocado.
+ *
+ * Los nombres dicen qué son, no qué color tienen, para poder cambiar la marca
+ * sin tocar componentes. Contraste medido sobre el cuero (#cdba9e): ink 11:1,
+ * ink-2 6:1; texto claro sobre la madera 8:1.
  */
 @theme {
-  --color-paper: #f6f1ea;
-  --color-surface: #ffffff;
-  --color-ink: #2b1a10;
-  --color-ink-2: #6a584b;
-  --color-ink-3: #9a897c;
-  --color-line: #e7ddd1;
-  --color-accent: #6b3f22;
-  --color-accent-strong: #4a2a15;
-  --color-accent-soft: #f2e8dd;
+  --color-leather: #cdba9e;
+  /* vidrio: lo blanco deja ver el cuero */
+  --color-paper: rgb(255 250 242 / 0.3);
+  --color-surface: rgb(255 252 247 / 0.5);
+  /* para lo que no puede ser transparente: el texto de un campo, un menú */
+  --color-solid: #f7f1e8;
+  /* texto sobre madera o azul */
+  --color-on-dark: #fbf5ec;
+  --color-ink: #141a2e;
+  --color-ink-2: #3c4156;
+  --color-ink-3: #6d6c76;
+  --color-line: rgb(20 26 46 / 0.14);
+  --color-accent: #1f3466;
+  --color-accent-strong: #142449;
+  --color-accent-soft: rgb(31 52 102 / 0.1);
+  --color-navy: #142449;
+  /* madera rojiza, de caoba: botones y detalles chicos */
+  --color-wood: #7d3820;
+  --color-wood-strong: #5c2613;
   --color-ok: #2f6b4f;
-  --color-whatsapp: #1a7f48;
+  --color-whatsapp: #7d3820;
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   /* títulos con serif de imprenta: la del sistema, sin bajar ninguna fuente */
   --font-display: "Times New Roman", Times, "Liberation Serif", "Noto Serif", Georgia, serif;
 
-  --radius-card: 1.25rem;
-  --radius-tile: 1.75rem;
+  --radius-card: 1.1rem;
+  --radius-tile: 1.5rem;
   /* curva con un rebote chiquito: la misma sensación elástica que el 3D */
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   /* sale rápido y frena largo: entradas de secciones y hojas */
@@ -34,7 +49,8 @@
 }
 
 html {
-  background: var(--color-surface);
+  background: var(--color-leather) url("/img/cuero.webp") repeat;
+  background-size: 760px;
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -45,10 +61,31 @@ html {
 body {
   font-family: var(--font-sans);
   font-feature-settings: "cv11", "ss01";
+  position: relative;
+  isolation: isolate;
+}
+
+/*
+ * Las luces sobre el cuero: una cálida que entra de arriba a la izquierda y
+ * dos azul marino, abajo a la derecha y a la izquierda. Quedan fijas mientras
+ * la página corre, como la luz de un salón.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70vmax 55vmax at 8% -12%, rgb(255 236 206 / 0.42), transparent 62%),
+    radial-gradient(60vmax 60vmax at 108% 112%, rgb(18 34 78 / 0.58), transparent 64%),
+    radial-gradient(45vmax 40vmax at -12% 96%, rgb(18 34 78 / 0.36), transparent 62%),
+    radial-gradient(40vmax 30vmax at 92% 18%, rgb(30 52 110 / 0.16), transparent 70%),
+    radial-gradient(120vmax 90vmax at 50% 40%, transparent 55%, rgb(20 22 36 / 0.22));
 }
 
 ::selection {
-  background: var(--color-accent-soft);
+  background: rgb(31 52 102 / 0.2);
 }
 
 :focus-visible {
@@ -75,9 +112,10 @@ body {
   .display-xl {
     font-family: var(--font-display);
     font-weight: 400;
-    font-size: clamp(2.7rem, 7.6vw, 5.9rem);
-    line-height: 1;
-    letter-spacing: -0.025em;
+    font-size: clamp(1.8rem, 7.4vw, 5.4rem);
+    line-height: 0.98;
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
   }
   .display-lg {
     font-family: var(--font-display);
@@ -104,8 +142,10 @@ body {
 
   .card {
     background: var(--color-surface);
-    border: 1px solid var(--color-line);
+    border: 1px solid rgb(255 255 255 / 0.4);
     border-radius: var(--radius-card);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    backdrop-filter: blur(10px) saturate(1.2);
   }
   /*
    * Vidrio: deja ver lo de atrás desenfocado. Se usa en lo que flota sobre la
@@ -113,37 +153,38 @@ body {
    * despegue del fondo.
    */
   .glass {
-    background: color-mix(in srgb, var(--color-surface) 62%, transparent);
-    -webkit-backdrop-filter: blur(22px) saturate(1.5);
-    backdrop-filter: blur(22px) saturate(1.5);
-    border: 1px solid rgb(255 255 255 / 0.55);
+    background: rgb(255 252 247 / 0.26);
+    -webkit-backdrop-filter: blur(14px) saturate(1.35);
+    backdrop-filter: blur(14px) saturate(1.35);
+    border: 1px solid rgb(255 255 255 / 0.38);
     box-shadow:
-      0 1px 0 rgb(255 255 255 / 0.5) inset,
-      0 10px 34px rgb(43 26 16 / 0.12);
+      0 1px 0 rgb(255 255 255 / 0.35) inset,
+      0 12px 36px rgb(16 22 44 / 0.14);
   }
   .glass-strong {
-    background: color-mix(in srgb, var(--color-surface) 84%, transparent);
-    -webkit-backdrop-filter: blur(30px) saturate(1.6);
-    backdrop-filter: blur(30px) saturate(1.6);
-    border: 1px solid rgb(255 255 255 / 0.6);
+    background: rgb(250 245 237 / 0.62);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid rgb(255 255 255 / 0.45);
   }
-  /* el fondo de una ventana: la página sigue ahí, fuera de foco */
+  /* el fondo de una ventana: la página sigue ahí, apenas fuera de foco */
   .veil {
-    background: rgb(58 36 22 / 0.3);
-    -webkit-backdrop-filter: blur(18px) saturate(1.3);
-    backdrop-filter: blur(18px) saturate(1.3);
+    background: rgb(14 22 44 / 0.26);
+    -webkit-backdrop-filter: blur(5px) saturate(1.1);
+    backdrop-filter: blur(5px) saturate(1.1);
   }
 
   /* bloque gris sin borde: el contenedor de una imagen o de una idea */
   .tile {
     background: var(--color-paper);
+    border: 1px solid rgb(255 255 255 / 0.32);
     border-radius: var(--radius-tile);
   }
 
   .eyebrow {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 600;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--color-accent);
   }
@@ -170,40 +211,50 @@ body {
     padding: 0.5rem 1rem;
     font-size: 0.875rem;
   }
-  .btn-primary {
-    background: var(--color-ink);
-    color: var(--color-surface);
+  /*
+   * Madera rojiza: la chapa de nogal del 3D, teñida de caoba, con un brillo de
+   * laca arriba. Es lo único de madera en la página: se reconoce como lo que se toca.
+   */
+  .btn-primary,
+  .btn-whatsapp {
+    color: var(--color-on-dark);
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0) 46%, rgb(0 0 0 / 0.12)),
+      linear-gradient(var(--color-wood), var(--color-wood)),
+      url("/tex/nogal.webp") center / 220px;
+    background-blend-mode: normal, multiply, normal;
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 0.22) inset,
+      0 -1px 0 rgb(0 0 0 / 0.18) inset,
+      0 6px 18px rgb(92 38 19 / 0.28);
   }
-  .btn-primary:hover {
-    background: #44291a;
+  .btn-primary:hover,
+  .btn-whatsapp:hover {
+    filter: brightness(1.08);
   }
   .btn-secondary {
-    background: #ece3d8;
+    background: rgb(255 252 247 / 0.42);
     color: var(--color-ink);
+    border: 1px solid rgb(255 255 255 / 0.45);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
   }
   .btn-secondary:hover {
-    background: #e1d5c7;
+    background: rgb(255 252 247 / 0.62);
   }
   .btn-ghost {
     border: 1px solid var(--color-line);
-    background: var(--color-surface);
+    background: rgb(255 252 247 / 0.22);
   }
   .btn-ghost:hover {
-    border-color: var(--color-ink-3);
-  }
-  .btn-whatsapp {
-    background: var(--color-whatsapp);
-    color: #fff;
-  }
-  .btn-whatsapp:hover {
-    background: #156a3c;
+    border-color: rgb(20 26 46 / 0.35);
   }
   .btn-light {
-    background: #fff;
+    background: var(--color-solid);
     color: var(--color-ink);
   }
   .btn-light:hover {
-    background: #ece3d8;
+    background: #fff;
   }
   .btn-outline-light {
     border: 1px solid rgb(255 255 255 / 0.28);
@@ -247,18 +298,20 @@ body {
     letter-spacing: 0.01em;
   }
   .badge-live {
-    background: #e7f3ec;
-    color: #1d5c3c;
+    background: rgb(31 52 102 / 0.1);
+    color: var(--color-accent-strong);
+    border: 1px solid rgb(31 52 102 / 0.14);
   }
   .badge-live::before {
     content: "";
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 999px;
-    background: #2f8f5b;
+    background: var(--color-wood);
+    box-shadow: 0 0 0 3px rgb(125 56 32 / 0.18);
   }
   .badge-dev {
-    background: #ece3d8;
+    background: rgb(255 252 247 / 0.4);
     color: var(--color-ink-2);
   }
 
@@ -281,9 +334,11 @@ body {
     color: var(--color-ink-2);
   }
   .segment > button[aria-pressed="true"] {
-    background: var(--color-surface);
-    color: var(--color-ink);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+    background: rgb(255 252 247 / 0.85);
+    color: var(--color-wood-strong);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.08),
+      0 0 0 1px rgb(125 56 32 / 0.25);
   }
   .segment > button:disabled {
     opacity: 0.35;
@@ -311,12 +366,12 @@ body {
   .range::-webkit-slider-runnable-track {
     height: 4px;
     border-radius: 999px;
-    background: linear-gradient(to right, var(--color-accent) var(--pct, 50%), var(--color-line) var(--pct, 50%));
+    background: linear-gradient(to right, var(--color-wood) var(--pct, 50%), var(--color-line) var(--pct, 50%));
   }
   .range::-moz-range-track {
     height: 4px;
     border-radius: 999px;
-    background: linear-gradient(to right, var(--color-accent) var(--pct, 50%), var(--color-line) var(--pct, 50%));
+    background: linear-gradient(to right, var(--color-wood) var(--pct, 50%), var(--color-line) var(--pct, 50%));
   }
   .range::-webkit-slider-thumb {
     appearance: none;
@@ -324,8 +379,8 @@ body {
     width: 20px;
     height: 20px;
     border-radius: 999px;
-    background: var(--color-surface);
-    border: 2px solid var(--color-accent);
+    background: var(--color-solid);
+    border: 2px solid var(--color-wood);
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
     transition: transform 220ms var(--ease-spring);
   }
@@ -333,8 +388,8 @@ body {
     width: 18px;
     height: 18px;
     border-radius: 999px;
-    background: var(--color-surface);
-    border: 2px solid var(--color-accent);
+    background: var(--color-solid);
+    border: 2px solid var(--color-wood);
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
   }
   .range:active::-webkit-slider-thumb {
@@ -378,11 +433,11 @@ body {
     gap: 0.25rem;
     padding: 0.35rem;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-surface) 66%, transparent);
-    -webkit-backdrop-filter: blur(22px) saturate(1.5);
-    backdrop-filter: blur(22px) saturate(1.5);
-    border: 1px solid rgb(255 255 255 / 0.55);
-    box-shadow: 0 8px 28px rgb(43 26 16 / 0.14);
+    background: rgb(255 252 247 / 0.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.35);
+    backdrop-filter: blur(14px) saturate(1.35);
+    border: 1px solid rgb(255 255 255 / 0.4);
+    box-shadow: 0 10px 30px rgb(16 22 44 / 0.16);
   }
   .tool {
     display: inline-flex;
@@ -402,14 +457,18 @@ body {
   }
   .tool:hover {
     color: var(--color-ink);
-    background: var(--color-paper);
+    background: rgb(255 252 247 / 0.45);
   }
   .tool:active {
     transform: scale(0.92);
   }
   .tool[aria-pressed="true"] {
-    background: var(--color-ink);
-    color: var(--color-surface);
+    color: var(--color-on-dark);
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.14), rgb(255 255 255 / 0) 50%),
+      linear-gradient(var(--color-wood), var(--color-wood)),
+      url("/tex/nogal.webp") center / 160px;
+    background-blend-mode: normal, multiply, normal;
   }
   .tool:disabled {
     opacity: 0.35;
@@ -425,15 +484,17 @@ body {
     max-width: 100%;
     padding: 0.6rem 0.75rem;
     border-radius: 1.6rem;
-    background: var(--color-paper);
+    background: rgb(255 252 247 / 0.3);
+    border: 1px solid rgb(255 255 255 / 0.38);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
   }
   @media (min-width: 640px) {
     .dock {
       flex-wrap: nowrap;
       padding: 0.35rem 0.5rem;
       border-radius: 999px;
-      background: color-mix(in srgb, var(--color-surface) 92%, transparent);
-      backdrop-filter: blur(14px);
+      background: rgb(255 252 247 / 0.34);
       box-shadow:
         0 1px 2px rgb(0 0 0 / 0.06),
         0 8px 28px rgb(17 18 20 / 0.12);
@@ -444,6 +505,37 @@ body {
     height: 1.4rem;
     background: var(--color-line);
     margin: 0 0.15rem;
+  }
+
+  /* cuánto le falta a la foto realista: una píldora arriba a la derecha del visor */
+  .photo-badge {
+    position: absolute;
+    right: 0.85rem;
+    bottom: 4.6rem;
+    z-index: 10;
+    overflow: hidden;
+    border-radius: 999px;
+    padding: 0.4rem 0.85rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--color-ink);
+    background: color-mix(in srgb, var(--color-surface) 55%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    backdrop-filter: blur(16px) saturate(1.4);
+    border: 1px solid rgb(255 255 255 / 0.45);
+    pointer-events: none;
+    animation: fade-in 320ms ease both;
+  }
+  .photo-badge-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--color-wood);
+    transform-origin: left;
+    transition: transform 400ms ease;
   }
 
   /* solapas del panel */
@@ -466,7 +558,7 @@ body {
     bottom: -1px;
     height: 2px;
     border-radius: 2px;
-    background: var(--color-accent);
+    background: var(--color-wood);
     transform: scaleX(0);
     transition: transform 380ms var(--ease-spring);
   }
@@ -479,7 +571,7 @@ body {
     width: 100%;
     border-radius: 0.85rem;
     border: 1px solid var(--color-line);
-    background: var(--color-surface);
+    background: rgb(255 252 247 / 0.6);
     padding: 0.8rem 1rem;
     font-size: 1rem;
     transition:
@@ -492,6 +584,7 @@ body {
   .field:focus {
     outline: none;
     border-color: var(--color-accent);
+    background: rgb(255 252 247 / 0.82);
     box-shadow: 0 0 0 3px var(--color-accent-soft);
   }
 
@@ -587,7 +680,7 @@ body {
     animation: window-in 520ms var(--ease-out) both;
   }
   .shimmer {
-    background: linear-gradient(100deg, var(--color-paper) 30%, var(--color-surface) 50%, var(--color-paper) 70%);
+    background: linear-gradient(100deg, rgb(255 252 247 / 0.2) 30%, rgb(255 252 247 / 0.5) 50%, rgb(255 252 247 / 0.2) 70%);
     background-size: 220% 100%;
     animation: shimmer 1.2s linear infinite;
   }
@@ -697,6 +790,9 @@ body {
   body {
     background: #fff;
   }
+  body::before {
+    display: none;
+  }
   .card {
     break-inside: avoid;
   }
@@ -710,4 +806,67 @@ body {
   to {
     width: 100%;
   }
+}
+
+/* la barra de precio del configurador: chica, de vidrio, sin tapar el mueble */
+.price-bar {
+  background: rgb(250 245 237 / 0.58);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border-top: 1px solid rgb(255 255 255 / 0.45);
+}
+@media (min-width: 1024px) {
+  .price-bar {
+    background: rgb(255 252 247 / 0.22);
+    border-top: 1px solid var(--color-line);
+  }
+}
+
+/* la portada: un marco de vidrio alrededor de la foto del mueble */
+.hero-stage {
+  border-radius: 2rem;
+  background: #d9d4cd;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.4),
+    0 30px 90px rgb(18 34 78 / 0.34),
+    0 2px 0 rgb(255 255 255 / 0.25) inset;
+}
+.hero-chip {
+  border-radius: 1rem;
+  padding: 0.6rem 0.85rem;
+  background: rgb(255 252 247 / 0.32);
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  backdrop-filter: blur(12px) saturate(1.3);
+  border: 1px solid rgb(255 255 255 / 0.42);
+}
+
+/* una línea fina con brillo: separa sin pesar */
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(20 26 46 / 0.22) 20%, rgb(20 26 46 / 0.22) 80%, transparent);
+}
+
+/* una muestra de material: la foto de verdad, a escala, con su nombre */
+.material-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.1rem;
+  aspect-ratio: 3 / 4;
+  border: 1px solid rgb(255 255 255 / 0.38);
+  box-shadow: 0 14px 34px rgb(14 22 44 / 0.18);
+  transition: transform 500ms var(--ease-out);
+}
+.material-tile:hover {
+  transform: translateY(-4px);
+}
+.material-tile > span {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 2.2rem 0.85rem 0.75rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-on-dark);
+  background: linear-gradient(transparent, rgb(12 16 30 / 0.62));
 }

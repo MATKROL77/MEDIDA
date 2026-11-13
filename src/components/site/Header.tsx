@@ -69,7 +69,7 @@ export function Header() {
           >
             <IconHeart />
             {saved > 0 && (
-              <span className="absolute right-0.5 top-0.5 grid min-w-[1.1rem] place-items-center rounded-full bg-ink px-1 text-[0.62rem] font-semibold leading-[1.1rem] text-surface">
+              <span className="absolute right-0.5 top-0.5 grid min-w-[1.1rem] place-items-center rounded-full bg-ink px-1 text-[0.62rem] font-semibold leading-[1.1rem] text-on-dark">
                 {saved}
               </span>
             )}
@@ -92,7 +92,7 @@ export function Header() {
       </div>
 
       {menu && (
-        <div id="menu-principal" className="fade-in absolute inset-x-0 top-full h-[calc(100dvh-3.5rem)] overflow-y-auto border-t border-line bg-surface md:hidden">
+        <div id="menu-principal" className="fade-in absolute inset-x-0 top-full h-[calc(100dvh-3.5rem)] overflow-y-auto border-t border-line glass-strong md:hidden">
           <nav aria-label="Principal" className="wrap flex flex-col py-4">
             {NAV.map((item) => (
               <Link key={item.href} href={item.href} onClick={() => setMenu(false)} className="border-b border-line py-4 font-display text-2xl font-semibold tracking-tight">

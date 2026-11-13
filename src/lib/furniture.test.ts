@@ -212,3 +212,13 @@ test("cama: las restricciones apagan lo que no se puede", () => {
   assert.ok(sinGuardado.parts.some((p) => p.label === "Tabla del elástico"), "sin guardado, el colchón va sobre tablas");
   assert.ok(!sinGuardado.parts.some((p) => p.label === "Piso falso"));
 });
+
+test("el sillón de cuero cuesta más que el de tela, y la portada arma un sillón válido", async () => {
+  const { HERO_SOFA } = await import("./presets.ts");
+  const hero = normalizeFurniture(HERO_SOFA);
+  assert.deepEqual(hero, HERO_SOFA, "la portada usa valores que la familia admite");
+  const tela = furniturePrice({ ...hero, fabric: "arena" });
+  const cuero = furniturePrice({ ...hero, fabric: "suela" });
+  assert.ok(cuero > tela, `cuero ${cuero} no supera a tela ${tela}`);
+  assert.ok(buildFurniture(hero).parts.length > 0);
+});

@@ -223,7 +223,7 @@ function Pref({ title, body, checked, disabled, onChange }: { title: string; bod
         <span className="relative mt-0.5 inline-flex shrink-0">
           <input type="checkbox" className="peer sr-only" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
           <span className={`h-6 w-11 rounded-full bg-line transition-colors duration-300 peer-checked:bg-ink peer-focus-visible:ring-2 peer-focus-visible:ring-accent/50 ${disabled ? "opacity-50" : ""}`} />
-          <span className="toggle-knob absolute left-0.5 top-0.5 size-5 rounded-full bg-surface shadow-sm peer-checked:translate-x-5" />
+          <span className="toggle-knob absolute left-0.5 top-0.5 size-5 rounded-full bg-solid shadow-sm peer-checked:translate-x-5" />
         </span>
       </label>
     </li>

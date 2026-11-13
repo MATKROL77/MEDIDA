@@ -57,7 +57,7 @@ export default async function ServicePage({ params }: Props) {
           {service.steps.map((step, i) => (
             <li key={step.title} data-reveal style={{ ["--reveal-delay" as string]: `${i * 80}ms` }}>
               <div className="flex items-center gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink font-display text-sm font-semibold text-surface">{i + 1}</span>
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink font-display text-sm font-semibold text-on-dark">{i + 1}</span>
                 {i < service.steps.length - 1 && <span className="hidden h-px flex-1 bg-line sm:block" aria-hidden />}
               </div>
               <h3 className="mt-5 font-display text-xl font-semibold tracking-tight">{step.title}</h3>

@@ -12,10 +12,12 @@ import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { IconCheck, IconClose, IconDecor, IconHeart } from "@/components/site/icons";
 import { Logo } from "@/components/site/Logo";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
+import { PhotoBadge, PhotoToggle, usePhotoMode } from "@/components/PhotoControls";
 import type { ViewName } from "@/components/viewer/Scene";
 import { fromBase64Url, toBase64Url } from "@/lib/base64url";
 import { undressed } from "@/lib/decor";
 import { addDesign, clearDraft, getDesign, nextName, readDraft, updateDesign, useDesigns, writeDraft } from "@/lib/designStore";
+import { fabricStyle } from "@/lib/swatch";
 import { FABRICS, buildFurniture, defaultFurniture, fabricById, furniturePrice, hasLed, furnitureSummary, normalizeFurniture, specById, type FurnitureConfig, type Value } from "@/lib/furniture";
 import { DEFAULT_CONFIG, type WardrobeConfig } from "@/lib/model";
 import { shrinkImage } from "@/lib/preview";
@@ -48,6 +50,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const [open, setOpen] = useState(false);
   const [explode, setExplode] = useState(false);
   const [lights, setLights] = useState(false);
+  const photo = usePhotoMode();
   // la alfombra, la tele, las lámparas: se pueden sacar para ver el mueble solo
   const [deco, setDeco] = useState(true);
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
@@ -161,8 +164,11 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
             confine
             onReady={() => setTimeout(() => setReady(true), 120)}
             captureRef={captureRef}
+            photo={photo.on}
+            onPhoto={photo.onStatus}
           />
         </div>
+        <PhotoBadge status={photo.status} />
 
         <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
           <div className="flex flex-col items-start">
@@ -184,7 +190,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           <Link href="/mis-disenos/" className="glass pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium">
             <IconHeart width={17} height={17} />
             <span className="hidden sm:inline">Mis diseños</span>
-            {designs.length > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-ink px-1.5 text-[0.68rem] font-semibold leading-5 text-surface">{designs.length}</span>}
+            {designs.length > 0 && <span className="grid min-w-5 place-items-center rounded-full bg-ink px-1.5 text-[0.68rem] font-semibold leading-5 text-on-dark">{designs.length}</span>}
           </Link>
         </header>
 
@@ -213,6 +219,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
                 <span>Luces</span>
               </button>
             )}
+            <PhotoToggle on={photo.on} toggle={photo.toggle} />
             <button type="button" className="tool" aria-pressed={explode} onClick={() => setExplode((x) => !x)} title="Separar las piezas">
               <IconExplode />
               <span className="hidden sm:inline">Explotar</span>
@@ -222,7 +229,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
       </section>
 
       <aside className="flex flex-col border-line bg-surface lg:min-h-0 lg:border-l">
-        <div className="flex-1 space-y-8 overflow-y-auto px-5 pb-36 pt-6 lg:pb-8">
+        <div className="flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 lg:pb-8">
           <Section title={spec.title} hint={summary.dimensions}>
             {spec.controls.map((c) => {
               const v = config.values[c.key];
@@ -254,7 +261,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
                 </p>
                 <div className="flex flex-wrap gap-2.5">
                   {FABRICS.map((f) => (
-                    <button key={f.id} type="button" title={f.name} aria-label={`Tapizado ${f.name}`} aria-pressed={config.fabric === f.id} onClick={() => setConfig((c) => ({ ...c, fabric: f.id }))} className={`swatch size-10 rounded-full border-2 ${config.fabric === f.id ? "border-ink" : "border-surface ring-1 ring-line"}`} style={{ background: f.color }} />
+                    <button key={f.id} type="button" title={f.name} aria-label={`Tapizado ${f.name}`} aria-pressed={config.fabric === f.id} onClick={() => setConfig((c) => ({ ...c, fabric: f.id }))} className={`swatch size-10 rounded-full border-2 ${config.fabric === f.id ? "border-wood" : "border-surface ring-1 ring-line"}`} style={fabricStyle(f)} />
                   ))}
                 </div>
               </div>
@@ -280,23 +287,23 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           <OtherConfigurators current={family} />
         </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur lg:static">
+        <div className="price-bar fixed inset-x-0 bottom-0 z-30 px-4 py-2.5 lg:static">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs text-ink-2">Precio estimado</p>
-              <p className="font-display text-xl font-semibold tabular-nums sm:text-2xl">{money(Math.round(shownPrice / 1000) * 1000)}</p>
+              <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-ink-2">Precio estimado</p>
+              <p className="font-display text-lg leading-tight tabular-nums">{money(Math.round(shownPrice / 1000) * 1000)}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button type="button" onClick={() => setSaveOpen(true)} className={`btn btn-sm h-11 px-3.5 ${saved ? "btn-secondary" : "btn-ghost"}`} aria-label={saved ? "Diseño guardado: cambiar nombre o dónde está" : "Guardar este diseño"}>
+              <button type="button" onClick={() => setSaveOpen(true)} className={`btn btn-sm h-9 px-3 text-[0.8rem] ${saved ? "btn-secondary" : "btn-ghost"}`} aria-label={saved ? "Diseño guardado: cambiar nombre o dónde está" : "Guardar este diseño"}>
                 {saved ? <IconCheck /> : <IconHeart />}
                 <span className="hidden min-[420px]:inline">{saved ? "Guardado" : "Guardar"}</span>
               </button>
-              <button type="button" onClick={() => setSendOpen(true)} className="btn btn-whatsapp btn-sm h-11 px-4">
+              <button type="button" onClick={() => setSendOpen(true)} className="btn btn-primary btn-sm h-9 px-3.5 text-[0.8rem]">
                 Enviar al taller
               </button>
             </div>
           </div>
-          <p className="mt-2 text-[11px] leading-snug text-ink-2">Valores orientativos de muestra. El fabricante debe confirmar medidas y costos antes de cotizar.</p>
+          <p className="mt-1 text-[10px] leading-snug text-ink-2">Valores orientativos de muestra. El fabricante debe confirmar medidas y costos antes de cotizar.</p>
         </div>
       </aside>
 
@@ -305,7 +312,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
       )}
       {saveOpen && <SaveSheet saved={saved} suggestedName={nextName(spec.label)} onSave={save} onClose={() => setSaveOpen(false)} />}
       {toast && (
-        <div role="status" className="toast fixed inset-x-3 bottom-28 z-40 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-surface shadow-xl lg:bottom-6 lg:left-6 lg:right-auto lg:mx-0">
+        <div role="status" className="toast fixed inset-x-3 bottom-28 z-40 mx-auto flex max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-sm text-on-dark shadow-xl lg:bottom-6 lg:left-6 lg:right-auto lg:mx-0">
           <span className="flex-1">{toast.text}</span>
           {toast.href && (
             <Link href={toast.href} className="shrink-0 font-semibold underline underline-offset-4">

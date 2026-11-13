@@ -4,7 +4,7 @@ import { ContactShadows, Edges, Environment, Lightformer, OrbitControls, Perform
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
@@ -16,6 +16,7 @@ import { drawerGroupsOf, isCovered, leavesOf, overlaps, sweep } from "@/lib/moti
 import { createKit, disposeKit, frontMaterials, GLASS_OPACITY, type MaterialKit } from "./materials";
 import { MM, PartNode, Presence } from "./PartNode";
 import type { FloorType } from "./constants";
+import { createPhotoBus, photoCapable, type PhotoBus, PhotoMode, type PhotoStatus } from "./PhotoMode";
 import { PODIUM_HEIGHT, Room, type Walls } from "./Room";
 
 export type ViewName = "front" | "three" | "side" | "top" | "back";
@@ -64,6 +65,12 @@ export type ViewerProps = {
   quality?: "alta" | "baja";
   /** cuenta los cuadros dibujados en window.__medidaFrames, para la herramienta de capturas */
   countFrames?: boolean;
+  /** modo foto: con la escena quieta, el 3D se recalcula con trazado de rayos */
+  photo?: boolean;
+  onPhoto?: (status: PhotoStatus) => void;
+  /** muestras por píxel y tope de píxeles del modo foto (la herramienta de capturas pide más) */
+  photoSamples?: number;
+  photoPixels?: number;
 };
 
 /** fondo liso de partida: un gris apenas cálido, para que la madera no se enfríe */
@@ -207,6 +214,9 @@ function sequence(
   }
 }
 
+/** intensidad del softbox del modo foto: da en el mueble la misma luz que la direccional del 3D rápido */
+const SOFTBOX_GAIN = 7.5;
+
 function KeyLight({ span, shape, rich }: { span: number; shape: WardrobeConfig["shape"]; rich: boolean }) {
   // en un ambiente armado la luz viene de un lado y el relleno baja: hay sombra y volumen
   const keyPower = rich ? 3.1 : 2.1;
@@ -214,19 +224,26 @@ function KeyLight({ span, shape, rich }: { span: number; shape: WardrobeConfig["
   const anim = useSceneAnim();
   const key = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
+  const softbox = useRef<THREE.RectAreaLight>(null);
   const side = shape === "l-right" ? -1 : 1;
+  const keyPos = useMemo(() => new THREE.Vector3(side * 4.5, 4.2, 3.6), [side]);
+  useEffect(() => softbox.current?.lookAt(0, 0.6, 0), [keyPos]);
   useFrame(() => {
     const night = 1 - 0.7 * anim.lights.v;
     if (key.current) key.current.intensity = keyPower * night;
     if (hemi.current) hemi.current.intensity = fill * night;
+    if (softbox.current) softbox.current.intensity = keyPower * SOFTBOX_GAIN * night;
   });
   const reach = Math.max(3, span * MM);
   return (
     <>
       <hemisphereLight ref={hemi} args={["#ffffff", "#d8ccbb", 0.55]} />
+      {/* en la foto la luz principal es un softbox de verdad: sombras que se abren con la distancia */}
+      <rectAreaLight ref={softbox} position={keyPos} width={2.4} height={2.4} color="#fff3e2" visible={false} userData={{ photoOnly: true }} />
       <directionalLight
         ref={key}
-        position={[side * 4.5, 4.2, 3.6]}
+        userData={{ fake: true }}
+        position={keyPos}
         intensity={2.1}
         color="#fff3e2"
         castShadow
@@ -290,7 +307,7 @@ function SelectionBox({ run, module }: { run: RunAssembly; module: number }) {
     }
   });
   return (
-    <mesh ref={ref} raycast={() => null}>
+    <mesh ref={ref} raycast={() => null} userData={{ fake: true }}>
       <boxGeometry args={[1, 1, 1]} />
       <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       <Edges color="#c06a26" lineWidth={1.8} renderOrder={5} transparent opacity={0.9} />
@@ -432,22 +449,29 @@ function CameraRig({ assembly, view, intro, sway, framing, minRadius }: { assemb
  * Captura del 3D para la tapa del PDF. Se lee justo después de que el
  * compositor dibuja el cuadro, antes de que el navegador limpie el lienzo.
  */
-function Capturer({ captureRef, countFrames }: { captureRef?: ViewerProps["captureRef"]; countFrames?: boolean }) {
+function Capturer({ captureRef, countFrames, bus }: { captureRef?: ViewerProps["captureRef"]; countFrames?: boolean; bus: PhotoBus }) {
   const gl = useThree((s) => s.gl);
   const pending = useRef<((url: string | null) => void)[]>([]);
   useEffect(() => {
     if (!captureRef) return;
-    captureRef.current = () => new Promise((resolve) => pending.current.push(resolve));
+    captureRef.current = () =>
+      new Promise((resolve) => {
+        // el modo foto no redibuja si no cambió nada: para leer el lienzo hay que pedírselo
+        bus.draw = true;
+        pending.current.push(resolve);
+      });
     return () => {
       captureRef.current = null;
     };
-  }, [captureRef]);
+  }, [captureRef, bus]);
   useFrame(() => {
     if (countFrames) {
       const w = window as unknown as { __medidaFrames?: number };
       w.__medidaFrames = (w.__medidaFrames ?? 0) + 1;
     }
     if (!pending.current.length) return;
+    // este cuadro lo dibujó el modo foto sin el pedido: se lee en el próximo
+    if (bus.busy && bus.draw) return;
     let url: string | null = null;
     try {
       url = gl.domElement.toDataURL("image/jpeg", 0.92);
@@ -455,11 +479,24 @@ function Capturer({ captureRef, countFrames }: { captureRef?: ViewerProps["captu
       url = null;
     }
     pending.current.splice(0).forEach((resolve) => resolve(url));
-  }, 2);
+  }, 3);
   return null;
 }
 
-function Effects({ hq, studio, rich }: { hq: boolean; studio: boolean; rich: boolean }) {
+function useShown(bus: PhotoBus) {
+  return useSyncExternalStore(
+    (cb) => {
+      bus.listeners.add(cb);
+      return () => bus.listeners.delete(cb);
+    },
+    () => bus.shown,
+    () => false,
+  );
+}
+
+function Effects({ hq, studio, rich, bus }: { hq: boolean; studio: boolean; rich: boolean; bus: PhotoBus }) {
+  // mientras la foto tapa todo, el compositor no dibuja: la placa de video queda para el trazado
+  const enabled = !useShown(bus);
   // en un ambiente armado, una curva de película: negros más profundos y color más lleno
   const tone = rich ? ToneMappingMode.ACES_FILMIC : ToneMappingMode.AGX;
   // sobre fondo liso el fondo es más brillante que cualquier superficie: el
@@ -469,7 +506,7 @@ function Effects({ hq, studio, rich }: { hq: boolean; studio: boolean; rich: boo
   // dos composiciones fijas: el compositor no admite hijos que aparecen y desaparecen
   if (hq)
     return (
-      <EffectComposer multisampling={4} enableNormalPass={false}>
+      <EffectComposer enabled={enabled} multisampling={4} enableNormalPass={false}>
         <N8AO aoRadius={rich ? 0.6 : 0.45} intensity={rich ? 3.4 : 2.4} distanceFalloff={0.9} quality="medium" />
         <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
         <Vignette offset={0.3} darkness={darkness} />
@@ -478,7 +515,7 @@ function Effects({ hq, studio, rich }: { hq: boolean; studio: boolean; rich: boo
     );
   // en equipos chicos se va la oclusión, que es lo más caro; el brillo de los LED queda
   return (
-    <EffectComposer multisampling={0} enableNormalPass={false}>
+    <EffectComposer enabled={enabled} multisampling={0} enableNormalPass={false}>
       {/* sin oclusión un tapizado parece plástico: en los ambientes armados queda, a media resolución */}
       {rich ? <N8AO aoRadius={0.6} intensity={3} distanceFalloff={0.9} quality="performance" halfRes /> : <></>}
       <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
@@ -494,6 +531,7 @@ function Grounding({ assembly }: { assembly: Assembly }) {
   const w = (max[0] - min[0]) * MM;
   const d = (max[2] - min[2]) * MM + 1.2;
   return (
+    <group userData={{ fake: true }}>
     <ContactShadows
       position={[((min[0] + max[0]) / 2) * MM, 0.016, (min[2] * MM + d / 2)]}
       scale={[w, d]}
@@ -504,6 +542,7 @@ function Grounding({ assembly }: { assembly: Assembly }) {
       color="#1a120c"
       frames={Infinity}
     />
+    </group>
   );
 }
 
@@ -556,7 +595,24 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   );
 }
 
-function SceneContents(props: ViewerProps & { hq: boolean }) {
+/** mientras baja la foto del estudio: una habitación clara armada con paneles de luz */
+function StudioFallback() {
+  return (
+    <Environment resolution={256} frames={1}>
+      <color attach="background" args={["#d8d2c8"]} />
+      <Lightformer form="rect" intensity={0.55} color="#9a7350" position={[0, -2.5, 0]} rotation-x={-Math.PI / 2} scale={[30, 30, 1]} />
+      <Lightformer form="rect" intensity={1.6} position={[0, 6, 1]} rotation-x={Math.PI / 2} scale={[12, 8, 1]} />
+      <Lightformer form="rect" intensity={2.6} color="#fff1df" position={[6, 2.2, 2.5]} rotation-y={-Math.PI / 2} scale={[3, 2.4, 1]} />
+      <Lightformer form="rect" intensity={0.7} color="#e8eef5" position={[-6, 2, 2]} rotation-y={Math.PI / 2} scale={[6, 3, 1]} />
+      <Lightformer form="rect" intensity={0.9} position={[0, 1.8, 7]} scale={[8, 3, 1]} />
+    </Environment>
+  );
+}
+
+/** foto HDR de un estudio fotográfico real (Poly Haven, CC0): reflejos y luz de relleno creíbles */
+export const STUDIO_HDRI = "/env/studio_small_09-1k.hdr";
+
+function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoOn: boolean; mobile: boolean }) {
   const kit = useMemo(() => createKit(props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave), [props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave]);
   useEffect(() => () => disposeKit(kit), [kit]);
   const { min, max } = props.assembly.bounds;
@@ -565,21 +621,16 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
   return (
     <>
       <AnimDriver props={props} kit={kit} />
-      {/* reflejos: una habitación clara con piso de madera, para que el espejo y el
-          metal reflejen algo creíble y no un fondo negro */}
-      <Environment resolution={256} frames={1}>
-        <color attach="background" args={["#d8d2c8"]} />
-        <Lightformer form="rect" intensity={0.55} color="#9a7350" position={[0, -2.5, 0]} rotation-x={-Math.PI / 2} scale={[30, 30, 1]} />
-        <Lightformer form="rect" intensity={1.6} position={[0, 6, 1]} rotation-x={Math.PI / 2} scale={[12, 8, 1]} />
-        <Lightformer form="rect" intensity={2.6} color="#fff1df" position={[6, 2.2, 2.5]} rotation-y={-Math.PI / 2} scale={[3, 2.4, 1]} />
-        <Lightformer form="rect" intensity={0.7} color="#e8eef5" position={[-6, 2, 2]} rotation-y={Math.PI / 2} scale={[6, 3, 1]} />
-        <Lightformer form="rect" intensity={0.9} position={[0, 1.8, 7]} scale={[8, 3, 1]} />
-      </Environment>
+      {/* reflejos y luz de relleno: la foto HDR de un estudio, para que el espejo,
+          el metal y el laqueado reflejen ventanas y paneles de luz de verdad */}
+      <Suspense fallback={<StudioFallback />}>
+        <Environment files={STUDIO_HDRI} />
+      </Suspense>
       <KeyLight span={span} shape={props.config.shape} rich={!!props.confine} />
       {/* sombras de borde difuso, que se abren con la distancia, como bajo la luz de un showroom */}
       <SoftShadows size={22} samples={10} focus={0.55} />
       <Wardrobe props={props} kit={kit} />
-      <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
+      <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway && !props.photoOn} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
       <OrbitControls
         makeDefault
         enabled={props.orbit !== "none"}
@@ -597,8 +648,9 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
         minAzimuthAngle={props.confine && wallsOf(props) !== "none" ? -1.05 : -Infinity}
         maxAzimuthAngle={props.confine && wallsOf(props) !== "none" ? 1.05 : Infinity}
       />
-      <Effects hq={props.hq} studio={props.environment.mode === "studio"} rich={!!props.confine} />
-      <Capturer captureRef={props.captureRef} countFrames={props.countFrames} />
+      <Effects hq={props.hq} studio={props.environment.mode === "studio"} rich={!!props.confine} bus={props.bus} />
+      <PhotoMode enabled={props.photoOn} bus={props.bus} onStatus={props.onPhoto} maxPixels={props.photoPixels ?? (props.mobile ? 5e5 : 1.4e6)} samples={props.photoSamples ?? (props.mobile ? 160 : 420)} />
+      <Capturer captureRef={props.captureRef} countFrames={props.countFrames} bus={props.bus} />
     </>
   );
 }
@@ -637,6 +689,10 @@ export default function Scene(props: ViewerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+  const bus = useMemo(createPhotoBus, []);
+  const [capable, setCapable] = useState(false);
+  const [mobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches);
+  const photoOn = !!props.photo && capable && !forcedLow;
   const { onReady } = props;
   // al grabar un video, el guion lee el estado de puertas, cajones y luces
   // cuadro a cuadro para poner los sonidos donde de verdad se mueven las cosas
@@ -653,29 +709,33 @@ export default function Scene(props: ViewerProps) {
         frameloop={props.paused ? "never" : "always"}
         gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
         camera={{ position: [4, 3, 7], fov: 34, near: 0.05, far: 80 }}
-        onCreated={() => onReady?.()}
+        onCreated={({ gl }) => {
+          setCapable(photoCapable(gl));
+          onReady?.();
+        }}
       >
         {/* la calidad baja sola si el equipo no llega a 60 cuadros */}
         <PerformanceMonitor
           onIncline={() => {
-            if (forcedLow || forcedHigh) return;
+            if (forcedLow || forcedHigh || bus.busy) return;
             setHq(true);
             setDpr(Math.min(maxDpr, window.devicePixelRatio));
           }}
           onDecline={() => {
-            if (forcedHigh) return;
+            // el trazado usa la placa a propósito: esos cuadros lentos no cuentan
+            if (forcedHigh || bus.busy) return;
             setHq(false);
             setDpr(1);
           }}
           flipflops={3}
           onFallback={() => {
-            if (forcedHigh) return;
+            if (forcedHigh || bus.busy) return;
             setHq(false);
             setDpr(1);
           }}
         />
         <SceneAnimContext.Provider value={anim}>
-          <SceneContents {...props} hq={hq} />
+          <SceneContents {...props} hq={hq} bus={bus} photoOn={photoOn} mobile={mobile} />
         </SceneAnimContext.Provider>
       </Canvas>
     </SceneAnimContext.Provider>

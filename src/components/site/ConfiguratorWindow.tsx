@@ -60,6 +60,10 @@ export function ConfiguratorWindow() {
   }, []);
 
   useEffect(() => setHref(null), [pathname]);
+  // lo que quedó atrás (el 3D de la portada) deja de dibujar mientras la ventana está abierta
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("medida:ventana", { detail: !!href }));
+  }, [href]);
   useEffect(() => {
     if (!href) setInside(null);
   }, [href]);

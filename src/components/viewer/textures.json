@@ -158,5 +158,16 @@
       "normal",
       "roughness"
     ]
+  },
+  "tela-cuero": {
+    "size": [
+      0.30000001192092896,
+      0.30000001192092896
+    ],
+    "grain": null,
+    "maps": [
+      "normal",
+      "roughness"
+    ]
   }
 }

@@ -63,6 +63,8 @@ export const FABRICS = [
   { id: "bordo", name: "Pana bordó", color: "#6e1f24", weave: "pana" },
   { id: "botella", name: "Pana verde botella", color: "#1f4a37", weave: "pana" },
   { id: "azul", name: "Lino azul noche", color: "#2f3d55", weave: "lino" },
+  { id: "suela", name: "Cuero suela", color: "#8a5434", weave: "cuero" },
+  { id: "cuero-negro", name: "Cuero negro", color: "#2a2624", weave: "cuero" },
 ] as const;
 
 export const fabricById = (id: string) => FABRICS.find((f) => f.id === id) ?? FABRICS[0];
@@ -959,7 +961,7 @@ export function buildFurniture(config: FurnitureConfig): FurnitureBuild {
 // ------------------------------------------------------------------ precio y resumen
 
 /** valores de muestra de lo que no sale de placa; como todo precio de la demo, hay que reemplazarlos */
-const SAMPLE = { sofaModule: 520_000, sofaArm: 140_000, sofaChaise: 260_000, leg: 9_000, metalLeg: 22_000, ironPerMeter: 14_000 };
+const SAMPLE = { sofaModule: 520_000, sofaArm: 140_000, sofaChaise: 260_000, leg: 9_000, metalLeg: 22_000, ironPerMeter: 14_000, leatherPerModule: 310_000 };
 
 /**
  * Precio estimado, con valores de muestra: la placa que consume cada pieza
@@ -988,6 +990,8 @@ export function furniturePrice(config: FurnitureConfig, build: FurnitureBuild = 
   if (config.family === "sillones") {
     const v = config.values;
     cost += (v.seats as number) * SAMPLE.sofaModule + (v.arms ? 2 * SAMPLE.sofaArm : 0) + (v.chaise !== "no" ? SAMPLE.sofaChaise : 0);
+    // el cuero cuesta más que la tela: un recargo de muestra por cuerpo
+    if (fabricById(config.fabric).weave === "cuero") cost += (v.seats as number) * SAMPLE.leatherPerModule;
   }
   return Math.ceil((cost * (1 + catalog.margin)) / 1000) * 1000;
 }

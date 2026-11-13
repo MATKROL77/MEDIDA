@@ -90,7 +90,7 @@ export function Highlights() {
                 aria-controls="exp-panel"
                 onClick={() => pick(i)}
                 className={`group flex shrink-0 items-center gap-3 rounded-full border px-4 py-2.5 text-left transition-colors duration-300 lg:w-full lg:items-start lg:rounded-2xl lg:border-0 lg:px-5 lg:py-4 ${
-                  on ? "border-ink bg-ink text-surface lg:bg-paper lg:text-ink" : "border-line text-ink-2 hover:text-ink lg:hover:bg-paper/60"
+                  on ? "border-ink bg-ink text-on-dark lg:bg-paper lg:text-ink" : "border-line text-ink-2 hover:text-ink lg:hover:bg-paper/60"
                 }`}
               >
                 <item.Icon className={`shrink-0 lg:mt-0.5 ${on ? "lg:text-accent" : ""}`} />

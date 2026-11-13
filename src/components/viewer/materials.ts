@@ -17,7 +17,7 @@ import { dressWith, tintFor, type PhotoId } from "./photo";
 /** qué terminaciones del catálogo tienen foto de verdad */
 const VENEERS: Record<string, PhotoId> = { nogal: "nogal", roble: "roble" };
 /** la trama de cada tipo de tela */
-const WEAVES: Record<string, PhotoId> = { lino: "tela-lino", pana: "tela-pana", boucle: "tela-boucle" };
+const WEAVES: Record<string, PhotoId> = { lino: "tela-lino", pana: "tela-pana", boucle: "tela-boucle", cuero: "tela-cuero" };
 
 /** pseudoaleatorio con semilla: la misma veta en cada carga */
 function rng(seed: number) {
@@ -295,8 +295,8 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
   const kit = {
     /** qué terminación va en los frentes: las piezas que la nombran la usan aunque no sean un frente */
     doorId,
-    /** tapizado: mate, sin brillo, con un tejido apenas marcado */
-    fabric: dressWith(
+    /** tapizado: mate, sin brillo, con un tejido apenas marcado; el cuero, semimate con su graneado */
+    fabric: weave === "cuero" ? leather(fabric) : dressWith(
       new THREE.MeshPhysicalMaterial({
         color: fabric,
         roughness: 0.95,
@@ -339,8 +339,25 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
   return kit;
 }
 
+/** cuero vacuno curtido: graneado fino, un brillo apagado que se abre en las curvas */
+function leather(color: string) {
+  return dressWith(
+    new THREE.MeshPhysicalMaterial({
+      color,
+      roughness: 0.58,
+      metalness: 0,
+      envMapIntensity: 0.7,
+      clearcoat: 0.22,
+      clearcoatRoughness: 0.42,
+    }),
+    "tela-cuero",
+    { normalScale: 1.1, roughness: 0.62 },
+  );
+}
+
 function glowMaterial(kind: "down" | "pool" | "fromLeft" | "fromRight") {
-  return new THREE.MeshBasicMaterial({
+  // una mancha de luz pintada: en el modo foto la luz de verdad la dan los LED
+  const m = new THREE.MeshBasicMaterial({
     map: glowTexture(kind),
     transparent: true,
     opacity: 0,
@@ -349,6 +366,8 @@ function glowMaterial(kind: "down" | "pool" | "fromLeft" | "fromRight") {
     toneMapped: false,
     side: THREE.DoubleSide,
   });
+  m.userData.fake = true;
+  return m;
 }
 
 /** materiales de frente: los que se vuelven translúcidos con rayos X */

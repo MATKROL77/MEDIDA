@@ -180,10 +180,11 @@ TV flotantes; bibliotecas con estructura de hierro o puertas de vidrio;
 sillones rectos o tipo puff, al piso o con patas. A todas menos el sillón se
 les puede sumar luz LED, que se prende en la escena.
 
-Cada mueble se dibuja en un ambiente con sentido: la mesa y la ratona en el
-medio, sobre una alfombra; el mueble de TV bajo una tele colgada; la mesa de
-luz al lado de una cama; la biblioteca con libros. Esa ambientación
-(`decor`) se dibuja pero no se mide, no se corta ni se cobra.
+Cada mueble se muestra solo, en el estudio: lo suelto sobre una tarima y lo
+que va contra la pared con un tabique detrás. La decoración (la tele sobre el
+mueble de TV, los libros, una lámpara, la ropa en el placard) se dibuja pero
+no se mide, no se corta ni se cobra, y se saca con el botón de arriba a la
+izquierda. Los sillones se tapizan en lino, pana, bouclé o cuero.
 
 Los máximos salen de lo fabricable: ninguna pieza supera la placa refilada, y
 hay una prueba que lo comprueba en todas las combinaciones. Los sillones
@@ -192,13 +193,48 @@ como todos los precios de la demo.
 
 ## Estilo
 
-Blanco y marrón chocolate (`src/app/globals.css`), títulos en la serif del
-sistema (Times New Roman y equivalentes: no se baja ninguna fuente) y texto en
-Inter. Lo que flota sobre la página (encabezado, barras, ventanas, hojas) usa
-vidrio: fondo translúcido con desenfoque (`.glass`, `.veil`).
+Cuero beige con luz azul marino y detalles de madera rojiza
+(`src/app/globals.css`). El fondo es una foto de cuero (Leather White, de Poly
+Haven, CC0) iluminada con su mapa de relieve por una luz cálida y una azul
+marino: lo arma `scripts/leather.mjs` en `public/img/cuero.webp`, una baldosa
+que se repite sin costura. Encima, fijas, dos manchas de luz azul y una cálida.
+
+El texto es azul noche. Lo que se toca (botones, el tramo de una medida, la
+opción elegida, la herramienta activa) es de madera: la chapa de nogal del 3D
+teñida de caoba, con un brillo de laca. Las superficies son vidrio: dejan ver
+el cuero apenas desenfocado. Títulos en la serif del sistema (Times New Roman
+y equivalentes, el de la portada en mayúsculas) y texto en Inter.
 
 Los configuradores se abren en una ventana sobre la página
-(`src/components/site/ConfiguratorWindow.tsx`), que queda atrás fuera de foco.
+(`src/components/site/ConfiguratorWindow.tsx`), que queda atrás apenas fuera
+de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
+
+## Realismo del 3D
+
+- **Texturas fotográficas** de Poly Haven (CC0): chapas de nogal y roble,
+  lino, pana, bouclé, lana, cuero, cemento, baldosa, pared. Las baja y las
+  achica `npm run textures` (`scripts/textures.mjs`), con su tamaño real en
+  `src/components/viewer/textures.json`. Cada pieza lleva coordenadas de
+  textura en metros (`meterUvs` en `photo.ts`) con la veta a lo largo de su
+  lado más largo: nada se estira al cambiar una medida. Créditos en
+  `public/tex/CREDITOS.md`.
+- **Estudio**: el mueble se muestra en un ciclorama, el fondo curvo sin
+  esquinas de un estudio de fotografía, con un piso de cemento que se funde en
+  él. Lo que se apoya o se cuelga de una pared tiene un tabique detrás; lo
+  suelto, una tarima baja (`Room.tsx`).
+- **Luz**: una foto HDR de un estudio real (Studio Small 09, CC0) da los
+  reflejos y el relleno; una luz principal da las sombras.
+- **Modo foto** (`PhotoMode.tsx`, con `three-gpu-pathtracer`): cuando la
+  escena se queda quieta medio segundo, el mismo 3D se recalcula con trazado
+  de rayos en la placa de video. La luz rebota de verdad, los LED iluminan lo
+  que tienen cerca (cada tira es una luz de área), la luz principal es un
+  softbox y las sombras se abren con la distancia. Se refina de a poco, con
+  un filtro que alisa el grano sin borronear cantos, y apenas algo se mueve
+  vuelve el 3D rápido. Lo que en el 3D rápido es un truco (la mancha de luz
+  pintada, la sombra de contacto) lleva `userData.fake` y el trazado no lo ve.
+  Arranca prendido en computadoras y apagado en teléfonos; el botón "Foto" lo
+  cambia y se recuerda. Necesita WebGL 2 con texturas de punto flotante: si
+  no hay, queda el 3D rápido.
 
 ## El configurador de placares
 
@@ -319,7 +355,14 @@ requiere adaptación. Los precios de la demo son de muestra
   el 3D y lo funde encima. Con ahorro de datos o movimiento reducido espera a
   que la persona lo pida. Fuera de pantalla deja de dibujar.
 - Las imágenes del sitio son capturas reales del configurador en WebP
-  (`public/img/`), entre 10 y 45 KB cada una.
+  (`public/img/`). Las de la portada salen del modo foto (`foto=1` en
+  `/render/`, ver `scripts/capture.mjs`): son la misma escena que después
+  calcula el navegador.
+- El modo foto no traba la página: calcula de a pedazos, ajusta cuántos por
+  cuadro según cómo va el equipo, tiene un tope de píxeles (menos en un
+  teléfono), deja de calcular al llegar a la cantidad de pasadas y solo vuelve
+  a pasar la imagen a pantalla cuando hay una pasada nueva. Mientras calcula,
+  el medidor de rendimiento no baja la calidad por esos cuadros.
 - La calidad del 3D se adapta sola al equipo. `/demo/?calidad=baja` fuerza el
   modo liviano y `?calidad=alta` deja todos los efectos (para grabar video; con
   esa opción el 3D deja en `window.__medidaAnim` el estado de puertas, cajones

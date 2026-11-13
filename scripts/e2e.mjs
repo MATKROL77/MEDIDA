@@ -50,6 +50,10 @@ async function visit(width, height, { consent = true } = {}) {
       if (!localStorage.getItem("medida.consent")) localStorage.setItem("medida.consent", JSON.stringify({ id: "prueba-0000", version: "2026-11", at: 1, analytics: false, marketing: false }));
     });
   }
+  // el modo foto (trazado de rayos) por software tarda minutos: se prueba aparte
+  await context.addInitScript(() => {
+    if (!localStorage.getItem("medida:foto")) localStorage.setItem("medida:foto", "0");
+  });
   const page = await context.newPage();
   // sin placa de video el 3D se dibuja por software y todo tarda más
   page.setDefaultTimeout(90_000);
@@ -145,6 +149,11 @@ for (const [width, height] of [
     const title = await page.locator("h1").boundingBox();
     const contact = await page.getByRole("link", { name: "Quiero MEDIDA para mi empresa" }).boundingBox();
     assert(stage.y < title.y && title.y < contact.y, "el orden no es configurador, título, contacto");
+  });
+
+  await check("landing: las texturas que se muestran son fotos del motor", async () => {
+    const tiles = await page.locator(".material-tile").evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundImage));
+    assert(tiles.length === 8 && tiles.every((b) => b.includes("/tex/")), `muestras: ${tiles.length}`);
   });
 
   await check("hero: el motor 3D no se baja con la página", async () => {
@@ -321,6 +330,16 @@ for (const [width, height] of [
     assert((await page.getByText(/^\$\s?[\d.]+$/).first().innerText()) === before, "sacar la decoración no puede cambiar el precio");
     await page.goto(base + "/demo/?calidad=baja", { waitUntil: "networkidle" });
     await page.getByRole("button", { name: /decoración/ }).click();
+  });
+
+  await check("configurador: el botón Foto prende y apaga el trazado de rayos, y se recuerda", async () => {
+    const foto = page.getByRole("button", { name: "Foto" });
+    const was = await foto.getAttribute("aria-pressed");
+    await foto.click();
+    assert((await foto.getAttribute("aria-pressed")) !== was, "el botón no cambió");
+    const stored = await page.evaluate(() => localStorage.getItem("medida:foto"));
+    assert(stored === (was === "true" ? "0" : "1"), `guardado: ${stored}`);
+    await foto.click();
   });
 
   await check("configurador: sin errores de página en todo el recorrido", async () => assert(errors.length === 0, errors[0]));

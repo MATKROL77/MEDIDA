@@ -48,6 +48,7 @@ const SETS = [
   { id: "tela-pana", slug: "velour_velvet", use: "detail" },
   { id: "tela-boucle", slug: "wool_boucle", use: "relief" },
   { id: "tela-lana", slug: "poly_wool_herringbone", use: "detail" },
+  { id: "tela-cuero", slug: "leather_white", use: "relief" },
 ];
 
 async function exists(file) {
@@ -137,6 +138,13 @@ await writeFile(
     "| Uso | Textura | Autor |",
     "| --- | --- | --- |",
     ...credits,
+    "",
+    "## Además",
+    "",
+    "| Uso | Recurso | Autor |",
+    "| --- | --- | --- |",
+    "| Luz y reflejos del 3D (`public/env/studio_small_09-1k.hdr`) | [Studio Small 09](https://polyhaven.com/a/studio_small_09) | Sergej Majboroda |",
+    "| Fondo de cuero del sitio (`public/img/cuero.webp`, lo arma `scripts/leather.mjs`) | [Leather White](https://polyhaven.com/a/leather_white) | Rob Tuytel |",
     "",
   ].join("\n"),
 );

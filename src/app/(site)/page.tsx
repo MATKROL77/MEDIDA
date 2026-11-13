@@ -15,6 +15,26 @@ import { site } from "@/lib/site";
  * todavía no hay, y no se inventan.
  */
 
+/** lo que hace distinto al configurador: cada cosa es real y se puede probar arriba */
+const qualities = [
+  { title: "Medida exacta", body: "Al milímetro, con las reglas de fabricación de tu taller." },
+  { title: "Texturas reales", body: "Fotografiadas, con relieve y brillo, a escala real." },
+  { title: "Luz calculada", body: "Trazado de rayos en el navegador, sin instalar nada." },
+  { title: "Directo al taller", body: "Despiece, cantos y plano de corte de lo que se ve." },
+];
+
+/** las texturas del motor, con la foto de verdad (Poly Haven, CC0) */
+const materials = [
+  { name: "Nogal", src: "/tex/nogal.webp", style: { backgroundSize: "560px" } },
+  { name: "Roble", src: "/tex/roble.webp", style: { backgroundSize: "560px" } },
+  { name: "Bouclé", src: "/tex/tela-boucle-rough.webp", style: { backgroundColor: "#d8cdb9", backgroundBlendMode: "soft-light", backgroundSize: "150px" } },
+  { name: "Pana", src: "/tex/tela-pana.webp", style: { backgroundColor: "#7a2a2c", backgroundBlendMode: "multiply", backgroundSize: "170px" } },
+  { name: "Lino", src: "/tex/tela-lino.webp", style: { backgroundColor: "#b39f82", backgroundBlendMode: "multiply", backgroundSize: "170px" } },
+  { name: "Cuero", src: "/tex/tela-cuero-rough.webp", style: { backgroundColor: "#8a5434", backgroundBlendMode: "soft-light", backgroundSize: "210px" } },
+  { name: "Cemento", src: "/tex/piso-cemento.webp", style: { backgroundSize: "420px" } },
+  { name: "Baldosa", src: "/tex/piso-baldosa.webp", style: { backgroundSize: "300px" } },
+];
+
 const steps = [
   { title: "Configura", body: "Tu cliente abre el configurador desde tu web o desde un enlace y arma el producto en 3D." },
   { title: "Personaliza", body: "Elige medidas, materiales y módulos. Cada cambio se ve en el momento." },
@@ -75,6 +95,51 @@ export default function Home() {
             </ContactLink>
             .
           </p>
+        </div>
+      </section>
+
+      {/* Lo que lo hace distinto */}
+      <section aria-label="Cualidades" className="wrap pb-6 sm:pb-10">
+        <div className="hairline" />
+        <ul className="grid gap-x-8 gap-y-6 py-8 sm:grid-cols-2 lg:grid-cols-4">
+          {qualities.map((q, i) => (
+            <li key={q.title} className="flex gap-4" data-reveal style={{ ["--reveal-delay" as string]: `${i * 70}ms` }}>
+              <span className="font-display text-sm tabular-nums text-wood">0{i + 1}</span>
+              <div>
+                <h2 className="text-[0.72rem] font-semibold uppercase tracking-[0.2em]">{q.title}</h2>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-2">{q.body}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="hairline" />
+      </section>
+
+      {/* Materiales */}
+      <section aria-labelledby="materiales" className="wrap py-16 sm:py-24">
+        <div className="grid gap-10 lg:grid-cols-[0.9fr_1.6fr] lg:items-end lg:gap-14">
+          <div data-reveal>
+            <p className="eyebrow">Materiales</p>
+            <h2 id="materiales" className="display-lg mt-4">
+              La textura hace al mueble.
+            </h2>
+            <p className="lead mt-5">
+              Cada terminación es una foto de alta resolución con su relieve y su brillo, puesta a escala real: la veta de una puerta de dos metros no es la de un cajón.
+            </p>
+            <p className="mt-4 leading-relaxed text-ink-2">Sumamos las de tu catálogo: chapas, melaminas, laqueados, telas, cueros o piedras. Las que ves acá ya están en el motor.</p>
+          </div>
+          <div className="grid grid-cols-4 gap-2.5 sm:gap-3.5">
+            {materials.map((m, i) => (
+              <div
+                key={m.name}
+                className="material-tile"
+                data-reveal
+                style={{ ["--reveal-delay" as string]: `${(i % 4) * 60}ms`, backgroundImage: `url(${m.src})`, backgroundPosition: "center", ...m.style }}
+              >
+                <span>{m.name}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -171,7 +236,7 @@ export default function Home() {
           {steps.map((step, i) => (
             <li key={step.title} className="relative" data-reveal style={{ ["--reveal-delay" as string]: `${i * 80}ms` }}>
               <div className="flex items-center gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink font-display text-sm font-semibold text-surface">{i + 1}</span>
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-ink font-display text-sm font-semibold text-on-dark">{i + 1}</span>
                 {/* la línea que une un paso con el siguiente */}
                 {i < steps.length - 1 && <span className="hidden h-px flex-1 bg-line lg:block" aria-hidden />}
               </div>

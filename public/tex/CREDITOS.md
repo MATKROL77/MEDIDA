@@ -16,3 +16,11 @@ Las genera `scripts/textures.mjs`.
 | tela-pana | [Velour Velvet](https://polyhaven.com/a/velour_velvet) | colormass, Rico Cilliers |
 | tela-boucle | [Wool Boucle](https://polyhaven.com/a/wool_boucle) | colormass, Rico Cilliers |
 | tela-lana | [Poly Wool Herringbone](https://polyhaven.com/a/poly_wool_herringbone) | colormass, Rico Cilliers |
+| tela-cuero | [Leather White](https://polyhaven.com/a/leather_white) | Rob Tuytel |
+
+## Además
+
+| Uso | Recurso | Autor |
+| --- | --- | --- |
+| Luz y reflejos del 3D (`public/env/studio_small_09-1k.hdr`) | [Studio Small 09](https://polyhaven.com/a/studio_small_09) | Sergej Majboroda |
+| Fondo de cuero del sitio (`public/img/cuero.webp`, lo arma `scripts/leather.mjs`) | [Leather White](https://polyhaven.com/a/leather_white) | Rob Tuytel |

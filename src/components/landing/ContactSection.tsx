@@ -15,7 +15,7 @@ const OPTIONS: Interest[] = ["demostracion", "configurador", "web-configurador",
 export function ContactSection({ placement = "contacto" }: { placement?: string }) {
   const [interest, setInterest] = useState<Interest>("demostracion");
   return (
-    <div className="rounded-[var(--radius-tile)] bg-ink px-6 py-12 text-surface sm:px-12 sm:py-16 lg:px-16 lg:py-20">
+    <div className="rounded-[var(--radius-tile)] bg-ink px-6 py-12 text-on-dark sm:px-12 sm:py-16 lg:px-16 lg:py-20">
       <div className="grid gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
         <div>
           <p className="text-[0.72rem] font-semibold uppercase tracking-[0.14em] text-white/60">Contacto</p>

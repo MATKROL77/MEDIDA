@@ -23,6 +23,10 @@ export type PhotoSet = { map?: THREE.Texture; normalMap?: THREE.Texture; roughne
 const loader = typeof window === "undefined" ? null : new THREE.TextureLoader();
 const sets = new Map<PhotoId, Promise<PhotoSet>>();
 
+/** cambia cada vez que un material recibe su foto: el modo foto rearma la escena cuando pasa */
+let version = 0;
+export const photoVersion = () => version;
+
 function load(url: string, srgb: boolean): Promise<THREE.Texture> {
   return new Promise((resolve, reject) =>
     loader!.load(
@@ -48,7 +52,11 @@ export function photoSet(id: PhotoId): Promise<PhotoSet> {
       e.maps.includes("color") ? load(`/tex/${id}.webp`, true) : undefined,
       e.maps.includes("normal") ? load(`/tex/${id}-nor.webp`, false) : undefined,
       e.maps.includes("roughness") ? load(`/tex/${id}-rough.webp`, false) : undefined,
-    ]).then(([map, normalMap, roughnessMap]) => ({ map, normalMap, roughnessMap }));
+    ]).then(([map, normalMap, roughnessMap]) => {
+      // las coordenadas de las piezas están en metros: la repetición lleva la foto a su medida real
+      for (const t of [map, normalMap, roughnessMap]) t?.repeat.set(1 / e.size[0], 1 / e.size[1]);
+      return { map, normalMap, roughnessMap };
+    });
     // si una textura no llega, el material se queda con su color liso: nunca negro
     p.catch(() => sets.delete(id));
     sets.set(id, p);
@@ -69,32 +77,54 @@ export function tintFor(id: PhotoId, target: string): THREE.Color {
   return new THREE.Color(clamp(want.r / base.r), clamp(want.g / base.g), clamp(want.b / base.b));
 }
 
+/** un número estable a partir de un texto: de dónde arranca la foto en cada pieza */
+function hash(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return (h >>> 0) / 4294967296;
+}
+
 /**
- * Proyecta las texturas del material según la medida real de cada pieza.
- * `tile`: cuántos metros cubre la textura. `grain`: si la veta de la foto
- * corre a lo largo de su V ("v") o de su U ("u").
+ * Coordenadas de textura en metros, a la medida real de la pieza, con la veta
+ * (la V) a lo largo de su lado más largo. Se escriben en la geometría, así
+ * valen igual para el 3D rápido y para el modo foto.
  */
-export function boxMapped<T extends THREE.Material>(material: T, tile: number[], grain: "u" | "v" | null): T {
-  const key = `box-${grain}-${tile[0].toFixed(3)}-${tile[1].toFixed(3)}`;
+export function meterUvs(geometry: THREE.BufferGeometry, size: number[], key: string) {
+  const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const nor = geometry.getAttribute("normal") as THREE.BufferAttribute;
+  if (!pos || !nor) return;
+  const g = size[0] >= size[1] && size[0] >= size[2] ? 0 : size[1] >= size[2] ? 1 : 2;
+  const ox = hash(key) * 3;
+  const oy = hash(`${key}:y`) * 3;
+  const uv = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    const p = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+    const n = [Math.abs(nor.getX(i)), Math.abs(nor.getY(i)), Math.abs(nor.getZ(i))];
+    const face = n[0] >= n[1] && n[0] >= n[2] ? 0 : n[1] >= n[2] ? 1 : 2;
+    // los dos ejes de la cara; el que va con la veta queda en V
+    const axes = [0, 1, 2].filter((a) => a !== face);
+    const along = axes.includes(g) ? g : axes[1];
+    const across = axes.find((a) => a !== along)!;
+    uv[i * 2] = p[across] + ox;
+    uv[i * 2 + 1] = p[along] + oy;
+  }
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+}
+
+/**
+ * Para lo que no tiene geometría propia (las paredes y la tarima, que son una
+ * caja escalada): las coordenadas en metros se calculan en el shader.
+ */
+export function boxMapped<T extends THREE.Material>(material: T): T {
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.boxTile = { value: new THREE.Vector2(1 / tile[0], 1 / tile[1]) };
-    shader.vertexShader = `uniform vec2 boxTile;\n${shader.vertexShader}`.replace(
+    shader.vertexShader = shader.vertexShader.replace(
       "#include <uv_vertex>",
       `#include <uv_vertex>
       {
-        // medida real de la pieza: la escala de su matriz, en metros
         vec3 sc = vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz));
         vec3 p = position * sc;
         vec3 an = abs(normal);
-        // la veta corre a lo largo del lado más largo de la pieza
-        float g = (sc.x >= sc.y && sc.x >= sc.z) ? 0.0 : (sc.y >= sc.z ? 1.0 : 2.0);
-        vec2 q;
-        if (an.x >= an.y && an.x >= an.z) q = g == 2.0 ? p.zy : p.yz;
-        else if (an.y >= an.z) q = g == 2.0 ? p.zx : p.xz;
-        else q = g == 1.0 ? p.yx : p.xy;
-        // cada pieza arranca en otro lugar de la foto: dos estantes iguales no se ven calcados
-        vec2 seed = vec2(fract(sc.x * 7.13 + sc.z * 3.71), fract(sc.y * 5.29 + sc.z * 1.87));
-        vec2 bu = ${grain === "v" ? "q.yx" : "q"} * boxTile + seed;
+        vec2 bu = (an.x >= an.y && an.x >= an.z) ? p.zy : (an.y >= an.z ? p.xz : p.xy);
         #ifdef USE_MAP
           vMapUv = (mapTransform * vec3(bu, 1.0)).xy;
         #endif
@@ -107,7 +137,7 @@ export function boxMapped<T extends THREE.Material>(material: T, tile: number[],
       }`,
     );
   };
-  material.customProgramCacheKey = () => key;
+  material.customProgramCacheKey = () => "box-meters";
   return material;
 }
 
@@ -115,9 +145,8 @@ export function boxMapped<T extends THREE.Material>(material: T, tile: number[],
  * Le pone a un material los mapas de una foto cuando terminan de bajar. Hasta
  * entonces se ve con su color liso, que ya es el del catálogo.
  */
-export function dressWith<T extends THREE.MeshStandardMaterial>(material: T, id: PhotoId, opts: { tint?: THREE.Color; normalScale?: number; roughness?: number } = {}): T {
-  const e = PHOTOS[id];
-  boxMapped(material, e.size, e.grain);
+export function dressWith<T extends THREE.MeshStandardMaterial>(material: T, id: PhotoId, opts: { tint?: THREE.Color; normalScale?: number; roughness?: number; project?: boolean } = {}): T {
+  if (opts.project) boxMapped(material);
   photoSet(id)
     .then((set) => {
       if (set.map) material.map = set.map;
@@ -129,6 +158,7 @@ export function dressWith<T extends THREE.MeshStandardMaterial>(material: T, id:
       if (opts.roughness !== undefined) material.roughness = opts.roughness;
       if (opts.tint) material.color.copy(opts.tint);
       material.needsUpdate = true;
+      version++;
     })
     .catch(() => {
       // sin la foto queda el color liso
