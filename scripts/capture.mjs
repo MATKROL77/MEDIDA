@@ -18,7 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DEFAULT_CONFIG, normalize } from "../src/lib/model.ts";
-import { HERO_FRAMING, HERO_SOFA } from "../src/lib/presets.ts";
+import { HERO_FRAMING, HERO_SOFA, HERO_SOFA_FRAMING } from "../src/lib/presets.ts";
 import { encodeConfig } from "../src/lib/share.ts";
 
 const require = createRequire(import.meta.url);
@@ -42,14 +42,14 @@ const mod = (layout, extra = {}) => ({ layout, shelves: 0, drawers: 0, width: 0,
 const run = (width, modules) => [{ width, modules }];
 const FONDO = `f6f1ea&encuadre=${HERO_FRAMING}`;
 /** la portada: el sillón curvo, en el showroom, calculado con trazado de rayos */
-const SOFA = `f=sillones&c=${Buffer.from(JSON.stringify(HERO_SOFA)).toString("base64url")}&ambiente=habitacion&piso=cemento&encuadre=${HERO_FRAMING}`;
+const SOFA = `f=sillones&c=${Buffer.from(JSON.stringify(HERO_SOFA)).toString("base64url")}&ambiente=habitacion&encuadre=${HERO_SOFA_FRAMING}&deco=0`;
 /** muestras por píxel de las fotos calculadas: sin placa de video tarda, pero sale limpia */
 const PHOTO = (samples) => `&foto=1&muestras=${samples}&px=4000000`;
 
 /** cada imagen: de dónde sale, a qué tamaño se dibuja y a qué ancho se guarda */
 const SHOTS = [
-  { name: "hero", query: `${SOFA}${PHOTO(160)}`, size: [1400, 700], width: 1400, photo: true },
-  { name: "hero-movil", query: `${SOFA}${PHOTO(140)}`, size: [700, 875], width: 700, photo: true },
+  { name: "hero", query: `${SOFA}${PHOTO(150)}`, size: [1400, 700], width: 1400, photo: true },
+  { name: "hero-movil", query: `${SOFA}${PHOTO(130)}`, size: [700, 875], width: 700, photo: true },
   {
     name: "exp-dimensiones",
     query: `c=${cfg({ runs: run(3400, [mod("hanging"), mod("drawers-shelves", { shelves: 3, drawers: 3 }), mod("double-hanging"), mod("shelves", { shelves: 4 })]) })}&fondo=${FONDO}`,
@@ -72,11 +72,11 @@ const SHOTS = [
   },
   // las otras familias, cada una en su ambiente
   { name: "familia-mesas", query: "f=mesas&ambiente=habitacion&encuadre=0.82&pared=tiza", settle: 14_000 },
-  { name: "familia-ratonas", query: "f=ratonas&ambiente=habitacion&encuadre=0.85&pared=arena&piso=cemento", settle: 14_000 },
+  { name: "familia-ratonas", query: "f=ratonas&ambiente=habitacion&encuadre=0.85&pared=arena", settle: 14_000 },
   { name: "familia-tv", query: "f=tv&ambiente=habitacion&encuadre=0.7&pared=arena&luces=1", settle: 18_000 },
   { name: "familia-bibliotecas", query: "f=bibliotecas&ambiente=habitacion&encuadre=0.8&pared=tiza", settle: 14_000 },
-  { name: "familia-camas", query: "f=camas&ambiente=habitacion&encuadre=0.8&pared=arena&piso=pinotea&luces=1", settle: 16_000 },
-  { name: "familia-sillones", query: "f=sillones&ambiente=habitacion&encuadre=0.75&pared=tiza&piso=cemento", settle: 14_000 },
+  { name: "familia-camas", query: "f=camas&ambiente=habitacion&encuadre=0.8&pared=arena&luces=1", settle: 16_000 },
+  { name: "familia-sillones", query: "f=sillones&ambiente=habitacion&encuadre=0.75&pared=tiza", settle: 14_000 },
 ];
 
 await mkdir(out, { recursive: true });
@@ -98,8 +98,16 @@ async function grab(url, [w, h], settle, photo) {
     return window.__medidaFrames;
   });
   await page.waitForFunction((n) => window.__medidaFrames >= n + 4, before, { timeout: 600_000, polling: 500 });
-  // con trazado de rayos: hasta que la foto termine de calcularse
-  if (photo) await page.waitForFunction(() => window.__medidaPhoto?.state === "done", null, { timeout: 4 * 3600_000, polling: 5000 });
+  // con trazado de rayos: hasta que la foto termine de calcularse, y se lee del lienzo
+  // en el mismo cuadro en que se dibuja (una captura de pantalla puede vencerse
+  // mientras la placa por software sigue ocupada)
+  if (photo) {
+    await page.waitForFunction(() => window.__medidaPhoto?.state === "done", null, { timeout: 4 * 3600_000, polling: 5000 });
+    const url = await page.evaluate(() => window.__medidaRender.capture());
+    await page.close();
+    if (!url) throw new Error("el 3D no devolvió la imagen");
+    return Buffer.from(url.split(",")[1], "base64");
+  }
   await page.evaluate(() => window.__medidaRender.pause());
   await page.waitForTimeout(1500);
   const png = await page.screenshot({ type: "png", timeout: 120_000 });
@@ -130,37 +138,34 @@ if (!only || only === "orden") {
 
 // imagen para compartir en redes (1200 × 630) e íconos, armados sobre la captura del hero
 if (!only || only === "og") {
-  // el mueble va a la derecha y el texto a la izquierda, sobre el cuero del sitio
+  // el mueble va a la derecha y el texto a la izquierda, sobre el beige del sitio
   const hero = await sharp(path.join(out, "hero.webp")).resize({ width: 1260, height: 630, fit: "cover", position: "centre" }).toBuffer();
-  const leather = await sharp(path.join(out, "cuero.webp")).resize(1200, 630, { fit: "cover" }).toBuffer();
-  const canvas = await sharp(leather)
+  const canvas = await sharp({ create: { width: 1200, height: 630, channels: 3, background: "#ece5d8" } })
     .composite([{ input: await sharp(hero).extract({ left: 0, top: 0, width: 900, height: 630 }).toBuffer(), left: 300, top: 0 }])
     .png()
     .toBuffer();
   const overlay = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
-    <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#cdba9e" stop-opacity="0.92"/><stop offset="0.4" stop-color="#cdba9e" stop-opacity="0.88"/><stop offset="0.62" stop-color="#cdba9e" stop-opacity="0"/></linearGradient>
-    <radialGradient id="n" cx="1" cy="1.1" r="0.9"><stop offset="0" stop-color="#12224e" stop-opacity="0.5"/><stop offset="1" stop-color="#12224e" stop-opacity="0"/></radialGradient></defs>
+    <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ece5d8"/><stop offset="0.4" stop-color="#ece5d8"/><stop offset="0.62" stop-color="#ece5d8" stop-opacity="0"/></linearGradient></defs>
     <rect width="1200" height="630" fill="url(#g)"/>
-    <rect width="1200" height="630" fill="url(#n)"/>
-    <g stroke="#141a2e" stroke-width="5" stroke-linecap="round" fill="none"><path d="M72 76v30M140 76v30M72 91h68"/></g>
-    <text x="160" y="103" font-family="Liberation Serif, Times New Roman, serif" font-size="32" letter-spacing="8" fill="#141a2e">MEDIDA</text>
-    <text x="72" y="300" font-family="Liberation Serif, Times New Roman, serif" font-size="56" letter-spacing="1" fill="#141a2e">TUS PRODUCTOS.</text>
-    <text x="72" y="364" font-family="Liberation Serif, Times New Roman, serif" font-size="56" letter-spacing="1" fill="#141a2e">INFINITAS</text>
-    <text x="72" y="428" font-family="Liberation Serif, Times New Roman, serif" font-size="56" letter-spacing="1" fill="#141a2e">CONFIGURACIONES.</text>
-    <text x="72" y="502" font-family="Helvetica, Arial, sans-serif" font-size="24" fill="#3c4156">Configuradores 3D para productos a medida</text>
+    <g stroke="#14213d" stroke-width="5" stroke-linecap="round" fill="none"><path d="M72 76v30M140 76v30M72 91h68"/></g>
+    <text x="160" y="103" font-family="Liberation Serif, Times New Roman, serif" font-size="32" letter-spacing="8" fill="#14213d">MEDIDA</text>
+    <text x="72" y="300" font-family="Liberation Serif, Times New Roman, serif" font-size="56" letter-spacing="1" fill="#14213d">TUS PRODUCTOS.</text>
+    <text x="72" y="364" font-family="Liberation Serif, Times New Roman, serif" font-size="56" letter-spacing="1" fill="#14213d">INFINITAS</text>
+    <text x="72" y="428" font-family="Liberation Serif, Times New Roman, serif" font-size="56" letter-spacing="1" fill="#14213d">CONFIGURACIONES.</text>
+    <text x="72" y="502" font-family="Helvetica, Arial, sans-serif" font-size="24" fill="#4a5369">Configuradores 3D para productos a medida</text>
   </svg>`);
   await sharp(canvas).composite([{ input: overlay }]).jpeg({ quality: 86, mozjpeg: true }).toFile(path.join(root, "public/og.jpg"));
 
   const icon = (size) =>
     Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">
-      <rect width="64" height="64" fill="#141a2e"/>
+      <rect width="64" height="64" fill="#14213d"/>
       <path d="M14 20v24M50 20v24M14 32h36" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none"/>
     </svg>`);
   for (const [name, size] of [["icon-192.png", 192], ["icon-512.png", 512]]) await sharp(icon(size)).png().toFile(path.join(root, "public", name));
   await sharp(icon(180)).png().toFile(path.join(root, "src/app/apple-icon.png"));
   await writeFile(
     path.join(root, "src/app/icon.svg"),
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#141a2e"/><path d="M14 20v24M50 20v24M14 32h36" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none"/></svg>\n`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#14213d"/><path d="M14 20v24M50 20v24M14 32h36" stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none"/></svg>\n`,
   );
   console.log("og.jpg, íconos");
 }

@@ -61,7 +61,7 @@ export type PartKind =
   | "glow";
 
 /** "soft": caja de cantos redondeados, para almohadones y tapizados */
-export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "trapezoid" | "quarter" | "knob" | "glow" | "none";
+export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "none";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
@@ -118,6 +118,14 @@ export type Part = {
   rotationY?: number;
   /** radio de los cantos de un almohadón ("cushion"), en mm */
   radius?: number;
+  /**
+   * Una pieza curva (el respaldo de un sillón curvo): una sección redondeada
+   * barrida a lo largo de un arco. Centro del arco (cx, cz) en las mismas
+   * coordenadas que la posición; radios interior y exterior (mm); ángulo de
+   * arranque y largo del arco (radianes, punto = centro + r·(sen θ, cos θ));
+   * redondeo de los cantos (mm). La posición y la medida son su caja.
+   */
+  arc?: { cx: number; cz: number; rIn: number; rOut: number; start: number; length: number; round: number };
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */

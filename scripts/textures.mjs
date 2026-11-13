@@ -35,6 +35,8 @@ const cache = path.resolve(process.argv[2] ?? path.join(tmpdir(), "medida-tex"))
  * - color: la foto entera, teñida hacia el color del catálogo
  * - detail: la foto en gris, para dar grano a un color que elige el cliente
  * - relief: solo el relieve (mapa de normales y de rugosidad)
+ * - shade: el relieve, más una trama en gris calculada con ese relieve (para
+ *   telas cuya foto trae un dibujo que no queremos, como el bouclé a cuadros)
  */
 const SETS = [
   { id: "nogal", slug: "walnut_veneer", use: "color", grain: "v" },
@@ -46,9 +48,9 @@ const SETS = [
   { id: "pared", slug: "beige_wall_001", use: "relief" },
   { id: "tela-lino", slug: "rough_linen", use: "detail" },
   { id: "tela-pana", slug: "velour_velvet", use: "detail" },
-  { id: "tela-boucle", slug: "wool_boucle", use: "relief" },
+  { id: "tela-boucle", slug: "wool_boucle", use: "shade" },
   { id: "tela-lana", slug: "poly_wool_herringbone", use: "detail" },
-  { id: "tela-cuero", slug: "leather_white", use: "relief" },
+  { id: "tela-cuero", slug: "brown_leather", use: "detail" },
 ];
 
 async function exists(file) {
@@ -71,6 +73,23 @@ async function download(url, file) {
   const res = await fetch(url, { headers: { "user-agent": "medida-textures" } });
   if (!res.ok) throw new Error(`${url} respondió ${res.status}`);
   await writeFile(file, Buffer.from(await res.arrayBuffer()));
+}
+
+/** la trama en gris de las telas: promedio claro y contraste parejo (desvío), en 0–255 */
+const DETAIL_MEAN = 205;
+const DETAIL_CONTRAST = 30;
+
+/** lleva unos valores a gris con ese promedio y ese contraste */
+function normalized(values) {
+  let sum = 0;
+  for (const v of values) sum += v;
+  const mean = sum / values.length;
+  let varSum = 0;
+  for (const v of values) varSum += (v - mean) ** 2;
+  const k = DETAIL_CONTRAST / Math.max(1e-3, Math.sqrt(varSum / values.length));
+  const out = Buffer.alloc(values.length);
+  for (let i = 0; i < values.length; i++) out[i] = Math.max(0, Math.min(255, Math.round(DETAIL_MEAN + (values[i] - mean) * k)));
+  return out;
 }
 
 await mkdir(out, { recursive: true });
@@ -105,11 +124,24 @@ for (const set of SETS) {
     entry.maps.push("color");
   }
   if (set.use === "detail" && src.diff) {
-    // en gris y llevada a un promedio claro: multiplica el color de la tela sin oscurecerlo
-    const gray = sharp(src.diff).resize(512).grayscale();
-    const { channels } = await gray.clone().stats();
-    const gain = 225 / channels[0].mean;
-    await gray.linear(gain, 0).webp({ quality: 80 }).toFile(path.join(out, `${set.id}.webp`));
+    // en gris, con un promedio claro y un contraste parejo: multiplica el color de
+    // la tela sin oscurecerlo, y la trama se lee igual en todas las telas
+    const { data, info } = await sharp(src.diff).resize(512).toColourspace("b-w").raw().toBuffer({ resolveWithObject: true });
+    await sharp(normalized(Float32Array.from(data)), { raw: { width: info.width, height: info.height, channels: 1 } })
+      .webp({ quality: 82 })
+      .toFile(path.join(out, `${set.id}.webp`));
+    entry.maps.push("color");
+  }
+  if (set.use === "shade" && src.nor) {
+    // la trama sale del relieve: cuánta luz recibe cada rulo con luz de arriba a la izquierda
+    const { data, info } = await sharp(src.nor).resize(512).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const l = [-0.45, 0.5, 0.74];
+    const values = new Float32Array(info.width * info.height);
+    for (let i = 0; i < values.length; i++) {
+      const n = [data[i * 3] / 127.5 - 1, data[i * 3 + 1] / 127.5 - 1, data[i * 3 + 2] / 127.5 - 1];
+      values[i] = Math.max(0, n[0] * l[0] + n[1] * l[1] + n[2] * l[2]);
+    }
+    await sharp(normalized(values), { raw: { width: info.width, height: info.height, channels: 1 } }).webp({ quality: 82 }).toFile(path.join(out, `${set.id}.webp`));
     entry.maps.push("color");
   }
   if (src.nor) {
@@ -144,7 +176,6 @@ await writeFile(
     "| Uso | Recurso | Autor |",
     "| --- | --- | --- |",
     "| Luz y reflejos del 3D (`public/env/studio_small_09-1k.hdr`) | [Studio Small 09](https://polyhaven.com/a/studio_small_09) | Sergej Majboroda |",
-    "| Fondo de cuero del sitio (`public/img/cuero.webp`, lo arma `scripts/leather.mjs`) | [Leather White](https://polyhaven.com/a/leather_white) | Rob Tuytel |",
     "",
   ].join("\n"),
 );

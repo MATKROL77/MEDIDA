@@ -112,7 +112,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
   const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({
     mode: "room",
     wall: WALL_COLORS[0].hex,
-    floor: "madera",
+    floor: "estudio",
   });
   const captureRef = useRef<(() => Promise<string | null>) | null>(null);
   const [sheet, setSheet] = useState<{ open: boolean; pdf: OrderPdf | null; failed: boolean }>({ open: false, pdf: null, failed: false });

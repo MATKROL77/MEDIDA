@@ -143,6 +143,7 @@
     ],
     "grain": null,
     "maps": [
+      "color",
       "normal",
       "roughness"
     ]
@@ -161,11 +162,12 @@
   },
   "tela-cuero": {
     "size": [
-      0.30000001192092896,
-      0.30000001192092896
+      0.4000000059604645,
+      0.40000003576278687
     ],
     "grain": null,
     "maps": [
+      "color",
       "normal",
       "roughness"
     ]

@@ -92,7 +92,8 @@ for (const [width, height] of [
   await page.goto(base + "/", { waitUntil: "networkidle" });
 
   await check("landing: título, subtítulo y los dos botones del hero", async () => {
-    const h1 = (await page.locator("h1").innerText()).replace(/\s+/g, " ");
+    // el texto, no cómo se ve: en pantalla va en mayúsculas
+    const h1 = (await page.locator("h1").textContent()).replace(/\s+/g, " ");
     assert(h1.includes("Tus productos.") && h1.includes("Infinitas configuraciones."), `h1: ${h1}`);
     assert(await page.getByText("Convertí tus productos personalizados en experiencias interactivas de compra.").isVisible(), "falta el subtítulo");
     assert((await page.getByRole("link", { name: "Probar configuradores" }).getAttribute("href")) === "/configuradores/", "Probar configuradores no va al catálogo");

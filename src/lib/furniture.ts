@@ -63,6 +63,7 @@ export const FABRICS = [
   { id: "bordo", name: "Pana bordó", color: "#6e1f24", weave: "pana" },
   { id: "botella", name: "Pana verde botella", color: "#1f4a37", weave: "pana" },
   { id: "azul", name: "Lino azul noche", color: "#2f3d55", weave: "lino" },
+  { id: "marino", name: "Pana azul marino", color: "#2a3a5e", weave: "pana" },
   { id: "suela", name: "Cuero suela", color: "#8a5434", weave: "cuero" },
   { id: "cuero-negro", name: "Cuero negro", color: "#2a2624", weave: "cuero" },
 ] as const;
@@ -821,14 +822,36 @@ const BUILDERS: Record<string, Builder> = {
     // radio del arco de un sillón curvo: más cerrado cuanto más corto
     const R = Math.max(1900, seats * sw * 0.95);
     const step = curved ? 2 * Math.asin(sw / (2 * R)) : 0;
-    // en el arco, el lado de atrás de cada módulo recorre más que el centro: se
-    // ensancha lo justo para que los módulos se toquen atrás y no se abran en cuñas
-    const widen = (lz: number) => (curved ? sw * ((R + d / 2 - lz) / R) - sw + 4 : 0);
 
+    /** un punto del arco del sillón curvo, a un ángulo dado, mirando hacia el centro */
+    const frameAt = (phi: number) => ({ cx: total / 2 + R * Math.sin(phi), cz: d / 2 + R * (1 - Math.cos(phi)), ry: -phi });
     /** un módulo: dónde está su centro y cuánto gira. En el curvo, los extremos vienen hacia adelante */
-    const frame = (i: number) => {
-      const phi = (i - (seats - 1) / 2) * step;
-      return curved ? { cx: total / 2 + R * Math.sin(phi), cz: d / 2 + R * (1 - Math.cos(phi)), ry: -phi } : { cx: arm + i * sw + sw / 2, cz: d / 2, ry: 0 };
+    const frame = (i: number) => (curved ? frameAt((i - (seats - 1) / 2) * step) : { cx: arm + i * sw + sw / 2, cz: d / 2, ry: 0 });
+    /** el ángulo de cada punta del arco */
+    const half = (seats * step) / 2;
+    /**
+     * En el curvo, la base y el respaldo son una sola pieza que sigue la curva,
+     * como en un sillón curvo de verdad: sin tramos rectos ni ranuras entre módulos.
+     */
+    const arcPart = (id: string, label: string, kind: PartKind, y: number, h: number, rIn: number, rOut: number, round: number) => {
+      const cx = total / 2;
+      const cz = d / 2 + R;
+      // punto = centro + r·(sen θ, cos θ): el ángulo del sillón (φ) es θ = π − φ
+      const start = Math.PI - half;
+      const length = 2 * half;
+      let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
+      for (let k = 0; k <= 48; k++) {
+        const t = start + (length * k) / 48;
+        for (const r of [rIn, rOut]) {
+          x0 = Math.min(x0, cx + r * Math.sin(t));
+          x1 = Math.max(x1, cx + r * Math.sin(t));
+          z0 = Math.min(z0, cz + r * Math.cos(t));
+          z1 = Math.max(z1, cz + r * Math.cos(t));
+        }
+      }
+      const p = piece(parts, id, label, kind, "fabric", [x0, y, z0], [x1 - x0, h, z1 - z0], { geometry: "arc", noCut: true });
+      p.arc = { cx, cz, rIn, rOut, start, length, round };
+      return p;
     };
     /** una pieza del módulo, dada en coordenadas del módulo (x a lo ancho, z de atrás hacia adelante, desde su centro) */
     const put = (f: { cx: number; cz: number; ry: number }, id: string, label: string, kind: PartKind, material: string, lx: number, y: number, lz: number, size: Vec3, radius: number, extra: Extra = {}) => {
@@ -859,6 +882,13 @@ const BUILDERS: Record<string, Builder> = {
       }
     };
 
+    if (curved && !bubbles) {
+      // todo de una pieza: base, respaldo, un solo almohadón de asiento y uno de respaldo a lo largo de la curva
+      arcPart("base", "Base", "bottom", lift, 210, R - d / 2, R + d / 2, 55);
+      arcPart("backrest", "Respaldo", "back", lift + 60, 640, R + d / 2 - 220, R + d / 2, 90);
+      arcPart("seat", "Almohadón de asiento", "shelf", lift + 190, 190, R - d / 2 + 15, R + d / 2 - 205, 85);
+      arcPart("pillow", "Almohadón de respaldo", "fixed-shelf", lift + 350, 430, R + d / 2 - 400, R + d / 2 - 195, 100);
+    }
     for (let i = 0; i < seats; i++) {
       const f = frame(i);
       const chaise = !curved && ((v.chaise === "izquierda" && i === 0) || (v.chaise === "derecha" && i === seats - 1));
@@ -873,10 +903,12 @@ const BUILDERS: Record<string, Builder> = {
         }
         for (const [k, lx] of [-sw / 4, sw / 4].entries()) put(f, `back:${i}:${k}`, "Almohadón de respaldo", "back", "fabric", lx, lift + 340, -d / 2 + 190, [sw / 2 - 6, 330, 360], 150);
       } else {
-        put(f, `base:${i}`, "Base del módulo", "bottom", "fabric", 0, lift, fz, [sw + widen(-d / 2), 210, depth], 55);
-        put(f, `backrest:${i}`, "Respaldo", "back", "fabric", 0, lift + 60, -d / 2 + 110, [sw + widen(-d / 2), 640, 220], 90);
-        put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift + 190, fz + 100, [sw - 10 + widen(-d / 2 + 215), 190, depth - 215], 85);
-        put(f, `pillow:${i}`, "Almohadón de respaldo", "fixed-shelf", "fabric", 0, lift + 350, -d / 2 + 300, [sw - 26 + widen(-d / 2 + 300), 430, 210], 100);
+        if (!curved) {
+          put(f, `base:${i}`, "Base del módulo", "bottom", "fabric", 0, lift, fz, [sw, 210, depth], 55);
+          put(f, `backrest:${i}`, "Respaldo", "back", "fabric", 0, lift + 60, -d / 2 + 110, [sw, 640, 220], 90);
+          put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift + 190, fz + 100, [sw - 10, 190, depth - 215], 85);
+          put(f, `pillow:${i}`, "Almohadón de respaldo", "fixed-shelf", "fabric", 0, lift + 350, -d / 2 + 300, [sw - 26, 430, 210], 100);
+        }
       }
       supports(f, `sup:${i}`, sw, depth, fz);
     }
@@ -884,19 +916,30 @@ const BUILDERS: Record<string, Builder> = {
     if (v.arms) {
       const ends: [string, number, number][] = [["l", 0, -1], ["r", seats - 1, 1]];
       for (const [id, i, side] of ends) {
-        const f = frame(i);
+        // en el curvo, el apoyabrazos arranca justo donde termina el arco
+        const f = curved ? frameAt(side * half) : frame(i);
         const chaise = !curved && ((v.chaise === "izquierda" && i === 0) || (v.chaise === "derecha" && i === seats - 1));
         const depth = chaise ? d + 640 : d;
         if (bubbles) put(f, `arm:${id}`, "Almohadón apoyabrazos", "side", "fabric", side * (sw / 2 - 150), lift + 340, 120, [290, 300, d - 420], 140);
-        else put(f, `arm:${id}`, "Apoyabrazos", "side", "fabric", side * (sw / 2 + arm / 2), lift, (depth - d) / 2, [arm, 560, depth], 80);
+        else put(f, `arm:${id}`, "Apoyabrazos", "side", "fabric", side * ((curved ? 0 : sw / 2) + arm / 2), lift, (depth - d) / 2, [arm, 560, depth], 80);
       }
     }
 
-    // el puff suelto: un módulo sin respaldo, delante del sillón
-    const frontEdge = curved ? d + R * (1 - Math.cos(((seats - 1) / 2) * step)) : v.chaise === "no" ? d : d + 640;
+    // el puff: un módulo sin respaldo, pegado al frente del asiento, como una chaise que se puede correr
     if (v.ottoman) {
-      const f = { cx: total * (v.chaise === "derecha" ? 0.28 : 0.72), cz: frontEdge + 620, ry: 0 };
       const ow = Math.min(sw, 900);
+      const cx = total * (v.chaise === "derecha" ? 0.28 : 0.72);
+      // dónde termina el asiento delante del puff: en el curvo, el frente es un arco (se toma el punto más adelantado bajo el puff)
+      let front = v.chaise === "no" ? d : d + 640;
+      if (curved) {
+        const rf = R - d / 2;
+        front = 0;
+        for (const x of [cx - ow / 2, cx, cx + ow / 2]) {
+          const dx = Math.min(rf, Math.abs(x - total / 2));
+          front = Math.max(front, d / 2 + R - Math.sqrt(rf * rf - dx * dx));
+        }
+      }
+      const f = { cx, cz: front + 320 + 2, ry: 0 };
       if (bubbles) for (const [k, lx] of [-ow / 4, ow / 4].entries()) put(f, `ott:${k}`, "Puff", "shelf", "fabric", lx, lift, 0, [ow / 2 - 6, 400, 620], 150);
       else {
         put(f, "ott:base", "Base del puff", "bottom", "fabric", 0, lift, 0, [ow, 210, 640], 55);
@@ -920,7 +963,12 @@ export function buildFurniture(config: FurnitureConfig): FurnitureBuild {
   const { parts, drawers, doors, center, gap, wall } = BUILDERS[config.family](config.values, config);
   // lo que va en el medio del ambiente se separa de la pared; lo demás queda apoyado contra ella
   const shift = center ? ROOM_CENTER : (gap ?? 0);
-  if (shift) for (const p of parts) p.position = [p.position[0], p.position[1], p.position[2] + shift];
+  if (shift)
+    for (const p of parts) {
+      p.position = [p.position[0], p.position[1], p.position[2] + shift];
+      // una pieza curva lleva su centro de arco con ella
+      if (p.arc) p.arc = { ...p.arc, cz: p.arc.cz + shift };
+    }
   const min: Vec3 = [Infinity, 0, Infinity];
   const max: Vec3 = [-Infinity, 0, -Infinity];
   const room = { min: [Infinity, 0, 0] as Vec3, max: [-Infinity, 0, -Infinity] as Vec3 };

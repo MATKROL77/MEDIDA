@@ -25,3 +25,6 @@ export const HERO_SOFA: FurnitureConfig = {
   front: "nogal",
   fabric: "crudo",
 };
+
+/** la portada se mira de cerca: el sillón ocupa el cuadro, como en una foto de catálogo */
+export const HERO_SOFA_FRAMING = 0.6;

@@ -4,6 +4,7 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 import type { Part } from "@/lib/assembly";
 
@@ -78,6 +79,60 @@ function updateTrapezoid(g: THREE.BufferGeometry, w: number, hl: number, hr: num
   uv.needsUpdate = true;
   g.computeVertexNormals();
   g.computeBoundingSphere();
+}
+
+/**
+ * Una pieza curva: la sección (un rectángulo de cantos redondeados) barrida a
+ * lo largo del arco, con sus dos tapas. Queda centrada en la caja de la pieza,
+ * que es el pivote del nodo.
+ */
+function arcGeometry(part: Part): THREE.BufferGeometry {
+  const a = part.arc!;
+  const [x0, , z0] = part.position;
+  const [sx, h, sz] = part.size;
+  const rc = Math.max(1, Math.min(a.round, h / 2 - 1, (a.rOut - a.rIn) / 2 - 1));
+  // la sección, en sentido antihorario (radio hacia la derecha, alto hacia arriba): las normales quedan hacia afuera
+  const profile: THREE.Vector2[] = [];
+  const corner = (cr: number, cy: number, from: number) => {
+    for (let k = 0; k <= 6; k++) {
+      const t = from + (k / 6) * (Math.PI / 2);
+      profile.push(new THREE.Vector2((cr + rc * Math.cos(t)) * MM, (cy + rc * Math.sin(t) - h / 2) * MM));
+    }
+  };
+  corner(a.rOut - rc, rc, -Math.PI / 2);
+  corner(a.rOut - rc, h - rc, 0);
+  corner(a.rIn + rc, h - rc, Math.PI / 2);
+  corner(a.rIn + rc, rc, Math.PI);
+  profile.push(profile[0].clone());
+  const body = new THREE.LatheGeometry(profile, Math.max(16, Math.round(a.length * 56)), a.start, a.length);
+  // la tela corre a lo largo de la curva: U es el largo del arco y V el contorno de la sección, en metros,
+  // así la trama no se corta donde cambia la cara
+  let perimeter = 0;
+  for (let i = 1; i < profile.length; i++) perimeter += profile[i].distanceTo(profile[i - 1]);
+  const along = a.length * ((a.rIn + a.rOut) / 2) * MM;
+  const uv = body.getAttribute("uv") as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * along, uv.getY(i) * perimeter);
+  // las tapas de las puntas: la misma sección, girada al ángulo de cada punta
+  const cap = (theta: number, flip: boolean) => {
+    const g = new THREE.ShapeGeometry(new THREE.Shape(profile.slice(0, -1)));
+    if (flip) {
+      const index = g.getIndex()!;
+      for (let i = 0; i < index.count; i += 3) {
+        const b = index.getX(i + 1);
+        index.setX(i + 1, index.getX(i + 2));
+        index.setX(i + 2, b);
+      }
+      const n = g.getAttribute("normal");
+      for (let i = 0; i < n.count; i++) n.setZ(i, -n.getZ(i));
+    }
+    g.rotateY(theta - Math.PI / 2);
+    return g;
+  };
+  const merged = mergeGeometries([body.toNonIndexed(), cap(a.start, false).toNonIndexed(), cap(a.start + a.length, true).toNonIndexed()]);
+  body.dispose();
+  // del centro del arco al centro de la caja de la pieza
+  merged.translate((a.cx - (x0 + sx / 2)) * MM, 0, (a.cz - (z0 + sz / 2)) * MM);
+  return merged;
 }
 
 function isVertical(p: Part) {
@@ -182,6 +237,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
   // es lo que agarra el brillo a lo largo del borde, como en un mueble de verdad
   const edged = part.geometry === "box" && part.kind !== "led" && part.kind !== "glow" && Math.min(...part.size) >= 2;
   const cushion = useMemo(() => {
+    if (part.geometry === "arc" && part.arc) return arcGeometry(part);
     if (part.geometry !== "cushion" && !edged) return null;
     const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
     const radius = part.geometry === "cushion" ? Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) : Math.min(2.2, Math.min(...part.size) * 0.22);
@@ -189,7 +245,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     meterUvs(g, [sx, sy, sz], part.id);
     return g;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc)]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {

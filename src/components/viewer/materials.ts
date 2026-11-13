@@ -16,6 +16,18 @@ import { dressWith, tintFor, type PhotoId } from "./photo";
 
 /** qué terminaciones del catálogo tienen foto de verdad */
 const VENEERS: Record<string, PhotoId> = { nogal: "nogal", roble: "roble" };
+/**
+ * La trama de las telas es una foto en gris con promedio 205 (ver
+ * scripts/textures.mjs): multiplica el color y lo oscurece. Esta ganancia lo
+ * compensa para que el tapizado quede del color de su muestra.
+ */
+const DETAIL_GAIN = 1 / Math.pow(205 / 255, 2.2);
+/** cuánto relieve y cuánto brillo rasante tiene cada tela */
+const WEAVE_LOOK: Record<string, { normal: number; sheen: number; sheenRoughness: number; lift: number }> = {
+  lino: { normal: 1.5, sheen: 0.45, sheenRoughness: 0.55, lift: 0.18 },
+  pana: { normal: 0.9, sheen: 1, sheenRoughness: 0.32, lift: 0.4 },
+  boucle: { normal: 2.1, sheen: 0.55, sheenRoughness: 0.7, lift: 0.2 },
+};
 /** la trama de cada tipo de tela */
 const WEAVES: Record<string, PhotoId> = { lino: "tela-lino", pana: "tela-pana", boucle: "tela-boucle", cuero: "tela-cuero" };
 
@@ -296,20 +308,7 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     /** qué terminación va en los frentes: las piezas que la nombran la usan aunque no sean un frente */
     doorId,
     /** tapizado: mate, sin brillo, con un tejido apenas marcado; el cuero, semimate con su graneado */
-    fabric: weave === "cuero" ? leather(fabric) : dressWith(
-      new THREE.MeshPhysicalMaterial({
-        color: fabric,
-        roughness: 0.95,
-        metalness: 0,
-        envMapIntensity: 0.3,
-        // el brillo rasante de una tela: los bordes se aclaran, como en la pana o el bouclé
-        sheen: weave === "pana" ? 0.8 : 0.35,
-        sheenRoughness: weave === "pana" ? 0.38 : 0.6,
-        sheenColor: new THREE.Color(fabric).lerp(new THREE.Color("#ffffff"), weave === "pana" ? 0.35 : 0.2),
-      }),
-      WEAVES[weave] ?? "tela-lino",
-      { normalScale: weave === "boucle" ? 1.6 : 1, roughness: 1 },
-    ),
+    fabric: weave === "cuero" ? leather(fabric) : upholstery(fabric, weave),
     /** hierro pintado de negro: marcos y patas */
     iron: new THREE.MeshStandardMaterial({ color: "#1d1c1b", metalness: 0.55, roughness: 0.48, envMapIntensity: 0.8 }),
     body: { v: surface(bodyId, "v"), u: surface(bodyId, "u") },
@@ -339,19 +338,41 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
   return kit;
 }
 
-/** cuero vacuno curtido: graneado fino, un brillo apagado que se abre en las curvas */
+/**
+ * Tela de tapizado: la trama fotografiada (en gris, sobre el color elegido), su
+ * relieve y el brillo rasante de la fibra, que aclara los bordes y las curvas
+ * como en una foto de un sillón de verdad.
+ */
+function upholstery(color: string, weave: string) {
+  const look = WEAVE_LOOK[weave] ?? WEAVE_LOOK.lino;
+  return dressWith(
+    new THREE.MeshPhysicalMaterial({
+      color,
+      roughness: 0.95,
+      metalness: 0,
+      envMapIntensity: 0.35,
+      sheen: look.sheen,
+      sheenRoughness: look.sheenRoughness,
+      sheenColor: new THREE.Color(color).lerp(new THREE.Color("#ffffff"), look.lift),
+    }),
+    WEAVES[weave] ?? "tela-lino",
+    { normalScale: look.normal, roughness: 1, tint: new THREE.Color(color).multiplyScalar(DETAIL_GAIN) },
+  );
+}
+
+/** cuero de tapicería: poro, pliegues y un brillo apagado que se abre en las curvas */
 function leather(color: string) {
   return dressWith(
     new THREE.MeshPhysicalMaterial({
       color,
-      roughness: 0.58,
+      roughness: 0.55,
       metalness: 0,
-      envMapIntensity: 0.7,
-      clearcoat: 0.22,
-      clearcoatRoughness: 0.42,
+      envMapIntensity: 0.75,
+      clearcoat: 0.25,
+      clearcoatRoughness: 0.4,
     }),
     "tela-cuero",
-    { normalScale: 1.1, roughness: 0.62 },
+    { normalScale: 1.25, roughness: 0.6, tint: new THREE.Color(color).multiplyScalar(DETAIL_GAIN) },
   );
 }
 

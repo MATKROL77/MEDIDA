@@ -17,7 +17,7 @@ import { createKit, disposeKit, frontMaterials, GLASS_OPACITY, type MaterialKit 
 import { MM, PartNode, Presence } from "./PartNode";
 import type { FloorType } from "./constants";
 import { createPhotoBus, photoCapable, type PhotoBus, PhotoMode, type PhotoStatus } from "./PhotoMode";
-import { PODIUM_HEIGHT, Room, type Walls } from "./Room";
+import { Room, type Walls } from "./Room";
 
 export type ViewName = "front" | "three" | "side" | "top" | "back";
 
@@ -104,7 +104,7 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   // el mapeo de tonos oscurece los claros: el fondo liso entra con ganancia para salir del color pedido
   const bg = useMemo(() => {
     const studio = new THREE.Color(backdrop).multiplyScalar(STUDIO_GAIN);
-    return { studio, room: new THREE.Color("#e7e2db"), cur: studio.clone() };
+    return { studio, room: new THREE.Color("#ece5d8"), cur: studio.clone() };
   }, [backdrop]);
 
   const motion = useMemo(
@@ -551,16 +551,6 @@ export function wallsOf(props: Pick<ViewerProps, "assembly" | "config">): Walls 
   return props.assembly.walls ?? (props.config.shape === "straight" ? "back" : props.config.shape);
 }
 
-/** lo suelto se muestra sobre la tarima del showroom: sube con ella, y baja cuando se pasa a fondo liso */
-function Lift({ on, children }: { on: boolean; children: React.ReactNode }) {
-  const anim = useSceneAnim();
-  const ref = useRef<THREE.Group>(null);
-  useFrame(() => {
-    ref.current?.position.set(0, on ? PODIUM_HEIGHT * MM * anim.room.v : 0, 0);
-  });
-  return <group ref={ref}>{children}</group>;
-}
-
 function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   const anim = useSceneAnim();
   const totalH = Math.max(1, props.assembly.bounds.max[1]);
@@ -574,7 +564,6 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
         wall={props.environment.wall}
         floor={props.environment.floor}
       />
-      <Lift on={walls === "none"}>
       {/* sombra de apoyo: lo que hace que el mueble pise el piso en vez de flotar */}
       {props.confine && <Grounding assembly={props.assembly} />}
       {props.assembly.runs.map((run) => (
@@ -590,7 +579,6 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
           {props.selection && props.selection.run === run.index && <SelectionBox run={run} module={props.selection.module} />}
         </RunGroup>
       ))}
-      </Lift>
     </Centered>
   );
 }

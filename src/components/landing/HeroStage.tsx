@@ -85,11 +85,22 @@ export function HeroStage() {
     return () => io.disconnect();
   }, []);
 
+  // la foto fija queda arriba hasta que el 3D en vivo está a su altura: cuando el
+  // trazado ya limpió buena parte del grano, o apenas la persona toca algo
+  const [touched, setTouched] = useState(false);
+  const [reveal, setReveal] = useState(false);
+  const traced = photo.on && (photo.status.state === "rendering" || photo.status.state === "done") && photo.status.progress >= 0.35;
+  useEffect(() => {
+    if (phase === "live" && (touched || traced)) setReveal(true);
+  }, [phase, touched, traced]);
+
   const set = (key: string, value: string | number) => {
+    setTouched(true);
     start();
     setConfig((c) => normalizeFurniture({ ...c, values: { ...c.values, [key]: value } }));
   };
   const setFabric = (fabric: string) => {
+    setTouched(true);
     start();
     setConfig((c) => ({ ...c, fabric }));
   };
@@ -99,7 +110,7 @@ export function HeroStage() {
   const seats = config.values.seats as number;
   const fabric = fabricById(config.fabric);
   const model = MODELS.find(([id]) => id === config.values.style)?.[1] ?? "";
-  const live = phase === "live";
+  const live = phase === "live" && reveal;
 
   return (
     <div>
@@ -117,7 +128,10 @@ export function HeroStage() {
           </picture>
 
           {(phase === "loading" || live) && (
-            <div className={`absolute inset-0 transition-opacity duration-700 ${live ? "opacity-100" : "opacity-0"} ${draggable ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"}`}>
+            <div
+              onPointerDown={() => setTouched(true)}
+              className={`absolute inset-0 transition-opacity duration-700 ${live ? "opacity-100" : "opacity-0"} ${draggable ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"}`}
+            >
               <Fallback onError={() => setPhase("failed")}>
                 <HeroLive
                   config={config}
@@ -181,7 +195,7 @@ export function HeroStage() {
                   aria-label={`Tapizado: ${f.name}`}
                   aria-pressed={config.fabric === f.id}
                   onClick={() => setFabric(f.id)}
-                  className={`swatch size-7 rounded-full border-2 ${config.fabric === f.id ? "border-wood" : "border-white/70"}`}
+                  className={`swatch size-7 rounded-full border-2 ${config.fabric === f.id ? "border-navy" : "border-white/70"}`}
                   style={fabricStyle(f)}
                 />
               ))}

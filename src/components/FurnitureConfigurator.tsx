@@ -54,7 +54,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   // la alfombra, la tele, las lámparas: se pueden sacar para ver el mueble solo
   const [deco, setDeco] = useState(true);
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
-  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "cemento" });
+  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "estudio" });
   const [ready, setReady] = useState(false);
   const [designId, setDesignId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -261,7 +261,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
                 </p>
                 <div className="flex flex-wrap gap-2.5">
                   {FABRICS.map((f) => (
-                    <button key={f.id} type="button" title={f.name} aria-label={`Tapizado ${f.name}`} aria-pressed={config.fabric === f.id} onClick={() => setConfig((c) => ({ ...c, fabric: f.id }))} className={`swatch size-10 rounded-full border-2 ${config.fabric === f.id ? "border-wood" : "border-surface ring-1 ring-line"}`} style={fabricStyle(f)} />
+                    <button key={f.id} type="button" title={f.name} aria-label={`Tapizado ${f.name}`} aria-pressed={config.fabric === f.id} onClick={() => setConfig((c) => ({ ...c, fabric: f.id }))} className={`swatch size-10 rounded-full border-2 ${config.fabric === f.id ? "border-navy" : "border-surface ring-1 ring-line"}`} style={fabricStyle(f)} />
                   ))}
                 </div>
               </div>

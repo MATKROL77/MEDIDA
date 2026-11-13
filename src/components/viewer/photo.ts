@@ -23,6 +23,15 @@ export type PhotoSet = { map?: THREE.Texture; normalMap?: THREE.Texture; roughne
 const loader = typeof window === "undefined" ? null : new THREE.TextureLoader();
 const sets = new Map<PhotoId, Promise<PhotoSet>>();
 
+/**
+ * Las telas se ven a la distancia de una foto de catálogo: con el sillón
+ * entero en pantalla, cada píxel cubre varios milímetros y una trama a escala
+ * real (el rulo de un bouclé, el cruzado de un lino) se promedia y desaparece.
+ * Como en la fotografía de producto, la trama se agranda un poco para que se
+ * lea. Las chapas y los pisos van a escala real.
+ */
+const READABLE: Partial<Record<PhotoId, number>> = { "tela-lino": 2.2, "tela-pana": 1.6, "tela-boucle": 1.9, "tela-lana": 1.8, "tela-cuero": 1.3 };
+
 /** cambia cada vez que un material recibe su foto: el modo foto rearma la escena cuando pasa */
 let version = 0;
 export const photoVersion = () => version;
@@ -54,7 +63,8 @@ export function photoSet(id: PhotoId): Promise<PhotoSet> {
       e.maps.includes("roughness") ? load(`/tex/${id}-rough.webp`, false) : undefined,
     ]).then(([map, normalMap, roughnessMap]) => {
       // las coordenadas de las piezas están en metros: la repetición lleva la foto a su medida real
-      for (const t of [map, normalMap, roughnessMap]) t?.repeat.set(1 / e.size[0], 1 / e.size[1]);
+      const k = READABLE[id] ?? 1;
+      for (const t of [map, normalMap, roughnessMap]) t?.repeat.set(1 / (e.size[0] * k), 1 / (e.size[1] * k));
       return { map, normalMap, roughnessMap };
     });
     // si una textura no llega, el material se queda con su color liso: nunca negro

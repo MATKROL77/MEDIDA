@@ -141,12 +141,34 @@ test("la habitación envuelve al mueble y a lo que lo acompaña", () => {
   }
 });
 
-test("el sillón curvo gira cada cuerpo hacia el centro", () => {
-  const curvo = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "curvo", seats: 4 } }));
-  const bases = curvo.parts.filter((p) => p.id.startsWith("base:"));
-  assert.equal(bases.length, 4);
-  assert.ok((bases[0].rotationY ?? 0) > 0 && (bases[3].rotationY ?? 0) < 0, "los extremos miran hacia adentro");
-  assert.ok(bases[0].position[2] > bases[1].position[2], "y vienen hacia adelante");
+test("el sillón curvo es una sola curva: base, respaldo y almohadones de una pieza, y el puff pegado al frente", () => {
+  const curvo = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "curvo", seats: 4, ottoman: true } }));
+  for (const id of ["base", "backrest", "seat", "pillow"]) {
+    const arc = curvo.parts.find((p) => p.id === id);
+    assert.ok(arc?.geometry === "arc" && arc.arc, `${id} tiene que ser una pieza curva`);
+    assert.ok(arc.arc.rOut > arc.arc.rIn && arc.arc.length > 0.5, `${id}: arco ${JSON.stringify(arc.arc)}`);
+    // la caja de la pieza contiene las dos puntas del arco
+    for (const t of [arc.arc.start, arc.arc.start + arc.arc.length]) {
+      const x = arc.arc.cx + arc.arc.rOut * Math.sin(t);
+      assert.ok(x >= arc.position[0] - 1 && x <= arc.position[0] + arc.size[0] + 1, `${id}: la punta queda fuera de su caja`);
+    }
+  }
+  assert.equal(curvo.parts.filter((p) => /^(base|backrest|seat|pillow):/.test(p.id)).length, 0, "sin tramos rectos");
+  // el puff toca el frente del asiento: su lado de atrás coincide con el punto más adelantado del arco que tiene detrás
+  const base = curvo.parts.find((p) => p.id === "base")!;
+  const puff = curvo.parts.find((p) => p.id === "ott:base")!;
+  const { cx, cz, rIn } = base.arc!;
+  let front = 0;
+  for (const x of [puff.position[0], puff.position[0] + puff.size[0] / 2, puff.position[0] + puff.size[0]]) front = Math.max(front, cz - Math.sqrt(rIn * rIn - (x - cx) ** 2));
+  assert.ok(Math.abs(puff.position[2] - front) < 5, `el puff está a ${Math.round(puff.position[2] - front)} mm del sillón`);
+});
+
+test("el puff del sillón recto va pegado al frente", () => {
+  const recto = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "recto", seats: 3, ottoman: true, depth: 980 } }));
+  const puff = recto.parts.find((p) => p.id === "ott:base")!;
+  const base = recto.parts.find((p) => p.id === "base:1")!;
+  const front = base.position[2] + base.size[2];
+  assert.ok(Math.abs(puff.position[2] - front) < 5, `el puff está a ${Math.round(puff.position[2] - front)} mm del sillón`);
 });
 
 test("la ropa del placard se dibuja pero no toca el despiece ni el precio", async () => {

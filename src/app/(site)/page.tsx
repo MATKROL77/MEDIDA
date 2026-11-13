@@ -27,10 +27,10 @@ const qualities = [
 const materials = [
   { name: "Nogal", src: "/tex/nogal.webp", style: { backgroundSize: "560px" } },
   { name: "Roble", src: "/tex/roble.webp", style: { backgroundSize: "560px" } },
-  { name: "Bouclé", src: "/tex/tela-boucle-rough.webp", style: { backgroundColor: "#d8cdb9", backgroundBlendMode: "soft-light", backgroundSize: "150px" } },
+  { name: "Bouclé", src: "/tex/tela-boucle.webp", style: { backgroundColor: "#e6dccb", backgroundBlendMode: "multiply", backgroundSize: "170px" } },
   { name: "Pana", src: "/tex/tela-pana.webp", style: { backgroundColor: "#7a2a2c", backgroundBlendMode: "multiply", backgroundSize: "170px" } },
   { name: "Lino", src: "/tex/tela-lino.webp", style: { backgroundColor: "#b39f82", backgroundBlendMode: "multiply", backgroundSize: "170px" } },
-  { name: "Cuero", src: "/tex/tela-cuero-rough.webp", style: { backgroundColor: "#8a5434", backgroundBlendMode: "soft-light", backgroundSize: "210px" } },
+  { name: "Cuero", src: "/tex/tela-cuero.webp", style: { backgroundColor: "#9a6040", backgroundBlendMode: "multiply", backgroundSize: "230px" } },
   { name: "Cemento", src: "/tex/piso-cemento.webp", style: { backgroundSize: "420px" } },
   { name: "Baldosa", src: "/tex/piso-baldosa.webp", style: { backgroundSize: "300px" } },
 ];
@@ -104,7 +104,7 @@ export default function Home() {
         <ul className="grid gap-x-8 gap-y-6 py-8 sm:grid-cols-2 lg:grid-cols-4">
           {qualities.map((q, i) => (
             <li key={q.title} className="flex gap-4" data-reveal style={{ ["--reveal-delay" as string]: `${i * 70}ms` }}>
-              <span className="font-display text-sm tabular-nums text-wood">0{i + 1}</span>
+              <span className="font-display text-sm tabular-nums text-ink-3">0{i + 1}</span>
               <div>
                 <h2 className="text-[0.72rem] font-semibold uppercase tracking-[0.2em]">{q.title}</h2>
                 <p className="mt-1.5 text-sm leading-relaxed text-ink-2">{q.body}</p>
