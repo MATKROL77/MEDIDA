@@ -263,10 +263,12 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9") {
       roughness: 0.92,
       metalness: 0,
       envMapIntensity: 0.3,
+      // una tela nunca es de un solo tono: manchas suaves y la trama
+      map: mottleTexture(),
       bumpMap: weaveTexture(),
-      bumpScale: 1.4,
+      bumpScale: 2.2,
       // el brillo rasante de una tela: los bordes se aclaran, como en la pana o el bouclé
-      sheen: 0.45,
+      sheen: 0.3,
       sheenRoughness: 0.6,
       sheenColor: new THREE.Color(fabric).lerp(new THREE.Color("#ffffff"), 0.22),
     }),
@@ -323,7 +325,7 @@ export function disposeKit(kit: MaterialKit) {
 
 let weave: THREE.CanvasTexture | null = null;
 /** trama de tela: un relieve fino que se repite, para que el tapizado no parezca plástico */
-function weaveTexture(): THREE.CanvasTexture {
+export function weaveTexture(): THREE.CanvasTexture {
   if (weave) return weave;
   const size = 64;
   const canvas = document.createElement("canvas");
@@ -341,4 +343,41 @@ function weaveTexture(): THREE.CanvasTexture {
   weave.repeat.set(26, 26);
   weave.anisotropy = 4;
   return weave;
+}
+
+let mottle: THREE.CanvasTexture | null = null;
+/** variación de tono de una tela: manchas grandes y suaves más un grano fino, casi blanco para multiplicar el color */
+export function mottleTexture(): THREE.CanvasTexture {
+  if (mottle) return mottle;
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#e9e9e9";
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 90; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const r = 18 + Math.random() * 46;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    const dark = Math.random() < 0.5;
+    g.addColorStop(0, dark ? "rgba(150,150,150,0.11)" : "rgba(255,255,255,0.14)");
+    g.addColorStop(1, "rgba(200,200,200,0)");
+    ctx.fillStyle = g;
+    // se repite en los cuatro bordes para que la textura empalme sin costura
+    for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) ctx.fillRect(x + dx - r, y + dy - r, 2 * r, 2 * r);
+  }
+  const img = ctx.getImageData(0, 0, size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 26;
+    img.data[i] += n;
+    img.data[i + 1] += n;
+    img.data[i + 2] += n;
+  }
+  ctx.putImageData(img, 0, 0);
+  mottle = new THREE.CanvasTexture(canvas);
+  mottle.wrapS = mottle.wrapT = THREE.RepeatWrapping;
+  mottle.repeat.set(1.5, 1.5);
+  mottle.colorSpace = THREE.SRGBColorSpace;
+  return mottle;
 }

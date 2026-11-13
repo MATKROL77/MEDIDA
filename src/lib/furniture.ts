@@ -48,8 +48,8 @@ export type FurnitureSpec = {
 };
 
 export const FABRICS = [
-  { id: "arena", name: "Lino arena", color: "#c9bba4" },
-  { id: "crudo", name: "Bouclé crudo", color: "#e4ddd0" },
+  { id: "arena", name: "Lino arena", color: "#b39f82" },
+  { id: "crudo", name: "Bouclé crudo", color: "#d8cdb9" },
   { id: "gris", name: "Gris piedra", color: "#8e8f8c" },
   { id: "grafito", name: "Grafito", color: "#45474a" },
   { id: "ocre", name: "Pana ocre", color: "#b9731f" },
@@ -306,8 +306,8 @@ function led(list: Part[], id: string, x: number, y: number, z: number, length: 
 const deco = { decor: true, noCut: true } as const;
 const BOOKS = ["#7b2f2a", "#e8e1d2", "#2f3b4a", "#b98b3e", "#d8d2c6", "#3d4a3a", "#8a8a86", "#c9b79c"];
 
-function rug(list: Part[], x: number, z: number, w: number, d: number, color = "#b9ad9b") {
-  piece(list, "deco:rug", "Alfombra", "bottom", `tint:${color}`, [x, 0, z], [w, 12, d], deco);
+function rug(list: Part[], x: number, z: number, w: number, d: number, color = "#6f6457") {
+  piece(list, "deco:rug", "Alfombra", "bottom", `rug:${color}`, [x, 0, z], [w, 14, d], deco);
 }
 /** libros parados, uno al lado del otro */
 function books(list: Part[], id: string, x: number, y: number, z: number, n: number, depth = 150) {

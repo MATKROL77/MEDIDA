@@ -8,7 +8,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import type { Part } from "@/lib/assembly";
 
 import { BOUNCY, clampDt, doorProgress, FIRM, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
-import type { MaterialKit } from "./materials";
+import { mottleTexture, weaveTexture, type MaterialKit } from "./materials";
 
 export const MM = 0.001;
 
@@ -89,6 +89,18 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
   let m = tints.get(spec);
   if (!m) {
     const gloss = spec.startsWith("gloss:");
+    // "rug:": alfombra tejida, con trama y manchas, no un plano de color
+    if (spec.startsWith("rug:")) {
+      const map = mottleTexture().clone();
+      map.repeat.set(5, 5);
+      map.needsUpdate = true;
+      const bump = weaveTexture().clone();
+      bump.repeat.set(60, 60);
+      bump.needsUpdate = true;
+      m = new THREE.MeshStandardMaterial({ color: spec.slice(4), roughness: 1, map, bumpMap: bump, bumpScale: 3, envMapIntensity: 0.2 });
+      tints.set(spec, m);
+      return m;
+    }
     m = new THREE.MeshStandardMaterial({ color: spec.slice(spec.indexOf(":") + 1), roughness: gloss ? 0.12 : 0.92, metalness: gloss ? 0.35 : 0, envMapIntensity: gloss ? 1.1 : 0.4 });
     tints.set(spec, m);
   }
@@ -96,7 +108,7 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
 }
 
 function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
-  if (p.material.startsWith("tint:") || p.material.startsWith("gloss:")) return tinted(p.material);
+  if (p.material.startsWith("tint:") || p.material.startsWith("gloss:") || p.material.startsWith("rug:")) return tinted(p.material);
   const along = isVertical(p) ? "v" : "u";
   switch (p.material) {
     case "none":

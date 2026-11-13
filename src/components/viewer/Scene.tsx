@@ -1,6 +1,6 @@
 "use client";
 
-import { Edges, Environment, Lightformer, OrbitControls, PerformanceMonitor } from "@react-three/drei";
+import { ContactShadows, Edges, Environment, Lightformer, OrbitControls, PerformanceMonitor } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
@@ -137,7 +137,7 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
     }
     kit.glass.opacity = GLASS_OPACITY * (1 - 0.7 * x);
     // de noche el ambiente baja para que se luzcan los LED
-    scene.environmentIntensity = 1 - 0.62 * l;
+    scene.environmentIntensity = (props.confine ? 0.55 : 1) * (1 - 0.62 * l);
     bg.cur.copy(bg.studio).lerp(bg.room, anim.room.v).multiplyScalar(1 - 0.35 * l);
     scene.background = bg.cur;
   });
@@ -205,15 +205,18 @@ function sequence(
   }
 }
 
-function KeyLight({ span, shape }: { span: number; shape: WardrobeConfig["shape"] }) {
+function KeyLight({ span, shape, rich }: { span: number; shape: WardrobeConfig["shape"]; rich: boolean }) {
+  // en un ambiente armado la luz viene de un lado y el relleno baja: hay sombra y volumen
+  const keyPower = rich ? 3.1 : 2.1;
+  const fill = rich ? 0.26 : 0.55;
   const anim = useSceneAnim();
   const key = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const side = shape === "l-right" ? -1 : 1;
   useFrame(() => {
     const night = 1 - 0.7 * anim.lights.v;
-    if (key.current) key.current.intensity = 2.1 * night;
-    if (hemi.current) hemi.current.intensity = 0.55 * night;
+    if (key.current) key.current.intensity = keyPower * night;
+    if (hemi.current) hemi.current.intensity = fill * night;
   });
   const reach = Math.max(3, span * MM);
   return (
@@ -454,7 +457,9 @@ function Capturer({ captureRef, countFrames }: { captureRef?: ViewerProps["captu
   return null;
 }
 
-function Effects({ hq, studio }: { hq: boolean; studio: boolean }) {
+function Effects({ hq, studio, rich }: { hq: boolean; studio: boolean; rich: boolean }) {
+  // en un ambiente armado, una curva de película: negros más profundos y color más lleno
+  const tone = rich ? ToneMappingMode.ACES_FILMIC : ToneMappingMode.AGX;
   // sobre fondo liso el fondo es más brillante que cualquier superficie: el
   // umbral del brillo sube para que solo brillen los LED, y la viñeta se afloja
   const threshold = studio ? 2.4 : 0.92;
@@ -463,20 +468,40 @@ function Effects({ hq, studio }: { hq: boolean; studio: boolean }) {
   if (hq)
     return (
       <EffectComposer multisampling={4} enableNormalPass={false}>
-        <N8AO aoRadius={0.45} intensity={2.4} distanceFalloff={0.9} quality="medium" />
+        <N8AO aoRadius={rich ? 0.6 : 0.45} intensity={rich ? 3.4 : 2.4} distanceFalloff={0.9} quality="medium" />
         <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
         <Vignette offset={0.3} darkness={darkness} />
-        <ToneMapping mode={ToneMappingMode.AGX} />
+        <ToneMapping mode={tone} />
       </EffectComposer>
     );
   // en equipos chicos se va la oclusión, que es lo más caro; el brillo de los LED queda
   return (
     <EffectComposer multisampling={0} enableNormalPass={false}>
+      {/* sin oclusión un tapizado parece plástico: en los ambientes armados queda, a media resolución */}
+      {rich ? <N8AO aoRadius={0.6} intensity={3} distanceFalloff={0.9} quality="performance" halfRes /> : <></>}
       <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
       <Vignette offset={0.3} darkness={darkness} />
-      <ToneMapping mode={ToneMappingMode.AGX} />
+      <ToneMapping mode={tone} />
       <SMAA />
     </EffectComposer>
+  );
+}
+
+function Grounding({ assembly }: { assembly: Assembly }) {
+  const { min, max } = assembly.room ?? assembly.bounds;
+  const w = (max[0] - min[0]) * MM;
+  const d = (max[2] - min[2]) * MM + 1.2;
+  return (
+    <ContactShadows
+      position={[((min[0] + max[0]) / 2) * MM, 0.016, (min[2] * MM + d / 2)]}
+      scale={[w, d]}
+      resolution={512}
+      far={0.9}
+      blur={2.2}
+      opacity={0.62}
+      color="#1a120c"
+      frames={Infinity}
+    />
   );
 }
 
@@ -492,6 +517,8 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
         wall={props.environment.wall}
         floor={props.environment.floor}
       />
+      {/* sombra de apoyo: lo que hace que el mueble pise el piso en vez de flotar */}
+      {props.confine && <Grounding assembly={props.assembly} />}
       {props.assembly.runs.map((run) => (
         <RunGroup key={run.index} run={run}>
           <Presence parts={run.parts}>
@@ -528,7 +555,7 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
         <Lightformer form="rect" intensity={0.7} color="#e8eef5" position={[-6, 2, 2]} rotation-y={Math.PI / 2} scale={[6, 3, 1]} />
         <Lightformer form="rect" intensity={0.9} position={[0, 1.8, 7]} scale={[8, 3, 1]} />
       </Environment>
-      <KeyLight span={span} shape={props.config.shape} />
+      <KeyLight span={span} shape={props.config.shape} rich={!!props.confine} />
       <Wardrobe props={props} kit={kit} />
       <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
       <OrbitControls
@@ -547,7 +574,7 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
         minAzimuthAngle={props.confine ? -1.05 : -Infinity}
         maxAzimuthAngle={props.confine ? 1.05 : Infinity}
       />
-      <Effects hq={props.hq} studio={props.environment.mode === "studio"} />
+      <Effects hq={props.hq} studio={props.environment.mode === "studio"} rich={!!props.confine} />
       <Capturer captureRef={props.captureRef} countFrames={props.countFrames} />
     </>
   );
