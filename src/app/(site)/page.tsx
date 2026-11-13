@@ -47,9 +47,11 @@ export default function Home() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      {/* Hero */}
-      <section className="wrap pb-16 pt-12 sm:pb-24 sm:pt-20">
-        <div className="mx-auto max-w-[70rem] text-center">
+      {/* Hero: primero el configurador, andando; debajo, qué es y cómo hablar */}
+      <section className="wrap pb-16 pt-4 sm:pb-24 sm:pt-6">
+        <HeroStage />
+
+        <div className="mx-auto mt-12 max-w-[70rem] text-center sm:mt-16">
           <p className="eyebrow">{site.tagline}</p>
           <h1 className="display-xl mt-5">
             Tus productos.
@@ -58,13 +60,13 @@ export default function Home() {
           </h1>
           <p className="lead mx-auto mt-6 max-w-2xl">Convertí tus productos personalizados en experiencias interactivas de compra.</p>
           <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/configuradores/" className="btn btn-primary">
-              Probar configuradores
-            </Link>
-            <ContactLink channel="whatsapp" interest="general" placement="hero" className="btn btn-secondary">
+            <ContactLink channel="whatsapp" interest="general" placement="hero" className="btn btn-whatsapp">
               <IconWhatsapp />
               Quiero MEDIDA para mi empresa
             </ContactLink>
+            <Link href="/configuradores/" className="btn btn-secondary">
+              Probar configuradores
+            </Link>
           </div>
           <p className="mt-4 text-sm text-ink-2">
             Sin registro.{" "}
@@ -73,10 +75,6 @@ export default function Home() {
             </ContactLink>
             .
           </p>
-        </div>
-
-        <div className="mt-12 sm:mt-16">
-          <HeroStage />
         </div>
       </section>
 
@@ -102,7 +100,7 @@ export default function Home() {
             <h2 id="configuradores" className="display-lg mt-4">
               Un configurador para cada familia de producto.
             </h2>
-            <p className="lead mt-5">Seis familias para probar ahora mismo. Todas corren sobre el mismo motor: cambian las medidas y las reglas, no el sistema.</p>
+            <p className="lead mt-5">Siete familias para probar ahora mismo. Todas corren sobre el mismo motor: cambian las medidas y las reglas, no el sistema.</p>
           </div>
           <Link href="/configuradores/" className="link-arrow">
             Ver todos

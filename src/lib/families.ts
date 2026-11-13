@@ -76,7 +76,19 @@ export const FAMILIES: Family[] = [
     href: "/demo/sillones/",
     options: ["De uno a cinco cuerpos", "Chaise a la izquierda o a la derecha", "Con o sin apoyabrazos", "Color del tapizado"],
   },
+  {
+    id: "camas",
+    name: "Bases de cama",
+    noun: "cama",
+    summary: "De una a dos plazas y media, con patas, al piso o flotante, respaldo tapizado o de madera y cajones.",
+    status: "demo",
+    href: "/demo/camas/",
+    options: ["Medida del colchón y alto", "Con patas, al piso o flotante", "Respaldo tapizado o de madera", "Cajones a los pies y luz LED"],
+  },
 ];
+
+/** los que se ofrecen primero al pie de cada configurador */
+export const RECOMMENDED = ["tv", "sillones", "camas"];
 
 export const familyById = (id: string): Family | undefined => FAMILIES.find((f) => f.id === id);
 export const demoFamilies = (): Family[] => FAMILIES.filter((f) => f.status === "demo");

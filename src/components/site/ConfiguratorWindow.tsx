@@ -24,9 +24,16 @@ function configuratorHref(anchor: HTMLAnchorElement): string | null {
 export function ConfiguratorWindow() {
   const pathname = usePathname() ?? "/";
   const [href, setHref] = useState<string | null>(null);
+  // dentro de la ventana se puede pasar a otro configurador: el título lo acompaña
+  const [inside, setInside] = useState<string | null>(null);
 
   useEffect(() => {
     const framed = window.self !== window.top;
+    if (framed) window.parent.postMessage({ medida: "configurador", path: window.location.pathname }, window.location.origin);
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin === window.location.origin && e.data?.medida === "configurador" && typeof e.data.path === "string") setInside(e.data.path);
+    };
+    window.addEventListener("message", onMessage);
     const onClick = (e: MouseEvent) => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const anchor = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
@@ -46,10 +53,16 @@ export function ConfiguratorWindow() {
       setHref(target);
     };
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("message", onMessage);
+    };
   }, []);
 
   useEffect(() => setHref(null), [pathname]);
+  useEffect(() => {
+    if (!href) setInside(null);
+  }, [href]);
 
   useEffect(() => {
     if (!href) return;
@@ -64,7 +77,7 @@ export function ConfiguratorWindow() {
   }, [href]);
 
   if (!href) return null;
-  const family = FAMILIES.find((f) => f.href === href.split("?")[0]) ?? familyById("placares")!;
+  const family = FAMILIES.find((f) => f.href === inside) ?? FAMILIES.find((f) => f.href === href.split("?")[0]) ?? familyById("placares")!;
 
   return (
     <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label={`Configurador de ${family.name.toLowerCase()}`}>

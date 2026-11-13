@@ -5,14 +5,16 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { IconBulb, IconDoor, IconExplode, IconFront, IconThree } from "@/components/icons";
+import { OtherConfigurators } from "@/components/OtherConfigurators";
 import { SendSheet } from "@/components/SendSheet";
 import { Dimension, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
-import { IconCheck, IconClose, IconHeart } from "@/components/site/icons";
+import { IconCheck, IconClose, IconDecor, IconHeart } from "@/components/site/icons";
 import { Logo } from "@/components/site/Logo";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import type { ViewName } from "@/components/viewer/Scene";
 import { fromBase64Url, toBase64Url } from "@/lib/base64url";
+import { undressed } from "@/lib/decor";
 import { addDesign, clearDraft, getDesign, nextName, readDraft, updateDesign, useDesigns, writeDraft } from "@/lib/designStore";
 import { FABRICS, buildFurniture, defaultFurniture, fabricById, furniturePrice, hasLed, furnitureSummary, normalizeFurniture, specById, type FurnitureConfig, type Value } from "@/lib/furniture";
 import { DEFAULT_CONFIG, type WardrobeConfig } from "@/lib/model";
@@ -46,6 +48,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const [open, setOpen] = useState(false);
   const [explode, setExplode] = useState(false);
   const [lights, setLights] = useState(false);
+  // la alfombra, la tele, las lámparas: se pueden sacar para ver el mueble solo
+  const [deco, setDeco] = useState(true);
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
   const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "pinotea" });
   const [ready, setReady] = useState(false);
@@ -81,6 +85,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const price = useMemo(() => furniturePrice(config, build), [config, build]);
   const summary = useMemo(() => furnitureSummary(config, build), [config, build]);
   const shownPrice = useAnimatedNumber(price);
+  const shown = useMemo(() => (deco ? build.assembly : undressed(build.assembly)), [deco, build.assembly]);
   const movable = build.doors + build.drawers > 0;
 
   // el 3D del placard pide una configuración de placard: se le pasa lo que mira (terminaciones y si hay puertas)
@@ -139,7 +144,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
         <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
           <Viewer3D
             config={look}
-            assembly={build.assembly}
+            assembly={shown}
             selection={null}
             onSelect={() => {}}
             open={open}
@@ -157,10 +162,22 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
         </div>
 
         <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
+          <div className="flex flex-col items-start">
           <Link href="/" className="glass pointer-events-auto rounded-2xl px-4 py-2.5" aria-label="MEDIDA, volver al inicio">
             <Logo />
             <p className="mt-0.5 text-xs text-ink-2">{spec.title}</p>
           </Link>
+            <button
+              type="button"
+              aria-pressed={deco}
+              onClick={() => setDeco((d) => !d)}
+              className="glass pointer-events-auto mt-2 flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+              title={deco ? "Sacar la decoración" : "Mostrar la decoración"}
+            >
+              <IconDecor width={15} height={15} />
+              {deco ? "Con decoración" : "Sin decoración"}
+            </button>
+          </div>
           <Link href="/mis-disenos/" className="glass pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium">
             <IconHeart width={17} height={17} />
             <span className="hidden sm:inline">Mis diseños</span>
@@ -248,6 +265,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
               </div>
             )}
           </Section>
+
+          <OtherConfigurators current={family} />
         </div>
 
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-5 py-4 backdrop-blur lg:static">

@@ -72,6 +72,7 @@ const SHOTS = [
   { name: "familia-ratonas", query: "f=ratonas&ambiente=habitacion&encuadre=0.85&pared=arena&piso=cemento", settle: 14_000 },
   { name: "familia-tv", query: "f=tv&ambiente=habitacion&encuadre=0.7&pared=arena&luces=1", settle: 18_000 },
   { name: "familia-bibliotecas", query: "f=bibliotecas&ambiente=habitacion&encuadre=0.8&pared=tiza", settle: 14_000 },
+  { name: "familia-camas", query: "f=camas&ambiente=habitacion&encuadre=0.8&pared=arena&piso=pinotea&luces=1", settle: 16_000 },
   { name: "familia-sillones", query: "f=sillones&ambiente=habitacion&encuadre=0.75&pared=tiza&piso=cemento", settle: 14_000 },
 ];
 

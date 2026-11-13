@@ -62,7 +62,7 @@ const overflow = (page) => page.evaluate(() => document.documentElement.scrollWi
 
 // ---------------------------------------------------------------- landing y páginas
 
-const PAGES = ["/", "/demo/mesas/", "/demo/ratonas/", "/demo/tv/", "/demo/bibliotecas/", "/demo/sillones/", "/configuradores/", "/servicios/", "/servicios/configurador-para-tu-web/", "/servicios/web-completa/", "/servicios/plataforma/", "/mis-disenos/", "/privacidad/", "/cookies/", "/terminos/"];
+const PAGES = ["/", "/demo/mesas/", "/demo/ratonas/", "/demo/tv/", "/demo/bibliotecas/", "/demo/sillones/", "/demo/camas/", "/configuradores/", "/servicios/", "/servicios/configurador-para-tu-web/", "/servicios/web-completa/", "/servicios/plataforma/", "/mis-disenos/", "/privacidad/", "/cookies/", "/terminos/"];
 
 for (const [width, height] of [
   [390, 844],
@@ -117,9 +117,9 @@ for (const [width, height] of [
   });
 
   await check("familias: las seis se pueden probar y abren su configurador", async () => {
-    assert((await page.getByText("Para probar", { exact: true }).count()) === 6, "tienen que ser seis para probar");
+    assert((await page.getByText("Para probar", { exact: true }).count()) === 7, "tienen que ser siete para probar");
     const hrefs = await page.locator('a[href^="/demo/"]').evaluateAll((as) => [...new Set(as.map((a) => a.getAttribute("href").split("?")[0]))]);
-    for (const f of ["", "mesas/", "ratonas/", "tv/", "bibliotecas/", "sillones/"]) assert(hrefs.includes(`/demo/${f}`), `falta /demo/${f}`);
+    for (const f of ["", "mesas/", "ratonas/", "tv/", "bibliotecas/", "sillones/", "camas/"]) assert(hrefs.includes(`/demo/${f}`), `falta /demo/${f}`);
   });
 
   await check("configurador: se abre como ventana sobre la página y se cierra volviendo a ella", async () => {
@@ -130,8 +130,21 @@ for (const [width, height] of [
     const frame = page.frameLocator("iframe");
     await frame.getByRole("button", { name: "Enviar al taller" }).waitFor();
     assert((await frame.getByRole("region", { name: "Aviso de cookies" }).count()) === 0, "la ventana no repite el aviso de cookies");
+    // al pie del configurador están los otros, y se pasa de uno a otro sin salir de la ventana
+    const first = await frame.locator('section[aria-label="Otros configuradores"] a').evaluateAll((as) => as.slice(0, 3).map((a) => a.getAttribute("href")));
+    assert(JSON.stringify(first) === JSON.stringify(["/demo/tv/", "/demo/sillones/", "/demo/camas/"]), `recomendados: ${first}`);
+    await frame.getByRole("link", { name: "Sillones modulares" }).click();
+    await page.getByRole("dialog", { name: /Configurador de sillones/ }).waitFor();
+    assert(page.url() === base + "/", "pasar a otro configurador no tiene que cambiar la página de atrás");
     await page.keyboard.press("Escape");
-    await win.waitFor({ state: "hidden" });
+    await page.getByRole("dialog").waitFor({ state: "hidden" });
+  });
+
+  await check("landing: lo primero es el configurador, y el contacto queda debajo", async () => {
+    const stage = await page.getByRole("group", { name: "Probá el configurador" }).boundingBox();
+    const title = await page.locator("h1").boundingBox();
+    const contact = await page.getByRole("link", { name: "Quiero MEDIDA para mi empresa" }).boundingBox();
+    assert(stage.y < title.y && title.y < contact.y, "el orden no es configurador, título, contacto");
   });
 
   await check("hero: el motor 3D no se baja con la página", async () => {
@@ -294,6 +307,20 @@ for (const [width, height] of [
     await frame.locator("#dim-Ancho").waitFor();
     assert((await frame.locator("#dim-Ancho").inputValue()) === "300" && (await frame.locator("#dim-Alto").inputValue()) === "220", "no abrió con las medidas guardadas");
     assert(await frame.getByRole("button", { name: /Diseño guardado/ }).isVisible(), "no muestra que está guardado");
+  });
+
+  await check("decoración: un botón arriba a la izquierda la saca y la vuelve a poner", async () => {
+    await page.goto(base + "/demo/tv/?calidad=baja", { waitUntil: "networkidle" });
+    const toggle = page.getByRole("button", { name: /decoración/ });
+    assert((await toggle.getAttribute("aria-pressed")) === "true", "tiene que arrancar con decoración");
+    const box = await toggle.boundingBox();
+    assert(box.x < 300 && box.y < 200, "el botón no está arriba a la izquierda");
+    const before = await page.getByText(/^\$\s?[\d.]+$/).first().innerText();
+    await toggle.click();
+    assert((await toggle.innerText()).includes("Sin decoración"), "no cambió");
+    assert((await page.getByText(/^\$\s?[\d.]+$/).first().innerText()) === before, "sacar la decoración no puede cambiar el precio");
+    await page.goto(base + "/demo/?calidad=baja", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /decoración/ }).click();
   });
 
   await check("configurador: sin errores de página en todo el recorrido", async () => assert(errors.length === 0, errors[0]));

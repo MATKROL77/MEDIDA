@@ -164,6 +164,29 @@ export const SPECS: FurnitureSpec[] = [
   },
 ];
 
+SPECS.push({
+  id: "camas",
+  label: "Cama",
+  title: "Bases de cama",
+  controls: [
+    { key: "width", type: "size", label: "Ancho del colchón", min: 800, max: 2000 },
+    { key: "length", type: "size", label: "Largo del colchón", min: 1900, max: 2100 },
+    { key: "height", type: "size", label: "Alto de la base", min: 200, max: 450 },
+    { key: "base", type: "choice", label: "Apoyo", options: choice(["patas", "Con patas"], ["caja", "Al piso"], ["flotante", "Flotante"]) },
+    { key: "head", type: "choice", label: "Respaldo", options: choice(["biblioteca", "Con estantes"], ["tapizado", "Tapizado"], ["madera", "De madera"], ["no", "Sin respaldo"]) },
+    { key: "foot", type: "choice", label: "A los pies", options: choice(["liso", "Liso"], ["cajones", "Cajones"], ["puertas", "Puertas"]) },
+    { key: "sides", type: "toggle", label: "Cajones al costado", hint: "Dos cajones grandes bajo el colchón" },
+    { key: "upholstered", type: "toggle", label: "Base tapizada", hint: "Forrada en tela" },
+    LED,
+  ],
+  defaults: { width: 1600, length: 2000, height: 400, base: "caja", head: "biblioteca", foot: "puertas", sides: true, upholstered: false, led: true },
+  body: "nogal",
+  front: "nogal",
+  bodyLabel: "Madera",
+  frontLabel: null,
+  upholstered: true,
+});
+
 export const hasLed = (config: FurnitureConfig): boolean => config.values.led === true;
 
 export const specById = (id: string): FurnitureSpec | undefined => SPECS.find((s) => s.id === id);
@@ -589,6 +612,115 @@ const BUILDERS: Record<string, Builder> = {
       }
     }
     return { parts, drawers: 0, doors };
+  },
+
+  camas(v, c) {
+    const mw = v.width as number;
+    const ml = v.length as number;
+    const h = v.height as number;
+    const parts: Part[] = [];
+    const soft = v.upholstered === true;
+    const t = soft ? 60 : 36;
+    const w = mw + 2 * t;
+    const head = v.head === "no" ? 0 : v.head === "tapizado" ? 110 : v.head === "biblioteca" ? 240 : 40;
+    const storeSide = v.sides === true && !soft;
+    const storeFoot = soft ? "liso" : (v.foot as string);
+    const z0 = head;
+    const len = ml + t;
+    // con una base baja el marco no puede quedar más fino que un larguero
+    const lift = v.base === "caja" ? 0 : Math.min(v.base === "flotante" ? 170 : 150, h - 120);
+    const rail = h - lift;
+    const cush = (): Extra => ({ geometry: "cushion", noCut: true });
+    const wrap = (id: string, label: string, kind: PartKind, pos: Vec3, size: Vec3) => {
+      const p = piece(parts, id, label, kind, soft ? "fabric" : c.body, pos, size, soft ? cush() : { band: { long: 2, short: 2 } });
+      if (soft) p.radius = 28;
+    };
+    // el marco: dos largueros y la piecera
+    wrap("rail:l", "Larguero", "side", [0, lift, z0], [t, rail, len]);
+    if (!storeSide) wrap("rail:r", "Larguero", "side", [w - t, lift, z0], [t, rail, len]);
+    if (storeFoot === "liso") wrap("foot", "Piecera", "side", [t, lift, z0 + len - t], [mw, rail, t]);
+    // tapa del marco: lo que se ve entre el colchón y los frentes
+    if (storeSide || storeFoot !== "liso") piece(parts, "deck", "Tapa de la base", "top", c.body, [t, h - 50, z0 + ml - 200], [mw, T, 200 + t], { band: { long: 1, short: 0 } });
+    // el colchón apoya sobre tablas, no sobre una placa entera
+    const slats = Math.max(6, Math.round(ml / 170));
+    for (let i = 0; i < slats; i++) piece(parts, `slat:${i}`, "Tabla del elástico", "shelf", "back", [t, h - 70, z0 + 40 + ((ml - 170) * i) / (slats - 1)], [mw, 20, 90]);
+    piece(parts, "spine", "Larguero central", "divider", c.body, [w / 2 - 9, lift, z0 + 20], [T, Math.max(40, rail - 70), ml - 40]);
+
+    if (v.head === "tapizado") {
+      const p = piece(parts, "head", "Respaldo tapizado", "back", "fabric", [-40, 0, 0], [w + 80, h + 780, head], cush());
+      p.radius = 48;
+    } else if (v.head === "madera") {
+      piece(parts, "head", "Respaldo", "back", c.body, [-60, 0, 0], [w + 120, h + 700, 36], { band: { long: 2, short: 2 } });
+    }
+
+    if (v.head === "biblioteca") {
+      // respaldo con estantes: un fondo, una tapa para apoyar cosas y nichos con luz
+      const hw = w + 120;
+      const top = h + 620;
+      piece(parts, "head", "Fondo del respaldo", "back", c.body, [-60, 0, 0], [hw, top, T], { band: { long: 1, short: 2 } });
+      piece(parts, "head:top", "Tapa del respaldo", "top", c.body, [-60, top - T, T], [hw, T, head - T], { band: { long: 2, short: 2 } });
+      piece(parts, "head:shelf", "Estante del respaldo", "shelf", c.body, [-60 + T, h + 300, T], [hw - 2 * T, T, head - T - 20]);
+      piece(parts, "head:front", "Frente del respaldo", "blind", c.body, [-60, 0, head - T], [hw, h + 300, T], { band: { long: 1, short: 0 } });
+      const cells = Math.max(2, Math.round(hw / 620));
+      for (let k = 0; k <= cells; k++) piece(parts, `head:div${k}`, k === 0 || k === cells ? "Lateral del respaldo" : "Divisor del respaldo", "divider", c.body, [-60 + ((hw - T) * k) / cells, h + 300 + T, T], [T, top - h - 300 - 2 * T, head - T - 20]);
+      if (v.led) led(parts, "led:head", -60 + 40, top - T - 8, head - 50, hw - 80);
+      books(parts, "deco:hb", -60 + 60, h + 300 + T, 60, 6, 140);
+    }
+
+    let drawers = 0;
+    let doors = 0;
+    if (v.base === "patas") {
+      legs(parts, "leg", 0, z0, w, len, lift, "conica", c.body, 70);
+      if (mw > 1300) for (const [k, z] of [z0 + 70, z0 + len - 128].entries()) piece(parts, `leg:m${k}`, "Pata", "plinth", c.body, [w / 2 - 29, 0, z], [58, lift, 58], { geometry: "cone", noCut: true });
+    } else if (v.base === "flotante") {
+      // el zócalo va metido hacia adentro y a oscuras: la cama parece no tocar el piso
+      piece(parts, "plinth", "Zócalo", "plinth", "tint:#201812", [220, 0, z0 + 220], [w - 440, lift, len - 440], { noCut: true });
+    }
+    const fh = rail - 16;
+    if (storeFoot === "cajones" && rail > 150) {
+      const dw = (mw - 12) / 2;
+      for (let k = 0; k < 2; k++) drawer(parts, `dr${k}`, k, t + 4 + k * (dw + 4), lift + 8, z0 + len - T, dw, fh, 700, c.front);
+      drawers += 2;
+    } else if (storeFoot === "puertas" && rail > 150) {
+      const dw = (mw - 9) / 2;
+      for (let k = 0; k < 2; k++) door(parts, `door${k}`, t + 3 + k * (dw + 3), lift + 8, z0 + len - T, dw, fh, c.front, k === 0 ? "left" : "right");
+      doors += 2;
+    }
+    if (storeSide && rail > 150) {
+      // dos cajones grandes que salen por el costado
+      const dl = (len - 3 * T - 8) / 2;
+      const out: Vec3 = [520, 0, 0];
+      piece(parts, "post:m", "Parante", "divider", c.body, [w - t, lift, z0 + T + dl + 4], [t, rail, T]);
+      piece(parts, "post:f", "Parante", "divider", c.body, [w - t, lift, z0 + len - T], [t, rail, T]);
+      piece(parts, "post:b", "Parante", "divider", c.body, [w - t, lift, z0], [t, rail, T]);
+      for (let k = 0; k < 2; k++) {
+        const z = z0 + T + 2 + k * (dl + T + 4);
+        const grip: Part = { id: `sd${k}:h`, label: "Tirador", kind: "handle", material: "handle", run: 0, module: null, position: [T, fh - 30, dl / 2 - 70], size: [22, 10, 140], geometry: "box", cut: null, explode: [0, 0, 0] };
+        piece(parts, `sd${k}:f`, "Frente de cajón", "drawer-front", c.front, [w - T, lift + 8, z], [T, fh, dl], { front: true, module: 10 + k, openShift: out, band: { long: 2, short: 2 }, details: [grip] });
+        piece(parts, `sd${k}:b`, "Fondo de cajón", "drawer-bottom", "back", [w - T - 560, lift + 20, z + 20], [560, 4, dl - 40], { module: 10 + k, openShift: out });
+        for (const [n, dz] of [20, dl - 32].entries()) piece(parts, `sd${k}:s${n}`, "Lateral de cajón", "drawer-side", "back", [w - T - 560, lift + 20, z + dz], [560, fh - 50, 12], { module: 10 + k, openShift: out });
+      }
+      drawers += 2;
+    }
+    if (v.led) led(parts, "led", 180, lift - 8 < 0 ? 4 : lift - 8, z0 + len * 0.5, w - 360, { y: 5, depth: len * 1.25 });
+
+    // lo que la viste: colchón, acolchado y almohadas; una mesa de luz a cada lado
+    const my = h - 50;
+    const c1 = (id: string, label: string, color: string, pos: Vec3, size: Vec3, radius: number) => {
+      piece(parts, id, label, "shelf", `tint:${color}`, pos, size, { ...deco, geometry: "cushion" }).radius = radius;
+    };
+    c1("deco:mattress", "Colchón", "#ece6dc", [t + 5, my, z0 + 10], [mw - 10, 250, ml - 20], 80);
+    c1("deco:duvet", "Acolchado", "#cfc4b3", [t - 10, my + 215, z0 + ml * 0.34], [mw + 20, 70, ml * 0.66], 30);
+    const pillows = mw > 1200 ? 2 : 1;
+    const pw = Math.min(700, mw / pillows - 60);
+    for (let k = 0; k < pillows; k++) c1(`deco:pillow${k}`, "Almohada", "#f6f2ea", [t + (mw / pillows) * k + (mw / pillows - pw) / 2, my + 240, z0 + 60], [pw, 150, 420], 70);
+    // del lado de los cajones no va mesa de luz: taparía por donde salen
+    for (const [k, x] of (storeSide ? [-560 - 60] : [-560 - 60, w + 120]).entries()) {
+      piece(parts, `deco:night${k}`, "Mesa de luz", "top", "tint:#3b2a1e", [x, 0, 20], [500, 480, 400], deco);
+      lamp(parts, `deco:lamp${k}`, x + 195, 480, 150);
+    }
+    rug(parts, -350, z0 + ml * 0.45, w + 700, ml * 0.9);
+    return { parts, drawers, doors };
   },
 
   sillones(v, c) {

@@ -17,11 +17,12 @@ import {
 } from "@/components/icons";
 import { LayoutIcon } from "@/components/LayoutIcon";
 import { Poster } from "@/components/Poster";
+import { OtherConfigurators } from "@/components/OtherConfigurators";
 import { SendSheet } from "@/components/SendSheet";
 import { Watermark } from "@/components/Watermark";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { ContactLink } from "@/components/site/ContactLink";
-import { IconCheck, IconClose, IconHeart, IconWhatsapp } from "@/components/site/icons";
+import { IconCheck, IconClose, IconDecor, IconHeart, IconWhatsapp } from "@/components/site/icons";
 import { Logo } from "@/components/site/Logo";
 import { Dimension, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
@@ -53,6 +54,7 @@ import {
   type Shape,
   type WardrobeConfig,
 } from "@/lib/model";
+import { dressed } from "@/lib/decor";
 import { addDesign, clearDraft, getDesign, nextName, readDraft, updateDesign, useDesigns, writeDraft } from "@/lib/designStore";
 import { drawerGroupsOf, leavesOf, openOffsets, toggleLeaf } from "@/lib/motion";
 import { buildOrderPdf, type OrderPdf } from "@/lib/orderPdf";
@@ -120,6 +122,8 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
   const [saveOpen, setSaveOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [changes, setChanges] = useState(0);
+  // ropa y zapatillas adentro: para verlo en uso. No cambian el despiece ni el precio
+  const [deco, setDeco] = useState(true);
   const [pitchClosed, setPitchClosed] = useState(true);
   const saved = useDesigns().designs.find((d) => d.id === designId) ?? null;
   const savedCount = useDesigns().designs.length;
@@ -169,6 +173,8 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
   }, []);
 
   const result = useMemo(() => quote(config), [config]);
+
+  const clothed = useMemo(() => dressed(result.assembly), [result.assembly]);
 
   /** una vista previa chica del 3D, tal como se ve ahora */
   const capturePreview = async (wait = 1500): Promise<string | null> => {
@@ -335,7 +341,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
         <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
           <Viewer3D
             config={config}
-            assembly={result.assembly}
+            assembly={deco ? clothed : result.assembly}
             selection={editingInside ? sel : null}
             onSelect={selectModule}
             open={open}
@@ -354,6 +360,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
         <Watermark />
 
         <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
+          <div className="flex flex-col items-start">
           {workshop ? (
             <div className="pointer-events-auto rounded-2xl bg-surface/90 px-4 py-2.5 shadow-sm backdrop-blur">
               <p className="font-display text-base font-semibold leading-tight">{workshop.name}</p>
@@ -365,6 +372,17 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
               <p className="mt-0.5 text-xs text-ink-2">{catalog.brand.tagline}</p>
             </Link>
           )}
+            <button
+              type="button"
+              aria-pressed={deco}
+              onClick={() => setDeco((d) => !d)}
+              className="glass pointer-events-auto mt-2 flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+              title={deco ? "Sacar la decoración" : "Mostrar la decoración"}
+            >
+              <IconDecor width={15} height={15} />
+              {deco ? "Con decoración" : "Sin decoración"}
+            </button>
+          </div>
           {demo && (
             <Link
               href="/mis-disenos/"
@@ -880,6 +898,8 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
           <Link href={`/demo/taller/?c=${encodeConfig(config)}`} className="link-arrow text-sm">
             Ver lo que le llega al taller
           </Link>
+
+          {demo && <OtherConfigurators current={FAMILY} />}
 
           {showPitch && (
             <aside className="fade-in relative rounded-2xl bg-paper p-4 pr-10" aria-label="MEDIDA para empresas">

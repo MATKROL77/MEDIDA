@@ -148,3 +148,26 @@ test("el sillón curvo gira cada cuerpo hacia el centro", () => {
   assert.ok((bases[0].rotationY ?? 0) > 0 && (bases[3].rotationY ?? 0) < 0, "los extremos miran hacia adentro");
   assert.ok(bases[0].position[2] > bases[1].position[2], "y vienen hacia adelante");
 });
+
+test("la ropa del placard se dibuja pero no toca el despiece ni el precio", async () => {
+  const { dressed, undressed } = await import("./decor.ts");
+  const { DEFAULT_CONFIG } = await import("./model.ts");
+  const { quote } = await import("./quote.ts");
+  const q = quote(DEFAULT_CONFIG);
+  const withClothes = dressed(q.assembly);
+  const added = withClothes.runs[0].parts.filter((p) => p.decor);
+  assert.ok(added.some((p) => p.label === "Ropa colgada") && added.some((p) => p.label === "Ropa doblada"), "falta ropa colgada o doblada");
+  assert.ok(added.every((p) => p.cut === null && p.size.every((s) => s > 0)));
+  assert.equal(q.assembly.runs[0].parts.filter((p) => p.decor).length, 0, "el despiece no se toca");
+  // la ropa colgada no atraviesa lo que hay debajo
+  const solid = q.assembly.runs[0].parts.filter((p) => ["bottom", "shelf", "fixed-shelf", "drawer-front"].includes(p.kind));
+  for (const c of added.filter((p) => p.label === "Ropa colgada")) {
+    for (const s of solid) {
+      const overlapX = s.position[0] < c.position[0] + c.size[0] && s.position[0] + s.size[0] > c.position[0];
+      const top = s.position[1] + s.size[1];
+      assert.ok(!overlapX || top <= c.position[1] || s.position[1] >= c.position[1] + c.size[1], `${c.id} atraviesa ${s.id}`);
+    }
+  }
+  const bare = undressed(buildFurniture(defaultFurniture("tv")).assembly);
+  assert.equal(bare.runs[0].parts.filter((p) => p.decor).length, 0);
+});

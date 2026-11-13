@@ -122,7 +122,7 @@ jobs:
             exit 0
           fi
           # la primera publicación de un subdominio puede tardar unos segundos
-          for path in / /configuradores/ /servicios/ /demo/ /demo/mesas/ /demo/ratonas/ /demo/tv/ /demo/bibliotecas/ /demo/sillones/ /demo/taller/ /mis-disenos/ /cuenta/ /admin/ /panel/ /embed/ /privacidad/ /cookies/ /terminos/ /api/health /api/public/site; do
+          for path in / /configuradores/ /servicios/ /demo/ /demo/mesas/ /demo/ratonas/ /demo/tv/ /demo/bibliotecas/ /demo/sillones/ /demo/camas/ /demo/taller/ /mis-disenos/ /cuenta/ /admin/ /panel/ /embed/ /privacidad/ /cookies/ /terminos/ /api/health /api/public/site; do
             ok=""
             for attempt in 1 2 3 4 5 6; do
               code=$(curl -s -o /dev/null -w '%{http_code}' "$url$path" || true)
