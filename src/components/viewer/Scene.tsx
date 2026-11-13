@@ -1,6 +1,6 @@
 "use client";
 
-import { ContactShadows, Edges, Environment, Lightformer, OrbitControls, PerformanceMonitor } from "@react-three/drei";
+import { ContactShadows, Edges, Environment, Lightformer, OrbitControls, PerformanceMonitor, SoftShadows } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
@@ -16,7 +16,7 @@ import { drawerGroupsOf, isCovered, leavesOf, overlaps, sweep } from "@/lib/moti
 import { createKit, disposeKit, frontMaterials, GLASS_OPACITY, type MaterialKit } from "./materials";
 import { MM, PartNode, Presence } from "./PartNode";
 import type { FloorType } from "./constants";
-import { Room } from "./Room";
+import { PODIUM_HEIGHT, Room, type Walls } from "./Room";
 
 export type ViewName = "front" | "three" | "side" | "top" | "back";
 
@@ -54,6 +54,8 @@ export type ViewerProps = {
   confine?: boolean;
   /** color del tapizado, para los muebles que lo llevan */
   fabric?: string;
+  /** el tipo de tela: lino, pana o bouclé (cambia la trama y el brillo) */
+  weave?: string;
   /** tope de resolución del lienzo */
   maxDpr?: number;
   /** encuadre: menos de 1 acerca la cámara (sin barras encima del visor sobra margen) */
@@ -95,7 +97,7 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   // el mapeo de tonos oscurece los claros: el fondo liso entra con ganancia para salir del color pedido
   const bg = useMemo(() => {
     const studio = new THREE.Color(backdrop).multiplyScalar(STUDIO_GAIN);
-    return { studio, room: new THREE.Color("#e9e4dc"), cur: studio.clone() };
+    return { studio, room: new THREE.Color("#e7e2db"), cur: studio.clone() };
   }, [backdrop]);
 
   const motion = useMemo(
@@ -505,18 +507,35 @@ function Grounding({ assembly }: { assembly: Assembly }) {
   );
 }
 
+/** qué paredes necesita lo que se muestra: el placard siempre va contra la pared, recto o en L */
+export function wallsOf(props: Pick<ViewerProps, "assembly" | "config">): Walls {
+  return props.assembly.walls ?? (props.config.shape === "straight" ? "back" : props.config.shape);
+}
+
+/** lo suelto se muestra sobre la tarima del showroom: sube con ella, y baja cuando se pasa a fondo liso */
+function Lift({ on, children }: { on: boolean; children: React.ReactNode }) {
+  const anim = useSceneAnim();
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    ref.current?.position.set(0, on ? PODIUM_HEIGHT * MM * anim.room.v : 0, 0);
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   const anim = useSceneAnim();
   const totalH = Math.max(1, props.assembly.bounds.max[1]);
+  const walls = wallsOf(props);
   return (
     <Centered assembly={props.assembly}>
       <Room
         min={(props.assembly.room ?? props.assembly.bounds).min}
         max={(props.assembly.room ?? props.assembly.bounds).max}
-        shape={props.config.shape}
+        walls={walls}
         wall={props.environment.wall}
         floor={props.environment.floor}
       />
+      <Lift on={walls === "none"}>
       {/* sombra de apoyo: lo que hace que el mueble pise el piso en vez de flotar */}
       {props.confine && <Grounding assembly={props.assembly} />}
       {props.assembly.runs.map((run) => (
@@ -532,12 +551,13 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
           {props.selection && props.selection.run === run.index && <SelectionBox run={run} module={props.selection.module} />}
         </RunGroup>
       ))}
+      </Lift>
     </Centered>
   );
 }
 
 function SceneContents(props: ViewerProps & { hq: boolean }) {
-  const kit = useMemo(() => createKit(props.config.bodyMaterial, props.config.doorMaterial, props.fabric), [props.config.bodyMaterial, props.config.doorMaterial, props.fabric]);
+  const kit = useMemo(() => createKit(props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave), [props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave]);
   useEffect(() => () => disposeKit(kit), [kit]);
   const { min, max } = props.assembly.bounds;
   const span = Math.max(max[0] - min[0], max[2] - min[2], max[1]);
@@ -556,6 +576,8 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
         <Lightformer form="rect" intensity={0.9} position={[0, 1.8, 7]} scale={[8, 3, 1]} />
       </Environment>
       <KeyLight span={span} shape={props.config.shape} rich={!!props.confine} />
+      {/* sombras de borde difuso, que se abren con la distancia, como bajo la luz de un showroom */}
+      <SoftShadows size={22} samples={10} focus={0.55} />
       <Wardrobe props={props} kit={kit} />
       <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
       <OrbitControls
@@ -571,8 +593,9 @@ function SceneContents(props: ViewerProps & { hq: boolean }) {
         maxDistance={props.confine ? 9 : 18}
         minPolarAngle={props.confine ? 0.5 : 0}
         maxPolarAngle={props.confine ? 1.52 : Math.PI}
-        minAzimuthAngle={props.confine ? -1.05 : -Infinity}
-        maxAzimuthAngle={props.confine ? 1.05 : Infinity}
+        // contra una pared no se puede ir por detrás; lo suelto se rodea entero
+        minAzimuthAngle={props.confine && wallsOf(props) !== "none" ? -1.05 : -Infinity}
+        maxAzimuthAngle={props.confine && wallsOf(props) !== "none" ? 1.05 : Infinity}
       />
       <Effects hq={props.hq} studio={props.environment.mode === "studio"} rich={!!props.confine} />
       <Capturer captureRef={props.captureRef} countFrames={props.countFrames} />

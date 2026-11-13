@@ -123,7 +123,8 @@ export type Part = {
   /** null para lo que no sale de placa */
   cut: Cut | null;
   /** las puertas batientes giran sobre este borde al abrir */
-  hinge?: "left" | "right";
+  /** "bottom": puerta rebatible, que se abre hacia adelante girando sobre su canto de abajo */
+  hinge?: "left" | "right" | "bottom";
   /** herrajes y terminaciones que se mueven con la pieza, en coordenadas de la pieza */
   details?: Part[];
   /** desplazamiento al abrir (cajones y hojas corredizas), en mm */
@@ -186,6 +187,8 @@ export type Assembly = {
   bounds: { min: Vec3; max: Vec3 };
   /** lo que tiene que entrar en la habitación: el mueble y lo que lo acompaña */
   room?: { min: Vec3; max: Vec3 };
+  /** qué paredes necesita el mueble en el showroom: ninguna, una atrás, o dos (placard en L) */
+  walls?: "none" | "back" | "l-left" | "l-right";
 };
 
 /** bisagras por puerta según su alto: lo que recomiendan los fabricantes de herrajes */
@@ -374,7 +377,8 @@ function frontDetails(
 function attachFrontFeatures(p: Part) {
   if (!p.cut) return;
   const features: Feature[] = [];
-  if (p.kind === "door" && p.hinge) {
+  // las cazoletas son de las batientes del placard; las rebatibles van con compás
+  if (p.kind === "door" && (p.hinge === "left" || p.hinge === "right")) {
     const edgeHeight = p.trapezoid ? (p.hinge === "left" ? p.trapezoid.left : p.trapezoid.right) : p.size[1];
     const count = hingesFor(p.size[1]);
     const at = Array.from({ length: count }, (_, i) => Math.round(100 + ((edgeHeight - 200) * i) / (count - 1)));

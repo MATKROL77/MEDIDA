@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p worker && tsc --noEmit -p worker/test",
     "test": "node --experimental-strip-types --test src/lib/*.test.ts worker/test/*.test.ts",
     "capture": "node --experimental-strip-types scripts/capture.mjs",
-    "preview": "next build && wrangler dev --port 8787 --var DEV_OUTBOX:1"
+    "preview": "next build && wrangler dev --port 8787 --var DEV_OUTBOX:1",
+    "textures": "NODE_USE_ENV_PROXY=1 node scripts/textures.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

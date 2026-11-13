@@ -89,10 +89,10 @@ export default function RenderStage() {
 
   const result = useMemo(() => {
     if (!state) return null;
-    if (!state.furniture) return { assembly: quote(state.config).assembly, look: state.config, fabric: undefined as string | undefined };
+    if (!state.furniture) return { assembly: quote(state.config).assembly, look: state.config, fabric: undefined as string | undefined, weave: undefined as string | undefined };
     const built = buildFurniture(state.furniture);
     const look: WardrobeConfig = { ...DEFAULT_CONFIG, doors: built.doors ? "hinged" : "none", bodyMaterial: state.furniture.body, doorMaterial: state.furniture.front, led: { ...DEFAULT_CONFIG.led, sensor: false } };
-    return { assembly: built.assembly, look, fabric: fabricById(state.furniture.fabric).color };
+    return { assembly: built.assembly, look, fabric: fabricById(state.furniture.fabric).color, weave: fabricById(state.furniture.fabric).weave as string | undefined };
   }, [state]);
   if (!state || !result) return null;
   const leaves = leavesOf(result.assembly);
@@ -104,6 +104,7 @@ export default function RenderStage() {
         config={result.look}
         assembly={result.assembly}
         fabric={result.fabric}
+        weave={result.weave}
         selection={null}
         onSelect={() => {}}
         open={state.open}

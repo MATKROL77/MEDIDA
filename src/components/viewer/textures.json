@@ -1,0 +1,162 @@
+{
+  "nogal": {
+    "size": [
+      1.7999999523162842,
+      1.7999999523162842
+    ],
+    "grain": "v",
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ],
+    "average": [
+      138,
+      105,
+      81
+    ]
+  },
+  "roble": {
+    "size": [
+      1.8300000429153442,
+      1.8300000429153442
+    ],
+    "grain": "v",
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ],
+    "average": [
+      161,
+      126,
+      87
+    ]
+  },
+  "piso-madera": {
+    "size": [
+      1.2000000476837158,
+      1.2000000476837158
+    ],
+    "grain": "u",
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ],
+    "average": [
+      162,
+      117,
+      84
+    ]
+  },
+  "piso-pinotea": {
+    "size": [
+      1.9800000190734863,
+      1.9800000190734863
+    ],
+    "grain": "v",
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ],
+    "average": [
+      154,
+      100,
+      20
+    ]
+  },
+  "piso-cemento": {
+    "size": [
+      3,
+      3.000000238418579
+    ],
+    "grain": null,
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ],
+    "average": [
+      86,
+      86,
+      84
+    ]
+  },
+  "piso-baldosa": {
+    "size": [
+      1.5,
+      1.5
+    ],
+    "grain": null,
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ],
+    "average": [
+      135,
+      117,
+      100
+    ]
+  },
+  "pared": {
+    "size": [
+      3,
+      3.000000238418579
+    ],
+    "grain": null,
+    "maps": [
+      "normal",
+      "roughness"
+    ]
+  },
+  "tela-lino": {
+    "size": [
+      0.2707081392676629,
+      0.27129998803138733
+    ],
+    "grain": null,
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ]
+  },
+  "tela-pana": {
+    "size": [
+      0.28422817052147237,
+      0.273499995470047
+    ],
+    "grain": null,
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ]
+  },
+  "tela-boucle": {
+    "size": [
+      0.3147823709728821,
+      0.39010000228881836
+    ],
+    "grain": null,
+    "maps": [
+      "normal",
+      "roughness"
+    ]
+  },
+  "tela-lana": {
+    "size": [
+      0.2700788548673393,
+      0.27570000290870667
+    ],
+    "grain": null,
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ]
+  }
+}

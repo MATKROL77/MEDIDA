@@ -1,8 +1,9 @@
 /**
- * Texturas dibujadas en canvas y materiales compartidos.
+ * Materiales compartidos y texturas dibujadas en canvas.
  *
- * Nada se baja de internet: las vetas, el parquet y los degradés de luz se
- * generan al vuelo. Los materiales se comparten entre piezas para que la
+ * Las maderas de verdad (nogal, roble), los pisos y las telas usan fotos de
+ * public/tex (ver photo.ts). Lo que no tiene foto (las melaminas lisas, los
+ * degradés de luz) se genera al vuelo. Los materiales se comparten entre piezas para que la
  * placa no compile un shader por pieza y los cambios de color sean un solo
  * ajuste por cuadro.
  */
@@ -10,6 +11,13 @@
 import * as THREE from "three";
 
 import { materialById } from "@/lib/catalog";
+
+import { dressWith, tintFor, type PhotoId } from "./photo";
+
+/** qué terminaciones del catálogo tienen foto de verdad */
+const VENEERS: Record<string, PhotoId> = { nogal: "nogal", roble: "roble" };
+/** la trama de cada tipo de tela */
+const WEAVES: Record<string, PhotoId> = { lino: "tela-lino", pana: "tela-pana", boucle: "tela-boucle" };
 
 /** pseudoaleatorio con semilla: la misma veta en cada carga */
 function rng(seed: number) {
@@ -211,11 +219,34 @@ export function glowTexture(kind: "down" | "pool" | "fromLeft" | "fromRight"): T
   return cached(`glow-${kind}`, () => {
     const size = 256;
     const [c, ctx] = canvas(size);
+    if (kind === "pool") {
+      // charco de luz en el piso: fuerte bajo el mueble y apagándose parejo
+      // hacia todos lados, sin ningún borde recto
+      const img = ctx.createImageData(size, size);
+      const soft = (t: number, edge: number) => {
+        const k = Math.min(1, Math.min(t, 1 - t) / edge);
+        return k * k * (3 - 2 * k);
+      };
+      for (let y = 0; y < size; y++) {
+        const v = (y + 0.5) / size;
+        // a lo ancho del charco, una campana: la luz se abre desde la tira
+        const across = Math.exp(-Math.pow((v - 0.5) / 0.2, 2)) * soft(v, 0.18);
+        for (let x = 0; x < size; x++) {
+          const u = (x + 0.5) / size;
+          // a lo largo, parejo en el medio y difuminado en las puntas
+          const a = across * soft(u, 0.3);
+          const i = (y * size + x) * 4;
+          img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+          img.data[i + 3] = Math.round(255 * a);
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      return toTexture(c, false);
+    }
     let g: CanvasGradient;
     if (kind === "down") g = ctx.createLinearGradient(0, 0, 0, size);
     else if (kind === "fromLeft") g = ctx.createLinearGradient(0, 0, size, 0);
-    else if (kind === "fromRight") g = ctx.createLinearGradient(size, 0, 0, 0);
-    else g = ctx.createLinearGradient(0, size, 0, 0);
+    else g = ctx.createLinearGradient(size, 0, 0, 0);
     g.addColorStop(0, "rgba(255,255,255,1)");
     g.addColorStop(0.25, "rgba(255,255,255,0.55)");
     g.addColorStop(0.6, "rgba(255,255,255,0.15)");
@@ -223,10 +254,10 @@ export function glowTexture(kind: "down" | "pool" | "fromLeft" | "fromRight"): T
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
     // los bordes laterales se apagan: la luz no corta en seco contra el lateral
-    const edge = ctx.createLinearGradient(0, 0, kind === "down" || kind === "pool" ? size : 0, kind === "down" || kind === "pool" ? 0 : size);
+    const edge = ctx.createLinearGradient(0, 0, kind === "down" ? size : 0, kind === "down" ? 0 : size);
     edge.addColorStop(0, "rgba(0,0,0,1)");
-    edge.addColorStop(0.12, "rgba(0,0,0,0)");
-    edge.addColorStop(0.88, "rgba(0,0,0,0)");
+    edge.addColorStop(0.2, "rgba(0,0,0,0)");
+    edge.addColorStop(0.8, "rgba(0,0,0,0)");
     edge.addColorStop(1, "rgba(0,0,0,1)");
     ctx.globalCompositeOperation = "destination-out";
     ctx.fillStyle = edge;
@@ -241,37 +272,44 @@ export type MaterialKit = ReturnType<typeof createKit>;
  * Un juego de materiales por combinación de terminaciones. Los frentes tienen
  * su propia copia transparente para la vista de rayos X.
  */
-export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9") {
+export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", weave = "lino") {
   const surface = (id: string, along: "u" | "v", transparent = false) => {
     const m = materialById(id);
-    return new THREE.MeshStandardMaterial({
-      color: m.grain ? "#ffffff" : m.color,
-      map: m.grain ? woodTexture(m.color, along) : null,
+    const photo = VENEERS[id];
+    const material = new THREE.MeshPhysicalMaterial({
+      // mientras baja la foto se ve el color del catálogo, nunca negro
+      color: photo ? m.color : m.grain ? "#ffffff" : m.color,
+      map: !photo && m.grain ? woodTexture(m.color, along) : null,
       roughness: m.grain ? 0.58 : 0.5,
       metalness: 0,
       transparent,
       envMapIntensity: 0.9,
+      // una capa de barniz satinado: el reflejo largo y suave de un mueble terminado
+      clearcoat: photo ? 0.32 : 0.14,
+      clearcoatRoughness: photo ? 0.38 : 0.5,
     });
+    // chapa de verdad, proyectada según la medida de cada pieza, con un laqueado satinado
+    return photo ? dressWith(material, photo, { tint: tintFor(photo, m.color), roughness: 0.62, normalScale: 0.6 }) : material;
   };
   const body = materialById(bodyId);
   const kit = {
     /** qué terminación va en los frentes: las piezas que la nombran la usan aunque no sean un frente */
     doorId,
     /** tapizado: mate, sin brillo, con un tejido apenas marcado */
-    fabric: new THREE.MeshPhysicalMaterial({
-      color: fabric,
-      roughness: 0.92,
-      metalness: 0,
-      envMapIntensity: 0.3,
-      // una tela nunca es de un solo tono: manchas suaves y la trama
-      map: mottleTexture(),
-      bumpMap: weaveTexture(),
-      bumpScale: 2.2,
-      // el brillo rasante de una tela: los bordes se aclaran, como en la pana o el bouclé
-      sheen: 0.3,
-      sheenRoughness: 0.6,
-      sheenColor: new THREE.Color(fabric).lerp(new THREE.Color("#ffffff"), 0.22),
-    }),
+    fabric: dressWith(
+      new THREE.MeshPhysicalMaterial({
+        color: fabric,
+        roughness: 0.95,
+        metalness: 0,
+        envMapIntensity: 0.3,
+        // el brillo rasante de una tela: los bordes se aclaran, como en la pana o el bouclé
+        sheen: weave === "pana" ? 0.8 : 0.35,
+        sheenRoughness: weave === "pana" ? 0.38 : 0.6,
+        sheenColor: new THREE.Color(fabric).lerp(new THREE.Color("#ffffff"), weave === "pana" ? 0.35 : 0.2),
+      }),
+      WEAVES[weave] ?? "tela-lino",
+      { normalScale: weave === "boucle" ? 1.6 : 1, roughness: 1 },
+    ),
     /** hierro pintado de negro: marcos y patas */
     iron: new THREE.MeshStandardMaterial({ color: "#1d1c1b", metalness: 0.55, roughness: 0.48, envMapIntensity: 0.8 }),
     body: { v: surface(bodyId, "v"), u: surface(bodyId, "u") },

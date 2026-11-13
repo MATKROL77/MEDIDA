@@ -51,7 +51,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   // la alfombra, la tele, las lámparas: se pueden sacar para ver el mueble solo
   const [deco, setDeco] = useState(true);
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
-  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "pinotea" });
+  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "cemento" });
   const [ready, setReady] = useState(false);
   const [designId, setDesignId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -85,6 +85,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const price = useMemo(() => furniturePrice(config, build), [config, build]);
   const summary = useMemo(() => furnitureSummary(config, build), [config, build]);
   const shownPrice = useAnimatedNumber(price);
+  // lo que no se puede elegir con lo que ya está elegido, y por qué
+  const locked = useMemo(() => spec.locks?.(config.values) ?? {}, [spec, config.values]);
   const shown = useMemo(() => (deco ? build.assembly : undressed(build.assembly)), [deco, build.assembly]);
   const movable = build.doors + build.drawers > 0;
 
@@ -155,6 +157,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
             environment={environment}
             view={view}
             fabric={fabricById(config.fabric).color}
+            weave={fabricById(config.fabric).weave}
             confine
             onReady={() => setTimeout(() => setReady(true), 120)}
             captureRef={captureRef}
@@ -223,13 +226,21 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           <Section title={spec.title} hint={summary.dimensions}>
             {spec.controls.map((c) => {
               const v = config.values[c.key];
+              const why = locked[c.key];
               if (c.type === "size") return <Dimension key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(mm) => set(c.key, mm)} />;
               if (c.type === "count") return <Stepper key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(n) => set(c.key, n)} />;
-              if (c.type === "toggle") return <Toggle key={c.key} label={c.label} hint={c.hint} checked={v as boolean} onChange={(on) => set(c.key, on)} />;
+              if (c.type === "toggle") return <Toggle key={c.key} label={c.label} hint={why ?? c.hint} disabled={!!why} checked={v as boolean} onChange={(on) => set(c.key, on)} />;
+              const reasons = [...new Set(c.options.map((o) => locked[`${c.key}:${o.id}`]).filter(Boolean))];
               return (
                 <div key={c.key} className="space-y-2">
                   <p className="text-sm">{c.label}</p>
-                  <Segmented value={v as string} options={c.options} onChange={(id) => set(c.key, id)} size={c.options.length > 3 ? "sm" : "md"} />
+                  <Segmented
+                    value={v as string}
+                    options={c.options.map((o) => ({ ...o, disabled: !!locked[`${c.key}:${o.id}`], title: locked[`${c.key}:${o.id}`] }))}
+                    onChange={(id) => set(c.key, id)}
+                    size={c.options.length > 3 ? "sm" : "md"}
+                  />
+                  {reasons.length > 0 && <p className="text-xs text-ink-2">{reasons.join(". ")}.</p>}
                 </div>
               );
             })}
@@ -253,7 +264,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           </Section>
 
           <Section title="Tu ambiente" hint="Solo para imaginarlo: no cambia el precio">
-            <Segmented value={environment.mode} options={[{ id: "room", label: "Habitación" }, { id: "studio", label: "Fondo liso" }]} onChange={(mode) => setEnvironment((e) => ({ ...e, mode }))} />
+            <Segmented value={environment.mode} options={[{ id: "room", label: "Showroom" }, { id: "studio", label: "Fondo liso" }]} onChange={(mode) => setEnvironment((e) => ({ ...e, mode }))} />
             {environment.mode === "room" && (
               <div className="fade-in flex flex-wrap gap-2.5">
                 {WALL_COLORS.map((w) => (

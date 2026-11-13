@@ -171,3 +171,44 @@ test("la ropa del placard se dibuja pero no toca el despiece ni el precio", asyn
   const bare = undressed(buildFurniture(defaultFurniture("tv")).assembly);
   assert.equal(bare.runs[0].parts.filter((p) => p.decor).length, 0);
 });
+
+test("cama con guardado: caja cerrada con piso falso, y cajones con su pared de atrás", () => {
+  const cama = buildFurniture(defaultFurniture("camas"));
+  const parts = cama.parts;
+  assert.ok(parts.some((p) => p.label === "Piso falso"), "falta el piso falso");
+  assert.ok(parts.some((p) => p.label === "Pared de fondo del guardado"), "las puertas de los pies no tienen fondo");
+  assert.ok(parts.some((p) => p.label === "Pared del guardado lateral"), "los cajones del costado no tienen contra qué correr");
+  const fronts = parts.filter((p) => p.kind === "drawer-front");
+  assert.ok(fronts.length >= 2);
+  for (const f of fronts) {
+    const box = parts.filter((p) => p.module === f.module && p.id !== f.id);
+    assert.ok(box.some((p) => p.kind === "drawer-end"), `${f.id}: el cajón no tiene contrafrente`);
+    assert.equal(box.filter((p) => p.kind === "drawer-side").length, 2, `${f.id}: le faltan laterales`);
+    assert.ok(box.some((p) => p.kind === "drawer-bottom"), `${f.id}: no tiene fondo`);
+  }
+  // las puertas de los pies son rebatibles y caben delante de su compartimento
+  const doors = parts.filter((p) => p.kind === "door");
+  assert.equal(doors.length, 2);
+  assert.ok(doors.every((d) => d.hinge === "bottom"));
+  // los cajones del costado no se meten en el compartimento de los pies
+  const wall = parts.find((p) => p.label === "Pared de fondo del guardado")!;
+  for (const p of parts.filter((x) => x.module !== null && x.module >= 10)) assert.ok(p.position[2] + p.size[2] <= wall.position[2] + 1, `${p.id} choca con el guardado de los pies`);
+  // las cajas de los cajones entran en lo que hay de profundidad
+  for (const p of parts.filter((x) => x.kind === "drawer-side")) assert.ok(p.size.every((n) => n > 0));
+});
+
+test("cama: las restricciones apagan lo que no se puede", () => {
+  const conPatas = normalizeFurniture({ family: "camas", values: { base: "patas", sides: true, foot: "cajones" } });
+  assert.equal(conPatas.values.sides, false, "con patas no hay cajones al costado");
+  assert.equal(conPatas.values.foot, "liso");
+  const baja = normalizeFurniture({ family: "camas", values: { base: "caja", height: 250, sides: true, foot: "puertas" } });
+  assert.equal(baja.values.sides, false, "una base baja no lleva cajones");
+  assert.equal(baja.values.foot, "liso");
+  const tapizada = normalizeFurniture({ family: "camas", values: { upholstered: true, sides: true } });
+  assert.equal(tapizada.values.sides, false);
+  const sinLuz = normalizeFurniture({ family: "camas", values: { base: "caja", head: "tapizado", led: true } });
+  assert.equal(sinLuz.values.led, false, "la luz no va donde no se ve");
+  const sinGuardado = buildFurniture(normalizeFurniture({ family: "camas", values: { base: "patas" } }));
+  assert.ok(sinGuardado.parts.some((p) => p.label === "Tabla del elástico"), "sin guardado, el colchón va sobre tablas");
+  assert.ok(!sinGuardado.parts.some((p) => p.label === "Piso falso"));
+});

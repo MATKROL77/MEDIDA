@@ -8,7 +8,8 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import type { Part } from "@/lib/assembly";
 
 import { BOUNCY, clampDt, doorProgress, FIRM, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
-import { mottleTexture, weaveTexture, type MaterialKit } from "./materials";
+import type { MaterialKit } from "./materials";
+import { dressWith, tintFor } from "./photo";
 
 export const MM = 0.001;
 
@@ -89,15 +90,16 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
   let m = tints.get(spec);
   if (!m) {
     const gloss = spec.startsWith("gloss:");
-    // "rug:": alfombra tejida, con trama y manchas, no un plano de color
+    // "rug:": alfombra de lana, con su trama de verdad
     if (spec.startsWith("rug:")) {
-      const map = mottleTexture().clone();
-      map.repeat.set(5, 5);
-      map.needsUpdate = true;
-      const bump = weaveTexture().clone();
-      bump.repeat.set(60, 60);
-      bump.needsUpdate = true;
-      m = new THREE.MeshStandardMaterial({ color: spec.slice(4), roughness: 1, map, bumpMap: bump, bumpScale: 3, envMapIntensity: 0.2 });
+      m = dressWith(new THREE.MeshStandardMaterial({ color: spec.slice(4), roughness: 1, envMapIntensity: 0.2 }), "tela-lana", { normalScale: 1.4, roughness: 1 });
+      tints.set(spec, m);
+      return m;
+    }
+    // "veneer:": muebles de la ambientación, en chapa de nogal teñida al color pedido
+    if (spec.startsWith("veneer:")) {
+      const color = spec.slice(7);
+      m = dressWith(new THREE.MeshStandardMaterial({ color, roughness: 0.6, envMapIntensity: 0.8 }), "nogal", { tint: tintFor("nogal", color), roughness: 0.6, normalScale: 0.6 });
       tints.set(spec, m);
       return m;
     }
@@ -108,7 +110,7 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
 }
 
 function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
-  if (p.material.startsWith("tint:") || p.material.startsWith("gloss:") || p.material.startsWith("rug:")) return tinted(p.material);
+  if (/^(tint|gloss|rug|veneer):/.test(p.material)) return tinted(p.material);
   const along = isVertical(p) ? "v" : "u";
   switch (p.material) {
     case "none":
@@ -175,14 +177,17 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
   const trapGeo = useMemo(() => (trap ? makeTrapezoid() : null), [trap]);
   useEffect(() => () => trapGeo?.dispose(), [trapGeo]);
 
-  // un almohadón se modela a su tamaño real: así el redondeo es parejo en todos los cantos
+  // un almohadón se modela a su tamaño real: así el redondeo es parejo en todos los cantos.
+  // Las placas también: un canto vivo perfecto no existe, y el redondeo de 2 mm
+  // es lo que agarra el brillo a lo largo del borde, como en un mueble de verdad
+  const edged = part.geometry === "box" && !part.decor && part.kind !== "led" && Math.min(...part.size) >= 2;
   const cushion = useMemo(() => {
-    if (part.geometry !== "cushion") return null;
+    if (part.geometry !== "cushion" && !edged) return null;
     const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
-    const radius = Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) * MM;
-    return new RoundedBoxGeometry(sx, sy, sz, 7, radius);
+    const radius = part.geometry === "cushion" ? Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) : Math.min(2.2, Math.min(...part.size) * 0.22);
+    return new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, part.size[0], part.size[1], part.size[2], part.radius]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {
@@ -224,7 +229,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
 
     // pivote: en las puertas, el canto de adelante del lado de la bisagra (así no
     // se mete en el lateral al girar); en lo demás, el centro
-    const pivot = door ? [door === "left" ? px : px + sx, py, pz + sz] : [px + sx / 2, py + sy / 2, pz + sz / 2];
+    const pivot = door ? [door === "right" ? px + sx : px, py, pz + sz] : [px + sx / 2, py + sy / 2, pz + sz / 2];
     if (outer.current) {
       outer.current.position.set(
         (pivot[0] + ex[0] * e + (os ? os[0] * drawer : 0) + slideX) * MM,
@@ -235,7 +240,8 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     if (rot.current) {
       if (door) {
         const angle = (part.openAngle ?? Math.PI / 2) * doorProgress(anim.open.v, part.openDelay);
-        rot.current.rotation.set(0, (door === "left" ? -1 : 1) * angle, 0);
+        if (door === "bottom") rot.current.rotation.set(angle, 0, 0);
+        else rot.current.rotation.set(0, (door === "left" ? -1 : 1) * angle, 0);
       } else rot.current.rotation.set(0, part.rotationY ?? 0, rz);
     }
 
@@ -244,7 +250,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
       if (trap && trapGeo) {
         updateTrapezoid(trapGeo, sx, tl, tr, sz);
         // el trapecio tiene su origen en la esquina mínima
-        const ox = door ? (door === "left" ? 0 : -sx) : -sx / 2;
+        const ox = door ? (door === "right" ? -sx : 0) : -sx / 2;
         const oy = door ? 0 : -sy / 2;
         const oz = door ? -sz : -sz / 2;
         m.position.set(ox * MM * a, oy * MM * a, oz * MM * a);
@@ -258,14 +264,14 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
         else if (part.glow === "x+" || part.glow === "x-") m.scale.set(sz * MM * a, sy * MM * a, 1);
         else m.scale.set(sx * MM * a, sy * MM * a, 1);
       } else {
-        if (door) m.position.set(((door === "left" ? sx : -sx) / 2) * MM, (sy / 2) * MM, (-sz / 2) * MM);
+        if (door) m.position.set(((door === "right" ? -sx : sx) / 2) * MM, (sy / 2) * MM, (-sz / 2) * MM);
         // el almohadón ya tiene su medida: solo acompaña la animación
         if (cushion) m.scale.set((sx / Math.max(part.size[0], 1)) * a, (sy / Math.max(part.size[1], 1)) * a, (sz / Math.max(part.size[2], 1)) * a);
         else m.scale.set(Math.max(sx, 0.01) * MM * a, Math.max(sy, 0.01) * MM * a, Math.max(sz, 0.01) * MM * a);
       }
     }
     if (details.current) {
-      const ox = door ? (door === "left" ? 0 : -sx) : -sx / 2;
+      const ox = door ? (door === "right" ? -sx : 0) : -sx / 2;
       details.current.position.set(ox * MM, (door ? 0 : -sy / 2) * MM, (door ? -sz : -sz / 2) * MM);
     }
   });

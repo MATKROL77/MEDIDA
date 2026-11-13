@@ -848,7 +848,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                 <Segmented
                   value={environment.mode}
                   options={[
-                    { id: "room", label: "Habitación" },
+                    { id: "room", label: "Showroom" },
                     { id: "studio", label: "Fondo liso" },
                   ]}
                   onChange={(mode) => setEnvironment((e) => ({ ...e, mode }))}
