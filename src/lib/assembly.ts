@@ -147,6 +147,8 @@ export type Part = {
    * hasta esta fracción en las puntas, que quedan pellizcadas como en uno de verdad.
    */
   pinch?: number;
+  /** vivo: un cordón de tela de este radio (mm) que corre por el canto de arriba y el de abajo del almohadón */
+  welt?: number;
   /**
    * Esquina curva (geometry "bend"): un cuarto de caño de espesor `t`, del
    * radio de la caja (size[0] = size[1]), que une una tapa con un lateral a lo

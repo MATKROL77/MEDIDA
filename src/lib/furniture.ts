@@ -404,10 +404,14 @@ function door(list: Part[], id: string, x: number, y: number, z: number, w: numb
  * Capitoné: la cara se hunde en una grilla de botones forrados, como en los
  * sillones de módulos acolchados. Cada botón es una pieza más del almohadón.
  */
-/** un almohadón relleno: se infla `puff` mm en el medio de la cara grande y lleva arrugas de `wrinkle` mm */
-function soft(p: Part, puff: number, wrinkle: number): Part {
+/**
+ * Un almohadón relleno: se infla `puff` mm en el medio de la cara grande, lleva
+ * arrugas de `wrinkle` mm y, si se pide, un vivo de `welt` mm en los cantos.
+ */
+function soft(p: Part, puff: number, wrinkle: number, welt = 0): Part {
   p.puff = puff;
   p.wrinkle = wrinkle;
+  if (welt) p.welt = welt;
   return p;
 }
 
@@ -1132,8 +1136,8 @@ const BUILDERS: Record<string, Builder> = {
           // la estructura tapizada, tirante; los almohadones, rellenos y con alguna arruga
           soft(put(f, `base:${i}`, "Base del módulo", "bottom", "fabric", 0, lift, fz, [sw, 210, depth], 55), 4, 1.2);
           soft(put(f, `backrest:${i}`, "Respaldo", "back", "fabric", 0, lift + 60, -d / 2 + 110, [sw, 640, 220], 90), 8, 1.5);
-          soft(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift + 190, fz + 100, [sw - 10, 190, depth - 215], 85), 22, 3.5);
-          soft(put(f, `pillow:${i}`, "Almohadón de respaldo", "fixed-shelf", "fabric", 0, lift + 350, -d / 2 + 300, [sw - 26, 430, 210], 100), 30, 5);
+          soft(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift + 190, fz + 100, [sw - 10, 190, depth - 215], 85), 22, 3.5, 5);
+          soft(put(f, `pillow:${i}`, "Almohadón de respaldo", "fixed-shelf", "fabric", 0, lift + 350, -d / 2 + 300, [sw - 26, 430, 210], 100), 30, 5, 5);
         }
       }
       supports(f, `sup:${i}`, sw, depth, fz);
@@ -1169,7 +1173,7 @@ const BUILDERS: Record<string, Builder> = {
       if (bubbles) for (const [k, lx] of [-ow / 4, ow / 4].entries()) put(f, `ott:${k}`, "Puff", "shelf", "fabric", lx, lift, 0, [ow / 2 - 6, 400, 620], 150);
       else {
         soft(put(f, "ott:base", "Base del puff", "bottom", "fabric", 0, lift, 0, [ow, 210, 640], 55), 4, 1.2);
-        soft(put(f, "ott:seat", "Almohadón del puff", "shelf", "fabric", 0, lift + 190, 0, [ow - 10, 180, 630], 85), 20, 3.5);
+        soft(put(f, "ott:seat", "Almohadón del puff", "shelf", "fabric", 0, lift + 190, 0, [ow - 10, 180, 630], 85), 20, 3.5, 5);
       }
       supports(f, "sup:ott", ow, 640);
     }

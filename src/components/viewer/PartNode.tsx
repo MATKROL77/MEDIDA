@@ -726,6 +726,44 @@ function twoSided(material: THREE.Material): THREE.Material {
 }
 
 /**
+ * El vivo de un almohadón: dos cordones (arriba y abajo) que siguen el canto
+ * redondeado a 45°, con la trama corriendo a lo largo del cordón.
+ */
+function weltGeometry(size: number[], radius: number, welt: number): THREE.BufferGeometry[] {
+  const [hx, hy, hz] = size.map((v) => v / 2);
+  const rc = Math.min(radius, hx, hy, hz);
+  const k = Math.SQRT1_2;
+  // el contorno a 45° del canto: un rectángulo de esquinas redondeadas en planta
+  const ax = hx - rc + rc * k;
+  const az = hz - rc + rc * k;
+  const cr = rc * k;
+  const loops: THREE.BufferGeometry[] = [];
+  for (const sign of [1, -1]) {
+    const y = sign * (hy - rc + rc * k);
+    const pts: THREE.Vector3[] = [];
+    const corners: [number, number, number][] = [
+      [ax - cr, az - cr, 0],
+      [-(ax - cr), az - cr, Math.PI / 2],
+      [-(ax - cr), -(az - cr), Math.PI],
+      [ax - cr, -(az - cr), 1.5 * Math.PI],
+    ];
+    for (const [cx, cz, a0] of corners)
+      for (let i = 0; i <= 6; i++) {
+        const a = a0 + (i / 6) * (Math.PI / 2);
+        pts.push(new THREE.Vector3(cx + cr * Math.cos(a), y, cz + cr * Math.sin(a)));
+      }
+    const curve = new THREE.CatmullRomCurve3(pts, true, "centripetal");
+    const length = curve.getLength();
+    const tube = new THREE.TubeGeometry(curve, Math.max(48, Math.round(length / 0.02)), welt, 8, true);
+    const uv = tube.getAttribute("uv") as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getY(i) * 2 * Math.PI * welt, uv.getX(i) * length);
+    loops.push(tube.toNonIndexed());
+    tube.dispose();
+  }
+  return loops;
+}
+
+/**
  * Separa los triángulos (sin índice) en dos geometrías: las caras a la vista y
  * las metidas en una ranura. Van en dos mallas con un material cada una: el
  * trazador de rayos no respeta los grupos de materiales dentro de una malla.
@@ -826,9 +864,14 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     const flat = g.index ? g.toNonIndexed() : g;
     if (flat !== g) g.dispose();
     meterUvs(flat, [sx, sy, sz], part.id, front ? part.position.map((v, i) => (v + part.size[i] / 2) * MM) : undefined);
+    if (part.welt) {
+      const merged = mergeGeometries([flat, ...weltGeometry([sx, sy, sz], radius * MM, part.welt * MM)]);
+      flat.dispose();
+      return merged;
+    }
     return flat;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.welt, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {
