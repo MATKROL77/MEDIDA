@@ -166,7 +166,8 @@ test("el sillón curvo es una sola curva: base, respaldo y almohadones de una pi
 test("el puff del sillón recto va pegado al frente", () => {
   const recto = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "recto", seats: 3, ottoman: true, depth: 980 } }));
   const puff = recto.parts.find((p) => p.id === "ott:base")!;
-  const base = recto.parts.find((p) => p.id === "base:1")!;
+  // la base es una sola, de punta a punta
+  const base = recto.parts.find((p) => p.id === "base")!;
   const front = base.position[2] + base.size[2];
   assert.ok(Math.abs(puff.position[2] - front) < 5, `el puff está a ${Math.round(puff.position[2] - front)} mm del sillón`);
 });
@@ -258,4 +259,14 @@ test("la mesa de luz con esquinas curvas lleva sus curvas y su frente redondeado
   const front = parts.find((p) => p.kind === "drawer-front")!;
   assert.ok(front.corners && front.corners[0] > 0);
   assert.match(front.cut?.note ?? "", /redondeadas/);
+});
+
+test("en el sillón recto la estructura es una sola y solo se separan los almohadones; las burbujas, de corrido", () => {
+  const recto = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "recto", seats: 3, arms: true } })).parts;
+  assert.equal(recto.filter((p) => p.label === "Base").length, 1);
+  assert.equal(recto.filter((p) => p.label === "Respaldo").length, 1);
+  assert.equal(recto.filter((p) => p.label === "Almohadón de asiento").length, 3);
+  const burbujas = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "burbujas", seats: 3 } })).parts;
+  assert.equal(burbujas.filter((p) => p.id === "seat" || p.id === "back").length, 2);
+  assert.ok(!burbujas.some((p) => /^(seat|back):\d/.test(p.id)), "las burbujas no van por cuerpo");
 });

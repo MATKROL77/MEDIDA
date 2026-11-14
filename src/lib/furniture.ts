@@ -1145,13 +1145,12 @@ const BUILDERS: Record<string, Builder> = {
       }
       const metal = v.base === "metal";
       const s = metal ? 26 : 62;
-      for (const [k, [lx, dz]] of [
-        [-w / 2 + 90, -depth / 2 + 110],
-        [w / 2 - 90, -depth / 2 + 110],
-        [-w / 2 + 90, depth / 2 - 110],
-        [w / 2 - 90, depth / 2 - 110],
-      ].entries()) {
-        put(f, `${id}:leg${k}`, "Pata", "plinth", metal ? "iron" : c.body, lx, 0, lz + dz, [s, lift + 12, s], 2, { geometry: metal ? "cyl" : "cone" });
+      // una pata en cada esquina y, si es largo, otras cada 1,6 m como mucho
+      const cols = Math.max(2, Math.ceil((w - 180) / 1600) + 1);
+      let k = 0;
+      for (let col = 0; col < cols; col++) {
+        const lx = -w / 2 + 90 + ((w - 180) * col) / (cols - 1);
+        for (const dz of [-depth / 2 + 110, depth / 2 - 110]) put(f, `${id}:leg${k++}`, "Pata", "plinth", metal ? "iron" : c.body, lx, 0, lz + dz, [s, lift + 12, s], 2, { geometry: metal ? "cyl" : "cone" });
       }
     };
 
@@ -1174,30 +1173,51 @@ const BUILDERS: Record<string, Builder> = {
       soft(arcPart("seat", "Almohadón de asiento", "shelf", lift + 190, 190, R - d / 2 + 15, R + d / 2 - 205, 85), 20, 3);
       soft(arcPart("pillow", "Almohadón de respaldo", "fixed-shelf", lift + 350, 430, R + d / 2 - 400, R + d / 2 - 195, 100), 26, 4);
     }
+    if (!curved) {
+      // la estructura es una sola: base y respaldo corridos de punta a punta, metidos
+      // en los apoyabrazos (así no queda una ranura entre cuerpos ni contra el brazo).
+      // Solo los almohadones se separan
+      const into = arm ? 70 : 0;
+      const run = { cx: total / 2, cz: d / 2, ry: 0 };
+      const span = seats * sw + 2 * into;
+      if (bubbles) {
+        // las burbujas no tienen almohadones: asiento y respaldo de una pieza, todo capitoné
+        const seatD = d - 300;
+        tufted(put(run, "seat", "Asiento", "shelf", "fabric", 0, lift, -d / 2 + 300 + seatD / 2, [seats * sw - 8, 380, seatD - 6], 105), "top", Math.max(2, Math.round((seats * sw) / 240)), Math.max(2, Math.round(seatD / 260)), 80);
+        tufted(put(run, "back", "Respaldo", "back", "fabric", 0, lift + 230, -d / 2 + 160, [seats * sw - 8, 420, 320], 120), "front", Math.max(2, Math.round((seats * sw) / 240)), 1, 64);
+      } else {
+        soft(put(run, "base", "Base", "bottom", "fabric", 0, lift, 0, [span, 210, d], 55), 4, 1.2);
+        soft(put(run, "backrest", "Respaldo", "back", "fabric", 0, lift + 60, -d / 2 + 110, [span, 640, 220], 90), 8, 1.5);
+      }
+    }
     for (let i = 0; i < seats; i++) {
       const f = frame(i);
       const chaise = !curved && ((v.chaise === "izquierda" && i === 0) || (v.chaise === "derecha" && i === seats - 1));
       const depth = chaise ? d + 640 : d;
       const fz = (depth - d) / 2;
       if (bubbles) {
-        // cada cuerpo es un almohadón grande, capitoné: botones hundidos cada 25 cm
-        // más o menos y la tela tirante entre ellos
-        const seatD = depth - 300;
-        const across = Math.max(2, Math.round(sw / 240));
-        const rows = Math.max(2, Math.round(seatD / 260));
-        tufted(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift, -d / 2 + 300 + seatD / 2, [sw - 8, 380, seatD - 6], 105), "top", across, rows, 80);
-        tufted(put(f, `back:${i}`, "Almohadón de respaldo", "back", "fabric", 0, lift + 230, -d / 2 + 160, [sw - 8, 420, 320], 120), "front", across, 1, 64);
+        // la chaise de las burbujas: el asiento sigue hacia adelante, también capitoné
+        if (chaise) tufted(put(f, `chaise:${i}`, "Asiento de la chaise", "shelf", "fabric", 0, lift, d / 2 + 320, [sw - 8, 380, 634], 105), "top", Math.max(2, Math.round(sw / 240)), 2, 80);
       } else {
         if (!curved) {
-          // la estructura tapizada, tirante; los almohadones, rellenos y con alguna arruga
-          soft(put(f, `base:${i}`, "Base del módulo", "bottom", "fabric", 0, lift, fz, [sw, 210, depth], 55), 4, 1.2);
-          soft(put(f, `backrest:${i}`, "Respaldo", "back", "fabric", 0, lift + 60, -d / 2 + 110, [sw, 640, 220], 90), 8, 1.5);
+          // bajo la chaise la base sigue hacia adelante; los almohadones, rellenos y con alguna arruga
+          if (chaise) soft(put(f, `base:chaise`, "Base de la chaise", "bottom", "fabric", 0, lift, d / 2 + 320 - 30, [sw, 210, 700], 55), 4, 1.2);
           soft(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift + 190, fz + 100, [sw - 10, 190, depth - 215], 85), 22, 3.5, 5);
           soft(put(f, `pillow:${i}`, "Almohadón de respaldo", "fixed-shelf", "fabric", 0, lift + 350, -d / 2 + 300, [sw - 26, 430, 210], 100), 30, 5, 5);
         }
       }
-      supports(f, `sup:${i}`, sw, depth, fz);
+      // el curvo apoya por cuerpo; el recto, bajo la estructura entera (abajo)
+      if (curved) supports(f, `sup:${i}`, sw, depth, fz);
+      else if (chaise) {
+        // la chaise suma sus patas de adelante
+        const legsOf = parts.length;
+        supports({ ...f, cz: f.cz + d / 2 + 320 }, `sup:chaise`, sw, 640);
+        // de la chaise quedan solo las de adelante (las de atrás caen sobre las de la estructura)
+        const extra = parts.splice(legsOf);
+        parts.push(...extra.filter((p) => p.position[2] + p.size[2] / 2 > f.cz + d / 2 + 320));
+      }
     }
+    if (!curved) supports({ cx: total / 2, cz: d / 2, ry: 0 }, "sup", total, d);
 
     if (v.arms) {
       const ends: [string, number, number][] = [["l", 0, -1], ["r", seats - 1, 1]];
@@ -1207,7 +1227,8 @@ const BUILDERS: Record<string, Builder> = {
         const chaise = !curved && ((v.chaise === "izquierda" && i === 0) || (v.chaise === "derecha" && i === seats - 1));
         const depth = chaise ? d + 640 : d;
         if (bubbles) put(f, `arm:${id}`, "Almohadón apoyabrazos", "side", "fabric", side * (sw / 2 - 150), lift + 340, 120, [290, 300, d - 420], 140);
-        else soft(put(f, `arm:${id}`, "Apoyabrazos", "side", "fabric", side * ((curved ? 0 : sw / 2) + arm / 2), lift, (depth - d) / 2, [arm, 560, depth], 80), 8, 1.5);
+        // de la misma tela y con el mismo vivo que los almohadones: el contorno del brazo queda marcado
+        else soft(put(f, `arm:${id}`, "Apoyabrazos", "side", "fabric", side * ((curved ? 0 : sw / 2) + arm / 2), lift, (depth - d) / 2, [arm, 560, depth], 80), 8, 1.5, 5);
       }
     }
 
