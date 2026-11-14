@@ -61,7 +61,7 @@ export type PartKind =
   | "glow";
 
 /** "soft": caja de cantos redondeados, para almohadones y tapizados */
-export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "shade" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "none";
+export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "shade" | "bend" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "none";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
@@ -147,6 +147,18 @@ export type Part = {
    * hasta esta fracción en las puntas, que quedan pellizcadas como en uno de verdad.
    */
   pinch?: number;
+  /**
+   * Esquina curva (geometry "bend"): un cuarto de caño de espesor `t`, del
+   * radio de la caja (size[0] = size[1]), que une una tapa con un lateral a lo
+   * largo de la profundidad. `corner` dice qué esquina del frente redondea.
+   */
+  bend?: { corner: "tl" | "tr" | "bl" | "br"; t: number };
+  /**
+   * Placa con las esquinas del frente redondeadas (mm): arriba a la izquierda,
+   * arriba a la derecha, abajo a la derecha y abajo a la izquierda. Se ve de
+   * frente (plano x-y) y tiene el espesor en z.
+   */
+  corners?: [number, number, number, number];
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */

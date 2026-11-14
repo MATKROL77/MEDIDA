@@ -91,6 +91,93 @@ function updateTrapezoid(g: THREE.BufferGeometry, w: number, hl: number, hr: num
  * lo largo del arco, con sus dos tapas. Queda centrada en la caja de la pieza,
  * que es el pivote del nodo.
  */
+/**
+ * Una esquina curva de madera doblada: un cuarto de caño extruido a lo largo
+ * de la profundidad. La veta da la vuelta a la curva (V es el largo del arco),
+ * como en una chapa enchapada curvada, y sigue en la tapa y el lateral.
+ */
+function bendGeometry(part: Part): THREE.BufferGeometry {
+  const { corner, t } = part.bend!;
+  const R = part.size[0] * MM;
+  const D = part.size[2] * MM;
+  const r = Math.max(0.001, R - t * MM);
+  const [a0, cx, cy] = ({ tl: [Math.PI / 2, R / 2, -R / 2], tr: [0, -R / 2, -R / 2], bl: [Math.PI, R / 2, R / 2], br: [1.5 * Math.PI, -R / 2, R / 2] } as const)[corner];
+  const seg = 24;
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const uv: number[] = [];
+  type V = { p: number[]; n: number[]; uv: number[] };
+  // un triángulo, dado vuelta si hace falta para que mire hacia su normal
+  const tri = (a: V, b: V, c: V) => {
+    const e1 = b.p.map((v, i) => v - a.p[i]);
+    const e2 = c.p.map((v, i) => v - a.p[i]);
+    const cross = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const n = [0, 1, 2].map((i) => a.n[i] + b.n[i] + c.n[i]);
+    const list = cross[0] * n[0] + cross[1] * n[1] + cross[2] * n[2] < 0 ? [a, c, b] : [a, b, c];
+    for (const v of list) {
+      pos.push(...v.p);
+      nor.push(...v.n);
+      uv.push(...v.uv);
+    }
+  };
+  const quad = (a: V, b: V, c: V, d: V) => {
+    tri(a, b, c);
+    tri(a, c, d);
+  };
+  const at = (k: number) => a0 + (Math.PI / 2) * (k / seg);
+  for (let k = 0; k < seg; k++) {
+    const [p, q] = [at(k), at(k + 1)];
+    for (const [rad, sign] of [
+      [R, 1],
+      [r, -1],
+    ] as const) {
+      // las caras curvas, afuera y adentro: la normal es el radio
+      const v = (a: number, z: number): V => ({ p: [cx + rad * Math.cos(a), cy + rad * Math.sin(a), z], n: [sign * Math.cos(a), sign * Math.sin(a), 0], uv: [z, rad * (a - a0)] });
+      quad(v(p, -D / 2), v(q, -D / 2), v(q, D / 2), v(p, D / 2));
+    }
+    // los cantos de adelante y de atrás: el cuarto de anillo
+    for (const z of [D / 2, -D / 2]) {
+      const v = (rad: number, a: number): V => ({ p: [cx + rad * Math.cos(a), cy + rad * Math.sin(a), z], n: [0, 0, Math.sign(z)], uv: [cx + rad * Math.cos(a), cy + rad * Math.sin(a)] });
+      quad(v(R, p), v(R, q), v(r, q), v(r, p));
+    }
+  }
+  // las puntas, donde pega con la tapa y el lateral
+  for (const k of [0, seg]) {
+    const a = at(k);
+    const n = k === 0 ? [Math.sin(a), -Math.cos(a), 0] : [-Math.sin(a), Math.cos(a), 0];
+    const v = (rad: number, z: number): V => ({ p: [cx + rad * Math.cos(a), cy + rad * Math.sin(a), z], n, uv: [z, rad] });
+    quad(v(R, -D / 2), v(r, -D / 2), v(r, D / 2), v(R, D / 2));
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+
+/** una placa vista de frente con las esquinas redondeadas y el canto apenas suavizado */
+function cornersGeometry(part: Part): THREE.BufferGeometry {
+  const [w, h, t] = part.size.map((v) => v * MM);
+  const [tl, tr, br, bl] = part.corners!.map((v) => Math.min(v * MM, w / 2 - 1e-4, h / 2 - 1e-4));
+  const edge = Math.min(0.0015, t / 4);
+  // el contorno queda adentro del canto suavizado: el bisel lo lleva a la medida
+  const [x0, x1, y0, y1] = [-w / 2 + edge, w / 2 - edge, -h / 2 + edge, h / 2 - edge];
+  const r = (v: number) => Math.max(v - edge, 0.0005);
+  const shape = new THREE.Shape();
+  shape.moveTo(x0 + r(bl), y0);
+  shape.lineTo(x1 - r(br), y0);
+  shape.absarc(x1 - r(br), y0 + r(br), r(br), -Math.PI / 2, 0, false);
+  shape.lineTo(x1, y1 - r(tr));
+  shape.absarc(x1 - r(tr), y1 - r(tr), r(tr), 0, Math.PI / 2, false);
+  shape.lineTo(x0 + r(tl), y1);
+  shape.absarc(x0 + r(tl), y1 - r(tl), r(tl), Math.PI / 2, Math.PI, false);
+  shape.lineTo(x0, y0 + r(bl));
+  shape.absarc(x0 + r(bl), y0 + r(bl), r(bl), Math.PI, 1.5 * Math.PI, false);
+  const g = new THREE.ExtrudeGeometry(shape, { depth: t - 2 * edge, bevelEnabled: true, bevelThickness: edge, bevelSize: edge, bevelSegments: 2, curveSegments: 16 });
+  g.translate(0, 0, -(t - 2 * edge) / 2);
+  return g.index ? g.toNonIndexed() : g;
+}
+
 function arcGeometry(part: Part): THREE.BufferGeometry {
   const a = part.arc!;
   const [x0, , z0] = part.position;
@@ -302,13 +389,14 @@ function tuftGeometry(g: THREE.BufferGeometry, size: number[], tuft: NonNullable
   const cu = ua / tuft.nx;
   const cv = va / tuft.ny;
   const depth = tuft.depth * MM;
-  const pinch = Math.min(cu, cv) * 0.11;
+  const pinch = Math.min(cu, cv) * 0.075;
   // 0 sobre la línea de botones, 1 a media celda: la tela se infla entre líneas
   // y hace un pliegue marcado en cada una (también afuera, hasta el canto)
   const swell = (w: number, c: number, n: number) => {
     const i = Math.min(n - 1, Math.max(0, Math.round(w / c - 0.5)));
     const t = Math.min(1, Math.abs(w - (i + 0.5) * c) / (c / 2));
-    return { t: Math.pow(Math.sin((Math.PI / 2) * t), 0.6), at: (i + 0.5) * c };
+    // celdas tirantes: planas arriba y con el pliegue bien marcado
+    return { t: Math.pow(Math.sin((Math.PI / 2) * t), 0.4), at: (i + 0.5) * c };
   };
   for (let i = 0; i < pos.count; i++) {
     const n = top ? nor.getY(i) : nor.getZ(i);
@@ -321,7 +409,7 @@ function tuftGeometry(g: THREE.BufferGeometry, size: number[], tuft: NonNullable
     const dome = su.t * sv.t;
     // el botón tira la tela hacia adentro, más hondo que el pliegue
     const button = Math.exp(-((u - su.at) ** 2 + (v - sv.at) ** 2) / (2 * pinch * pinch));
-    const k = 0.5 * (1 - dome) + 0.5 * button;
+    const k = 0.42 * (1 - dome) + 0.58 * button;
     // más suave sobre los cantos redondeados
     const d = depth * k * Math.min(1, (n - 0.25) / 0.45);
     if (top) pos.setY(i, pos.getY(i) - d);
@@ -705,6 +793,13 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
   const edged = part.geometry === "box" && part.kind !== "led" && part.kind !== "glow" && Math.min(...part.size) >= 2;
   const cushion = useMemo(() => {
     if (part.geometry === "arc" && part.arc) return arcGeometry(part);
+    if (part.geometry === "bend" && part.bend) return bendGeometry(part);
+    if (part.corners) {
+      const g = cornersGeometry(part);
+      const front = part.front || part.kind === "door" || part.kind === "drawer-front";
+      meterUvs(g, part.size.map((v) => v * MM), part.id, front ? part.position.map((v, i) => (v + part.size[i] / 2) * MM) : undefined);
+      return g;
+    }
     if (part.geometry !== "cushion" && !edged) return null;
     const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
     const radius = part.geometry === "cushion" ? Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) : Math.min(2.2, Math.min(...part.size) * 0.22);
@@ -733,7 +828,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     meterUvs(flat, [sx, sy, sz], part.id, front ? part.position.map((v, i) => (v + part.size[i] / 2) * MM) : undefined);
     return flat;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {

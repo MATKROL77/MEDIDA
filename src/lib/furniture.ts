@@ -100,7 +100,7 @@ export const SPECS: FurnitureSpec[] = [
     title: "Mesas ratonas y de luz",
     controls: [
       { key: "kind", type: "choice", label: "Tipo", options: choice(["ratona", "Ratona"], ["luz", "Mesa de luz"]) },
-      { key: "style", type: "choice", label: "Estilo", options: choice(["clasica", "Con cajones"], ["puente", "Puente"], ["losa", "Losa"], ["vidrio", "Tapa de vidrio"]) },
+      { key: "style", type: "choice", label: "Estilo", options: choice(["clasica", "Con cajones"], ["puente", "Puente"], ["curva", "Esquinas curvas"], ["losa", "Losa"], ["vidrio", "Tapa de vidrio"]) },
       { key: "width", type: "size", label: "Ancho", min: 350, max: 1400 },
       { key: "depth", type: "size", label: "Profundidad", min: 300, max: 800 },
       { key: "height", type: "size", label: "Alto", min: 280, max: 700 },
@@ -495,6 +495,19 @@ function shelfDecor(list: Part[], id: string, x: number, y: number, z: number, w
   else if (width >= bw + 40 && space >= bh + 30) prop(list, `${id}:jarron`, "Jarrón", "jarron-bronce", x + width / 2 - bw / 2, y, z + 20);
   else books(list, id, x, y, z, 4 + (seed % 3), 150);
 }
+/**
+ * Una esquina curva: MDF flexible (ranurado) cortado plano al largo del arco y
+ * curvado sobre plantillas, enchapado como el resto. Une una tapa con un
+ * lateral a lo largo de la profundidad `d`; `r` es el radio de afuera.
+ */
+function bendPiece(list: Part[], id: string, material: string, corner: "tl" | "tr" | "bl" | "br", x: number, y: number, z: number, r: number, d: number, t: number): Part {
+  const p = piece(list, id, "Esquina curva", "side", material, [x, y, z], [r, r, d], { geometry: "bend", noCut: true });
+  p.bend = { corner, t };
+  const arc = Math.round((Math.PI / 2) * (r - t / 2));
+  p.cut = { length: Math.max(d, arc), width: Math.min(d, arc), thickness: t, band: { long: 0, short: 0 }, note: `MDF flexible curvado, radio ${r} mm` };
+  return p;
+}
+
 /** una lámpara de mesa: pie de cerámica (escaneado), cuello de bronce y pantalla de lino abierta */
 function lamp(list: Part[], id: string, x: number, y: number, z: number) {
   const base = prop(list, `${id}:base`, "Lámpara", "jarron", x, y, z, 0.55);
@@ -596,6 +609,28 @@ const BUILDERS: Record<string, Builder> = {
         drawer(parts, "dr0", 0, t + 3, h - t - fh - 3, d - T, w - 2 * t - 6, fh, d - T, c.front);
         drawers = 1;
       }
+      if (v.led) led(parts, "led", t + 30, h - t - 8, d - 60, w - 2 * t - 60);
+    } else if (v.style === "curva") {
+      // tapa y laterales de una sola vuelta, gruesos, con las esquinas de arriba
+      // curvadas como la madera doblada; el cajón cuelga bajo la tapa y su
+      // frente sigue la curva de adentro. Abajo queda abierto
+      const t = 36;
+      const r = Math.round(Math.min(110, w / 4, h / 3));
+      const inner = r - t;
+      piece(parts, "top", "Tapa", "top", c.front, [r, h - t, 0], [w - 2 * r, t, d], { band: { long: 2, short: 0 } });
+      for (const [id, x] of [["l", 0], ["r", w - t]] as const) piece(parts, `side:${id}`, "Lateral", "side", c.front, [x, 0, 0], [t, h - r, d], { band: { long: 2, short: 1 } });
+      bendPiece(parts, "bend:l", c.front, "tl", 0, h - r, 0, r, d, t);
+      bendPiece(parts, "bend:r", c.front, "tr", w - r, h - r, 0, r, d, t);
+      if (n > 0 && h - t > 220) {
+        const fh = Math.min(170, h - t - 120);
+        // sin tirador: se abre tomándolo de abajo, como en las mesas de madera doblada
+        drawer(parts, "dr0", 0, t + 3, h - t - 3 - fh, d - T, w - 2 * t - 6, fh, d - T, c.front, "push");
+        const front = parts.find((p) => p.id === "dr0:f")!;
+        const round = Math.max(10, inner - 3);
+        front.corners = [round, round, 12, 12];
+        if (front.cut) front.cut.note = `esquinas redondeadas: arriba radio ${round} mm, abajo 12 mm`;
+        drawers = 1;
+      } else piece(parts, "shelf", "Estante", "shelf", c.body, [t, 60, 20], [w - 2 * t, T, d - 40]);
       if (v.led) led(parts, "led", t + 30, h - t - 8, d - 60, w - 2 * t - 60);
     } else if (v.style === "losa") {
       // una losa gruesa apoyada en dos bases metidas hacia adentro
@@ -1056,11 +1091,11 @@ const BUILDERS: Record<string, Builder> = {
       const depth = chaise ? d + 640 : d;
       const fz = (depth - d) / 2;
       if (bubbles) {
-        // cada cuerpo es un almohadón grande, capitoné: botones hundidos cada 30 cm
-        // más o menos y la tela inflada entre ellos
+        // cada cuerpo es un almohadón grande, capitoné: botones hundidos cada 25 cm
+        // más o menos y la tela tirante entre ellos
         const seatD = depth - 300;
-        const across = Math.max(2, Math.round(sw / 300));
-        const rows = Math.max(2, Math.round(seatD / 320));
+        const across = Math.max(2, Math.round(sw / 240));
+        const rows = Math.max(2, Math.round(seatD / 260));
         tufted(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift, -d / 2 + 300 + seatD / 2, [sw - 8, 380, seatD - 6], 105), "top", across, rows, 80);
         tufted(put(f, `back:${i}`, "Almohadón de respaldo", "back", "fabric", 0, lift + 230, -d / 2 + 160, [sw - 8, 420, 320], 120), "front", across, 1, 64);
       } else {

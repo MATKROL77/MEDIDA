@@ -244,3 +244,18 @@ test("el sillón de cuero cuesta más que el de tela, y la portada arma un sill�
   assert.ok(cuero > tela, `cuero ${cuero} no supera a tela ${tela}`);
   assert.ok(buildFurniture(hero).parts.length > 0);
 });
+
+test("la mesa de luz con esquinas curvas lleva sus curvas y su frente redondeado en el despiece", () => {
+  const config = normalizeFurniture({ ...defaultFurniture("ratonas"), values: { ...defaultFurniture("ratonas").values, kind: "luz", style: "curva", width: 500, depth: 400, height: 520, drawers: 1 } });
+  const parts = buildFurniture(config).assembly.runs.flatMap((r) => r.parts);
+  const bends = parts.filter((p) => p.geometry === "bend");
+  assert.equal(bends.length, 2);
+  for (const b of bends) {
+    assert.match(b.cut?.note ?? "", /MDF flexible/);
+    // la curva cubre de la tapa al lateral: la caja es un cuadrado del radio
+    assert.equal(b.size[0], b.size[1]);
+  }
+  const front = parts.find((p) => p.kind === "drawer-front")!;
+  assert.ok(front.corners && front.corners[0] > 0);
+  assert.match(front.cut?.note ?? "", /redondeadas/);
+});
