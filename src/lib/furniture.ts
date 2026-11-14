@@ -163,7 +163,7 @@ export const SPECS: FurnitureSpec[] = [
       { key: "seats", type: "count", label: "Cuerpos", min: 1, max: 5 },
       { key: "seatWidth", type: "size", label: "Ancho de cada cuerpo", min: 700, max: 1100 },
       { key: "depth", type: "size", label: "Profundidad", min: 850, max: 1100 },
-      { key: "base", type: "choice", label: "Apoyo", options: choice(["piso", "Al piso"], ["patas", "Patas de madera"], ["metal", "Patas de metal"]) },
+      { key: "base", type: "choice", label: "Apoyo", options: choice(["piso", "Al piso"], ["madera", "Base de madera"], ["patas", "Patas de madera"], ["metal", "Patas de metal"]) },
       { key: "chaise", type: "choice", label: "Chaise", options: choice(["no", "Sin chaise"], ["izquierda", "A la izquierda"], ["derecha", "A la derecha"]) },
       { key: "arms", type: "toggle", label: "Con apoyabrazos" },
       { key: "ottoman", type: "toggle", label: "Con puff", hint: "Un módulo suelto, sin respaldo" },
@@ -392,6 +392,27 @@ function door(list: Part[], id: string, x: number, y: number, z: number, w: numb
     // el vidrio siempre lleva tirador: no se puede fresar ni empujar sin marcarlo
     details: glass ? [bar] : gripFor(id, grip, w, h, bar),
   });
+}
+
+/**
+ * Capitoné: la cara se hunde en una grilla de botones forrados, como en los
+ * sillones de módulos acolchados. Cada botón es una pieza más del almohadón.
+ */
+function tufted(p: Part, face: "top" | "front", nx: number, ny: number, depth: number): Part {
+  p.tuft = { face, nx, ny, depth };
+  const [sx, sy, sz] = p.size;
+  const buttons: Part[] = [];
+  for (let i = 0; i < nx; i++) {
+    for (let j = 0; j < ny; j++) {
+      const u = ((i + 0.5) * sx) / nx;
+      const v = ((j + 0.5) * (face === "top" ? sz : sy)) / ny;
+      // el botón queda en el fondo del hundido, apenas asomado
+      const position: Vec3 = face === "top" ? [u - 13, sy - depth - 4, v - 13] : [u - 13, v - 13, sz - depth - 4];
+      buttons.push({ id: `${p.id}:btn${i}${j}`, label: "Botón forrado", kind: "handle", material: "fabric", run: 0, module: null, position, size: [26, face === "top" ? 16 : 26, face === "top" ? 26 : 16], geometry: "knob", cut: null, explode: [0, 0, 0] });
+    }
+  }
+  p.details = [...(p.details ?? []), ...buttons];
+  return p;
 }
 
 /** cuatro patas en las esquinas de un rectángulo, metidas `inset` desde cada borde */
@@ -882,7 +903,8 @@ const BUILDERS: Record<string, Builder> = {
     const style = v.style as string;
     const bubbles = style === "burbujas";
     const curved = style === "curvo";
-    const lift = v.base === "piso" ? 36 : 150;
+    // base de madera: un zócalo a la vista, apenas metido, que sigue la forma del sillón
+    const lift = v.base === "piso" ? 36 : v.base === "madera" ? 120 : 150;
     const arm = v.arms && !bubbles ? 190 : 0;
     const total = seats * sw + 2 * arm;
     // radio del arco de un sillón curvo: más cerrado cuanto más corto
@@ -899,7 +921,7 @@ const BUILDERS: Record<string, Builder> = {
      * En el curvo, la base y el respaldo son una sola pieza que sigue la curva,
      * como en un sillón curvo de verdad: sin tramos rectos ni ranuras entre módulos.
      */
-    const arcPart = (id: string, label: string, kind: PartKind, y: number, h: number, rIn: number, rOut: number, round: number) => {
+    const arcPart = (id: string, label: string, kind: PartKind, y: number, h: number, rIn: number, rOut: number, round: number, material = "fabric") => {
       const cx = total / 2;
       const cz = d / 2 + R;
       // punto = centro + r·(sen θ, cos θ): el ángulo del sillón (φ) es θ = π − φ
@@ -915,7 +937,7 @@ const BUILDERS: Record<string, Builder> = {
           z1 = Math.max(z1, cz + r * Math.cos(t));
         }
       }
-      const p = piece(parts, id, label, kind, "fabric", [x0, y, z0], [x1 - x0, h, z1 - z0], { geometry: "arc", noCut: true });
+      const p = piece(parts, id, label, kind, material, [x0, y, z0], [x1 - x0, h, z1 - z0], { geometry: "arc", noCut: true });
       p.arc = { cx, cz, rIn, rOut, start, length, round };
       return p;
     };
@@ -931,6 +953,8 @@ const BUILDERS: Record<string, Builder> = {
       return p;
     };
     const supports = (f: { cx: number; cz: number; ry: number }, id: string, w: number, depth: number, lz = 0) => {
+      // con base de madera el zócalo es uno solo, abajo de todo
+      if (v.base === "madera") return;
       if (v.base === "piso") {
         // al piso: un zócalo oscuro metido hacia adentro, que queda en sombra y no se ve
         put(f, `${id}:plinth`, "Zócalo", "plinth", "tint:#241c16", 0, 0, lz, [w - (bubbles ? 340 : 150), lift + 6, depth - (bubbles ? 340 : 170)], 4, { geometry: "box" });
@@ -948,6 +972,17 @@ const BUILDERS: Record<string, Builder> = {
       }
     };
 
+    if (v.base === "madera") {
+      if (curved) arcPart("plinth", "Zócalo curvo de madera", "plinth", 0, lift, R - d / 2 + 25, R + d / 2 - 25, 6, c.body);
+      else {
+        piece(parts, "plinth", "Zócalo de madera", "plinth", c.body, [20, 0, 25], [total - 40, lift, d - 50], { noCut: true });
+        // bajo la chaise, el zócalo sigue hacia adelante
+        if (v.chaise !== "no" && !bubbles) {
+          const x = v.chaise === "izquierda" ? arm + 20 : arm + (seats - 1) * sw + 20;
+          piece(parts, "plinth:chaise", "Zócalo de madera", "plinth", c.body, [x, 0, d - 25], [sw - 40, lift, 640], { noCut: true });
+        }
+      }
+    }
     if (curved && !bubbles) {
       // todo de una pieza: base, respaldo, un solo almohadón de asiento y uno de respaldo a lo largo de la curva
       arcPart("base", "Base", "bottom", lift, 210, R - d / 2, R + d / 2, 55);
@@ -961,13 +996,11 @@ const BUILDERS: Record<string, Builder> = {
       const depth = chaise ? d + 640 : d;
       const fz = (depth - d) / 2;
       if (bubbles) {
-        // cada cuerpo son almohadones inflados: cuatro de asiento y dos de respaldo, bien gordos
         const rows = chaise ? 3 : 2;
-        const cell = depth / rows;
-        for (let r = 0; r < rows; r++) {
-          for (const [k, lx] of [-sw / 4, sw / 4].entries()) put(f, `seat:${i}:${r}:${k}`, "Almohadón de asiento", "shelf", "fabric", lx, lift, -d / 2 + cell * (r + 0.5), [sw / 2 - 6, 400, cell - 6], 150);
-        }
-        for (const [k, lx] of [-sw / 4, sw / 4].entries()) put(f, `back:${i}:${k}`, "Almohadón de respaldo", "back", "fabric", lx, lift + 340, -d / 2 + 190, [sw / 2 - 6, 330, 360], 150);
+        // cada cuerpo es un almohadón grande, capitoné: botones hundidos y la tela inflada entre ellos
+        const seatD = depth - 300;
+        tufted(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift, -d / 2 + 300 + seatD / 2, [sw - 8, 380, seatD - 6], 105), "top", 2, rows, 70);
+        tufted(put(f, `back:${i}`, "Almohadón de respaldo", "back", "fabric", 0, lift + 230, -d / 2 + 160, [sw - 8, 420, 320], 120), "front", 2, 1, 58);
       } else {
         if (!curved) {
           put(f, `base:${i}`, "Base del módulo", "bottom", "fabric", 0, lift, fz, [sw, 210, depth], 55);

@@ -128,6 +128,8 @@ export type Part = {
   arc?: { cx: number; cz: number; rIn: number; rOut: number; start: number; length: number; round: number };
   /** un objeto de ambientación escaneado (public/models/<model>.glb); la medida es la suya */
   model?: string;
+  /** capitoné: la cara de arriba (o la de adelante) se hunde en una grilla de botones */
+  tuft?: { face: "top" | "front"; nx: number; ny: number; depth: number };
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */

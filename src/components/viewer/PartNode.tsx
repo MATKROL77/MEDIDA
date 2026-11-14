@@ -4,7 +4,8 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { TessellateModifier } from "three/examples/jsm/modifiers/TessellateModifier.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 
@@ -200,6 +201,50 @@ function DecorModel({ id, size }: { id: string; size: number[] }) {
   return object ? <primitive object={object} /> : null;
 }
 
+/**
+ * Capitoné: hunde la cara pedida en una grilla de puntos (donde van los
+ * botones), con la tela que se frunce hacia cada uno. La geometría tiene que
+ * venir subdividida.
+ */
+function tuftGeometry(g: THREE.BufferGeometry, size: number[], tuft: NonNullable<Part["tuft"]>) {
+  const pos = g.getAttribute("position") as THREE.BufferAttribute;
+  const nor = g.getAttribute("normal") as THREE.BufferAttribute;
+  const top = tuft.face === "top";
+  // los ejes de la cara: en la de arriba, x y z; en la de adelante, x e y
+  const ua = size[0];
+  const va = top ? size[2] : size[1];
+  const cu = ua / tuft.nx;
+  const cv = va / tuft.ny;
+  const well = Math.min(cu, cv) * 0.17;
+  const crease = Math.min(cu, cv) * 0.06;
+  const depth = tuft.depth * MM;
+  for (let i = 0; i < pos.count; i++) {
+    const n = top ? nor.getY(i) : nor.getZ(i);
+    if (n < 0.25) continue;
+    const u = pos.getX(i) + ua / 2;
+    const v = (top ? pos.getZ(i) : pos.getY(i)) + va / 2;
+    // el botón más cercano
+    const iu = Math.min(tuft.nx - 1, Math.max(0, Math.floor(u / cu)));
+    const iv = Math.min(tuft.ny - 1, Math.max(0, Math.floor(v / cv)));
+    const bu = iu * cu + cu / 2;
+    const bv = iv * cv + cv / 2;
+    let k = Math.exp(-((u - bu) ** 2 + (v - bv) ** 2) / (2 * well * well));
+    // los pliegues: la tela tira de un botón al otro, en las líneas que los unen
+    const firstU = cu / 2;
+    const lastU = ua - cu / 2;
+    const firstV = cv / 2;
+    const lastV = va - cv / 2;
+    if (tuft.nx > 1 && v > firstV - cv * 0.35 && v < lastV + cv * 0.35) k = Math.max(k, 0.42 * Math.exp(-((v - bv) ** 2) / (2 * crease * crease)) * (u > firstU && u < lastU ? 1 : 0));
+    if (tuft.ny > 1 && u > firstU - cu * 0.35 && u < lastU + cu * 0.35) k = Math.max(k, 0.42 * Math.exp(-((u - bu) ** 2) / (2 * crease * crease)) * (v > firstV && v < lastV ? 1 : 0));
+    // más suave sobre los cantos redondeados
+    const d = depth * k * Math.min(1, (n - 0.25) / 0.45);
+    if (top) pos.setY(i, pos.getY(i) - d);
+    else pos.setZ(i, pos.getZ(i) - d);
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+}
+
 function isVertical(p: Part) {
   return p.cut ? Math.abs(p.cut.length - p.size[1]) < 1 : true;
 }
@@ -306,13 +351,22 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     if (part.geometry !== "cushion" && !edged) return null;
     const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
     const radius = part.geometry === "cushion" ? Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) : Math.min(2.2, Math.min(...part.size) * 0.22);
-    const g = new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
+    let g: THREE.BufferGeometry = new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
+    if (part.tuft) {
+      // las caras planas de la caja redondeada son un solo rectángulo: se parten en
+      // triángulos de 3 cm para poder hundirlas, y se vuelven a soldar para que el sombreado sea suave
+      const fine = new TessellateModifier(0.03, 10).modify(g.toNonIndexed());
+      g.dispose();
+      g = mergeVertices(fine, 1e-5);
+      fine.dispose();
+      tuftGeometry(g, [sx, sy, sz], part.tuft);
+    }
     // los frentes (puertas, cajones) comparten la veta con sus vecinos
     const front = part.front || part.kind === "door" || part.kind === "drawer-front";
     meterUvs(g, [sx, sy, sz], part.id, front ? part.position.map((v, i) => (v + part.size[i] / 2) * MM) : undefined);
     return g;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {
