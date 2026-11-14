@@ -99,16 +99,18 @@ function hash(text: string): number {
  * (la V) a lo largo de su lado más largo. Se escriben en la geometría, así
  * valen igual para el 3D rápido y para el modo foto.
  */
-export function meterUvs(geometry: THREE.BufferGeometry, size: number[], key: string) {
+export function meterUvs(geometry: THREE.BufferGeometry, size: number[], key: string, origin?: number[]) {
   const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
   const nor = geometry.getAttribute("normal") as THREE.BufferAttribute;
   if (!pos || !nor) return;
   const g = size[0] >= size[1] && size[0] >= size[2] ? 0 : size[1] >= size[2] ? 1 : 2;
-  const ox = hash(key) * 3;
-  const oy = hash(`${key}:y`) * 3;
+  // con origen, la foto se toma de la posición en el mueble: frentes vecinos comparten la veta,
+  // como si salieran de la misma placa. Sin origen, cada pieza arranca en un lugar distinto
+  const ox = origin ? 0 : hash(key) * 3;
+  const oy = origin ? 0 : hash(`${key}:y`) * 3;
   const uv = new Float32Array(pos.count * 2);
   for (let i = 0; i < pos.count; i++) {
-    const p = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+    const p = origin ? [pos.getX(i) + origin[0], pos.getY(i) + origin[1], pos.getZ(i) + origin[2]] : [pos.getX(i), pos.getY(i), pos.getZ(i)];
     const n = [Math.abs(nor.getX(i)), Math.abs(nor.getY(i)), Math.abs(nor.getZ(i))];
     const face = n[0] >= n[1] && n[0] >= n[2] ? 0 : n[1] >= n[2] ? 1 : 2;
     // los dos ejes de la cara; el que va con la veta queda en V

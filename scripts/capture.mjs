@@ -70,7 +70,7 @@ const SHOTS = [
   },
   {
     name: "familia-placares",
-    query: `c=${cfg({ shape: "l-left", runs: [{ width: 2800, modules: [mod("shelves", { shelves: 4 }), mod("drawers-hanging", { drawers: 3 }), mod("double-hanging")] }, { width: 2000, modules: [mod("hanging"), mod("shelves", { shelves: 4 })] }], doorMaterial: "roble" })}&ambiente=habitacion&abierto=1&luces=1&encuadre=0.82&pared=arena${PHOTO(90)}`,
+    query: `c=${cfg({ shape: "l-left", runs: [{ width: 2800, modules: [mod("shelves", { shelves: 4 }), mod("drawers-hanging", { drawers: 3 }), mod("double-hanging")] }, { width: 2000, modules: [mod("hanging"), mod("shelves", { shelves: 4 })] }], doorMaterial: "roble" })}&ambiente=habitacion&abierto=1&luces=1&encuadre=0.82&pared=arena${PHOTO(260)}`,
     settle: 34_000,
     ...FAMILY,
   },
