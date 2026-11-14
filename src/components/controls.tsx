@@ -310,3 +310,53 @@ export function DimensionCards({ items, onChange }: { items: { key: string; labe
     </div>
   );
 }
+
+/**
+ * En el teléfono parado, el 3D arranca agrandado: se ve el mueble entero.
+ * Al deslizar para ver las opciones se achica solo, y al volver arriba del
+ * todo se agranda otra vez. El botón de agrandar y achicar sigue andando (si
+ * se lo achica arriba de todo, no se vuelve a agrandar hasta que se desliza).
+ */
+export function useScrollExpand(portrait: boolean) {
+  const [big, setBig] = useState(false);
+  const [atTop, setAtTop] = useState(true);
+  const started = useRef(false);
+  useEffect(() => {
+    if (!portrait) return;
+    if (!started.current) {
+      started.current = true;
+      if (window.scrollY <= 2) setBig(true);
+    }
+    let last = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      if (y > 24 && last <= 24) setBig(false);
+      if (y <= 2 && last > 2) setBig(true);
+      setAtTop(y <= 2);
+      last = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [portrait]);
+  return { big, setBig, atTop };
+}
+
+/**
+ * La seña de que hay más abajo: un puntito que sube por la derecha, como un
+ * dedo deslizando, con "Deslizá". Tocarla baja un poco la página.
+ */
+export function SwipeHint({ show }: { show: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label="Deslizá para ver las opciones"
+      onClick={() => window.scrollBy({ top: Math.round(window.innerHeight * 0.4), behavior: "smooth" })}
+      className={`swipe-hint glass lg:hidden ${show ? "" : "pointer-events-none opacity-0"}`}
+    >
+      <span className="swipe-track" aria-hidden="true">
+        <span className="swipe-dot" />
+      </span>
+      <span className="swipe-label">Deslizá</span>
+    </button>
+  );
+}

@@ -23,7 +23,7 @@ import { Watermark } from "@/components/Watermark";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { ContactLink } from "@/components/site/ContactLink";
 import { IconCheck, IconClose, IconDecor, IconHeart, IconWhatsapp } from "@/components/site/icons";
-import { Dimension, DimensionCards, ExpandToggle, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber, usePortraitPhone } from "@/components/controls";
+import { Dimension, DimensionCards, ExpandToggle, OptionCard, Section, Segmented, Stepper, Swatches, SwipeHint, Toggle, useAnimatedNumber, usePortraitPhone, useScrollExpand } from "@/components/controls";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import { PhotoBadge, PhotoToggle, usePhotoMode } from "@/components/PhotoControls";
 import type { ViewName } from "@/components/viewer/Scene";
@@ -109,8 +109,9 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
   const [lights, setLights] = useState(false);
   const photo = usePhotoMode();
   // en el teléfono: el 3D agrandado y la cámara más cerca
-  const [big, setBig] = useState(false);
   const portrait = usePortraitPhone();
+  // arranca agrandado; al deslizar se achica y al volver arriba se agranda
+  const { big, setBig, atTop } = useScrollExpand(portrait);
   const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({
     mode: "room",
     wall: WALL_COLORS[0].hex,
@@ -364,6 +365,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
           />
         </div>
         <PhotoBadge status={photo.status} />
+        <SwipeHint show={portrait && big && atTop} />
         {/* abajo a la izquierda, a la altura del aviso de la foto realista */}
         <button
           type="button"

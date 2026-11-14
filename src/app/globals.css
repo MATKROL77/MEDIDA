@@ -509,6 +509,68 @@ body {
       bottom: 4.6rem;
     }
   }
+  /* la seña de deslizar: un puntito que sube por una guía, a la derecha del 3D */
+  .swipe-hint {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 5.4rem;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.55rem 0.45rem 0.5rem;
+    border-radius: 999px;
+    transition: opacity 300ms ease;
+  }
+  .swipe-track {
+    position: relative;
+    width: 0.5rem;
+    height: 3.2rem;
+    border-radius: 999px;
+    background: rgb(20 33 61 / 0.12);
+  }
+  .swipe-dot {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: 0.95rem;
+    height: 0.95rem;
+    margin-left: -0.475rem;
+    border-radius: 999px;
+    background: var(--color-navy);
+    box-shadow: 0 2px 8px rgb(20 33 61 / 0.3);
+    animation: swipe-dot 1.7s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+  }
+  .swipe-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--color-ink);
+  }
+  @keyframes swipe-dot {
+    0% {
+      transform: translateY(0);
+      opacity: 0;
+    }
+    15% {
+      opacity: 1;
+    }
+    70% {
+      transform: translateY(-2.25rem);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-2.25rem);
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .swipe-dot {
+      animation: none;
+      bottom: 1.1rem;
+    }
+  }
   /* las tarjetas de las medidas, en el teléfono: la elegida, marcada en azul */
   .dim-card {
     border-radius: 1rem;

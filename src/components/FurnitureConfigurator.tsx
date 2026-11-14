@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IconBulb, IconDoor, IconExplode, IconFront, IconThree } from "@/components/icons";
 import { OtherConfigurators } from "@/components/OtherConfigurators";
 import { SendSheet } from "@/components/SendSheet";
-import { Dimension, DimensionCards, ExpandToggle, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber, usePortraitPhone } from "@/components/controls";
+import { Dimension, DimensionCards, ExpandToggle, Section, Segmented, Stepper, Swatches, SwipeHint, Toggle, useAnimatedNumber, usePortraitPhone, useScrollExpand } from "@/components/controls";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { IconCheck, IconClose, IconDecor, IconHeart } from "@/components/site/icons";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
@@ -58,8 +58,9 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   // el módulo tocado en el 3D, para cambiarlo solo (en las familias que lo permiten)
   const [picked, setPicked] = useState<number | null>(null);
   // en el teléfono: el 3D agrandado y la cámara más cerca
-  const [big, setBig] = useState(false);
   const portrait = usePortraitPhone();
+  // arranca agrandado; al deslizar se achica y al volver arriba se agranda
+  const { big, setBig, atTop } = useScrollExpand(portrait);
   // en el teléfono el panel de controles se pliega: queda el título y el precio, y el 3D crece
   const [panelOpen, setPanelOpen] = useState(true);
   const [designId, setDesignId] = useState<string | null>(null);
@@ -177,6 +178,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           />
         </div>
         <PhotoBadge status={photo.status} />
+        <SwipeHint show={portrait && big && atTop} />
 
         {/* abajo a la izquierda, a la altura del aviso de la foto realista */}
         <button
