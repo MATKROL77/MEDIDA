@@ -257,6 +257,14 @@ de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
 - **Lo que se ve por una ranura**: la caja de un cajón cerrado va con la
   variante oscura de su material (por la ranura entre frentes se ve en
   sombra, no la melamina clara); al abrirlo vuelve a su color.
+- **Piezas barridas** (`sweepGeometry`): una sección redondeada que recorre
+  una curva libre en planta, con su alto cambiando a lo largo, relleno,
+  arrugas y puntas redondeadas: el sillón curvo orgánico (asiento, respaldo
+  y zócalo).
+- **Tapas en planta** (`plan`): rectángulo con el mismo radio en las cuatro
+  esquinas, elipse o media elipse, y marcos (un aro con hueco) para el vidrio.
+- **Piedra**: mármol pulido (textura CC0 de Poly Haven) para la tapa de la
+  mesita del sillón.
 - **Cantos**: las placas tienen cantos redondeados de 2 mm con facetas planas;
   con normales suaves, en menos de un píxel el suavizado de bordes los hacía
   brillar a puntitos. La textura se proyecta por triángulo, y las normales se
@@ -281,9 +289,11 @@ de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
   pintada, la sombra de contacto) lleva `userData.fake` y el trazado no lo ve.
   Ojo: el trazado lee los colores por vértice con una transparencia que no
   tienen, así que una geometría con `vertexColors` le desaparece.
-  Arranca prendido en computadoras y apagado en teléfonos; el botón "Foto" lo
-  cambia y se recuerda. Necesita WebGL 2 con texturas de punto flotante: si
-  no hay, queda el 3D rápido.
+  Arranca apagado siempre y se calcula solo al apretar "Realismo" (usa la
+  placa de video del equipo; no se recuerda entre visitas). Para que no se
+  vea grano, la foto tapa el 3D recién con el 85 % de sus pasadas, filtrada;
+  hasta ahí se ve el 3D de siempre con el porcentaje. Necesita WebGL 2 con
+  texturas de punto flotante: si no hay, queda el 3D rápido.
 
 ## El configurador de placares
 

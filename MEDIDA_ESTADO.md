@@ -35,6 +35,34 @@ solo uso.
 por plan, panel de empresa, configurador embebible que le escribe a la
 empresa, administración.
 
+**Lo pedido sobre la edición publicada (14/11/2026, a la tarde).**
+- Realismo a pedido: arranca solo con el botón y no muestra grano (la foto
+  tapa el 3D recién al 85 % de sus pasadas). El render en un servidor con
+  placa de video no está hecho: necesita una cuenta de un proveedor de GPU
+  y su clave.
+- Visor: sin el cartel de arriba; "Con decoración" abajo a la izquierda.
+- Luz en cada hueco y adentro de cada cajón (TV, camas, mesas de luz), con
+  su mancha de luz en el 3D rápido.
+- Mesas: mesa o escritorio; forma recta, con esquinas redondeadas (radio
+  parejo) o redonda u ovalada; vidrio con marco de madera o de hierro; largo
+  y ancho con el mismo rango (tapa en dos mitades si no entra en una placa);
+  las patas ya no se esconden detrás del vidrio.
+- Mesa de luz y ratona: puerta de madera o de vidrio, rueditas, cajón bajo
+  el vidrio; el tabique de atrás mide al menos 4,8 m.
+- Cama: cajones a la izquierda, a la derecha o de los dos lados; trampilla
+  que levanta el colchón; puertas en el respaldo con estantes.
+- Sillones: el recto con base y respaldo de una pieza (solo se separan los
+  almohadones) y apoyabrazos integrados; las burbujas de corrido; el curvo
+  pasa a ser orgánico, con curvatura regulable, zócalo de madera y mesita
+  de madera doblada con tapa de mármol.
+- Cada módulo se edita solo: cuerpos del mueble de TV y columnas de la
+  biblioteca, tocándolos en el 3D.
+- Portarretratos mirando al frente.
+Verificado: `npm test` (81 pruebas), `typecheck`, `lint` y `build` sin
+errores; capturas en Chromium de cada mueble; edición de un módulo probada
+tocándolo en el 3D; sin scroll horizontal a 390 y 1440 px en la portada y
+en los siete configuradores.
+
 **Link principal con la edición nueva (14/11/2026, más tarde).** A pedido
 de Matías, el link principal publica la edición nueva (beige y azul marino,
 siete familias, modo realista); la clásica deja de publicarse y queda en
