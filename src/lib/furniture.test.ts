@@ -221,19 +221,38 @@ test("cama con guardado: caja cerrada con piso falso, y cajones con su pared de 
 });
 
 test("cama: las restricciones apagan lo que no se puede", () => {
-  const conPatas = normalizeFurniture({ family: "camas", values: { base: "patas", sides: true, foot: "cajones" } });
-  assert.equal(conPatas.values.sides, false, "con patas no hay cajones al costado");
+  const conPatas = normalizeFurniture({ family: "camas", values: { base: "patas", sides: "ambos", foot: "cajones" } });
+  assert.equal(conPatas.values.sides, "no", "con patas no hay cajones al costado");
   assert.equal(conPatas.values.foot, "liso");
-  const baja = normalizeFurniture({ family: "camas", values: { base: "caja", height: 250, sides: true, foot: "puertas" } });
-  assert.equal(baja.values.sides, false, "una base baja no lleva cajones");
+  const baja = normalizeFurniture({ family: "camas", values: { base: "caja", height: 250, sides: "derecha", foot: "puertas" } });
+  assert.equal(baja.values.sides, "no", "una base baja no lleva cajones");
   assert.equal(baja.values.foot, "liso");
-  const tapizada = normalizeFurniture({ family: "camas", values: { upholstered: true, sides: true } });
-  assert.equal(tapizada.values.sides, false);
-  const sinLuz = normalizeFurniture({ family: "camas", values: { base: "caja", head: "tapizado", led: true } });
+  const tapizada = normalizeFurniture({ family: "camas", values: { upholstered: true, sides: "izquierda" } });
+  assert.equal(tapizada.values.sides, "no");
+  const sinLuz = normalizeFurniture({ family: "camas", values: { base: "caja", head: "tapizado", sides: "no", foot: "liso", led: true } });
   assert.equal(sinLuz.values.led, false, "la luz no va donde no se ve");
+  const conTrampilla = normalizeFurniture({ family: "camas", values: { lid: true, sides: "ambos", foot: "cajones" } });
+  assert.equal(conTrampilla.values.sides, "no", "con trampilla el guardado es por arriba");
+  assert.equal(conTrampilla.values.foot, "liso");
+  const angosta = normalizeFurniture({ family: "camas", values: { width: 900, sides: "ambos" } });
+  assert.notEqual(angosta.values.sides, "ambos", "en una de una plaza no entran cajones de los dos lados");
   const sinGuardado = buildFurniture(normalizeFurniture({ family: "camas", values: { base: "patas" } }));
   assert.ok(sinGuardado.parts.some((p) => p.label === "Tabla del elástico"), "sin guardado, el colchón va sobre tablas");
   assert.ok(!sinGuardado.parts.some((p) => p.label === "Piso falso"));
+});
+
+test("cama: cajones de los dos lados, trampilla y puertas en el respaldo", () => {
+  const ambos = buildFurniture(normalizeFurniture({ family: "camas", values: { sides: "ambos", foot: "liso" } })).parts;
+  const fronts = ambos.filter((p) => p.kind === "drawer-front");
+  assert.equal(fronts.length, 4);
+  const xs = fronts.map((p) => p.position[0]);
+  assert.ok(Math.min(...xs) < 50 && Math.max(...xs) > 1000, "hay cajones a la izquierda y a la derecha");
+  const trampilla = buildFurniture(normalizeFurniture({ family: "camas", values: { lid: true } })).parts;
+  const tapas = trampilla.filter((p) => p.hinge === "lid");
+  assert.ok(tapas.length >= 1 && tapas.every((p) => p.kind === "door"));
+  assert.match(tapas[0].cut?.note ?? "", /pistones/);
+  const puertas = buildFurniture(normalizeFurniture({ family: "camas", values: { head: "biblioteca", headDoors: true } })).parts;
+  assert.ok(puertas.some((p) => p.id.startsWith("head:door")));
 });
 
 test("el sillón de cuero cuesta más que el de tela, y la portada arma un sillón válido", async () => {

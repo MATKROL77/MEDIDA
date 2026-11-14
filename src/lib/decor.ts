@@ -94,5 +94,7 @@ export function dressed(assembly: Assembly): Assembly {
 
 /** el mueble solo, sin nada de lo que lo acompaña */
 export function undressed(assembly: Assembly): Assembly {
-  return { ...assembly, room: undefined, runs: assembly.runs.map((r) => ({ ...r, parts: r.parts.filter((p) => !p.decor) })) };
+  // lo que va colgado de una pieza (el colchón de una cama con trampilla) también sale
+  const bare = (p: Part): Part => (p.details?.some((d) => d.decor) ? { ...p, details: p.details.filter((d) => !d.decor) } : p);
+  return { ...assembly, room: undefined, runs: assembly.runs.map((r) => ({ ...r, parts: r.parts.filter((p) => !p.decor).map(bare) })) };
 }

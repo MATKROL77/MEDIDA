@@ -175,7 +175,8 @@ export type Part = {
   cut: Cut | null;
   /** las puertas batientes giran sobre este borde al abrir */
   /** "bottom": puerta rebatible, que se abre hacia adelante girando sobre su canto de abajo */
-  hinge?: "left" | "right" | "bottom";
+  /** "lid": una tapa horizontal con la bisagra atrás (hacia la cabecera), que se levanta: la trampilla de una cama */
+  hinge?: "left" | "right" | "bottom" | "lid";
   /** herrajes y terminaciones que se mueven con la pieza, en coordenadas de la pieza */
   details?: Part[];
   /** desplazamiento al abrir (cajones y hojas corredizas), en mm */

@@ -978,7 +978,8 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
 
     // pivote: en las puertas, el canto de adelante del lado de la bisagra (así no
     // se mete en el lateral al girar); en lo demás, el centro
-    const pivot = door ? [door === "right" ? px + sx : px, py, pz + sz] : [px + sx / 2, py + sy / 2, pz + sz / 2];
+    // una tapa (trampilla) gira sobre su canto de arriba del lado de atrás
+    const pivot = door === "lid" ? [px + sx / 2, py + sy, pz] : door ? [door === "right" ? px + sx : px, py, pz + sz] : [px + sx / 2, py + sy / 2, pz + sz / 2];
     if (outer.current) {
       outer.current.position.set(
         (pivot[0] + ex[0] * e + (os ? os[0] * drawer : 0) + slideX) * MM,
@@ -989,7 +990,8 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     if (rot.current) {
       if (door) {
         const angle = (part.openAngle ?? Math.PI / 2) * doorProgress(anim.open.v, part.openDelay);
-        if (door === "bottom") rot.current.rotation.set(angle, 0, 0);
+        if (door === "lid") rot.current.rotation.set(-angle, 0, 0);
+        else if (door === "bottom") rot.current.rotation.set(angle, 0, 0);
         else rot.current.rotation.set(0, (door === "left" ? -1 : 1) * angle, 0);
       } else rot.current.rotation.set(0, part.rotationY ?? 0, rz);
     }
@@ -1020,15 +1022,19 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
         else if (part.glow === "x+" || part.glow === "x-") m.scale.set(sz * MM * a, sy * MM * a, 1);
         else m.scale.set(sx * MM * a, sy * MM * a, 1);
       } else {
-        if (door) m.position.set(((door === "right" ? -sx : sx) / 2) * MM, (sy / 2) * MM, (-sz / 2) * MM);
+        if (door === "lid") m.position.set(0, (-sy / 2) * MM, (sz / 2) * MM);
+        else if (door) m.position.set(((door === "right" ? -sx : sx) / 2) * MM, (sy / 2) * MM, (-sz / 2) * MM);
         // el almohadón ya tiene su medida: solo acompaña la animación
         if (cushion) m.scale.set((sx / Math.max(part.size[0], 1)) * a, (sy / Math.max(part.size[1], 1)) * a, (sz / Math.max(part.size[2], 1)) * a);
         else m.scale.set(Math.max(sx, 0.01) * MM * a, Math.max(sy, 0.01) * MM * a, Math.max(sz, 0.01) * MM * a);
       }
     }
     if (details.current) {
-      const ox = door ? (door === "right" ? -sx : 0) : -sx / 2;
-      details.current.position.set(ox * MM, (door ? 0 : -sy / 2) * MM, (door ? -sz : -sz / 2) * MM);
+      if (door === "lid") details.current.position.set((-sx / 2) * MM, -sy * MM, 0);
+      else {
+        const ox = door ? (door === "right" ? -sx : 0) : -sx / 2;
+        details.current.position.set(ox * MM, (door ? 0 : -sy / 2) * MM, (door ? -sz : -sz / 2) * MM);
+      }
     }
   });
 
