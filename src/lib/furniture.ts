@@ -936,7 +936,17 @@ const BUILDERS: Record<string, Builder> = {
     duvet.drape = { w: mw + 6, d: dl + 8, drop: 200 };
     const pillows = mw > 1200 ? 2 : 1;
     const pw = Math.min(700, mw / pillows - 60);
-    for (let k = 0; k < pillows; k++) c1(`deco:pillow${k}`, "Almohada", "#f6f2ea", [t + (mw / pillows) * k + (mw / pillows - pw) / 2, my + 240, z0 + 60], [pw, 150, 420], 70, 6);
+    for (let k = 0; k < pillows; k++) {
+      c1(`deco:pillow${k}`, "Almohada", "#f6f2ea", [t + (mw / pillows) * k + (mw / pillows - pw) / 2, my + 240, z0 + 60], [pw, 160, 440], 50, 6);
+      // fina en el borde y gorda en el medio, como una almohada de pluma
+      parts[parts.length - 1].pinch = 0.32;
+    }
+    // una manta doblada a los pies, sobre el acolchado, que cae por los costados y adelante
+    const tw = mw + 76;
+    const fold = 430;
+    const fall = 160;
+    c1("deco:throw", "Manta", "#a0927f", [t + mw / 2 - tw / 2 - fall, my + 281, z0 + ml + 38 - fold], [tw + 2 * fall, 26, fold + fall], 10, 7);
+    parts[parts.length - 1].drape = { w: tw, d: fold, drop: 170 };
     return { parts, drawers, doors, wall: v.head !== "no" };
   },
 
