@@ -35,6 +35,11 @@ solo uso.
 por plan, panel de empresa, configurador embebible que le escribe a la
 empresa, administración.
 
+**Link principal con la edición nueva (14/11/2026, más tarde).** A pedido
+de Matías, el link principal publica la edición nueva (beige y azul marino,
+siete familias, modo realista); la clásica deja de publicarse y queda en
+`edicion-clasica/`; `medida-nuevo` deja de actualizarse.
+
 **Dos links (14/11/2026).** El link principal vuelve a la edición clásica
 (versión del 12/11 con placares, TV y bibliotecas) más una base de cama hecha
 con el motor de esa versión; la edición nueva se publica aparte, en el Worker

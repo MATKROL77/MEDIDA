@@ -1,10 +1,11 @@
-# Edición clásica (el link principal)
+# Edición clásica (ya no se publica)
 
-El link principal de MEDIDA muestra la edición clásica: la versión del
-12/11/2026 (commit en `BASE`), con placares, muebles de TV, bibliotecas y
-bases de cama, texturas dibujadas y el 3D liviano. Lo que se desarrolla en esta
-rama (el modo foto, el estudio, los sillones nuevos) se publica aparte, en el
-Worker `medida-nuevo`, hasta que esté listo.
+Desde el 14/11/2026 el link principal publica la edición nueva (la de esta
+rama). La edición clásica queda guardada acá por si hace falta volver a
+armarla: la versión del 12/11/2026 (commit en `BASE`), con placares, muebles
+de TV, bibliotecas y bases de cama, texturas dibujadas y el 3D liviano. El
+Worker `medida-nuevo`, donde se probaba la edición nueva, dejó de
+actualizarse.
 
 - `BASE`: el commit de partida.
 - `cambios.patch`: lo que se le cambió a esa versión. Muestra solo placares,
@@ -14,7 +15,7 @@ Worker `medida-nuevo`, hasta que esté listo.
   costado con su pared de fondo y su piso, contrafrente en todos los cajones,
   respaldo liso o con estantes), la imagen de su tarjeta y sus pruebas.
 
-La publicación (`.github/workflows/deploy.yml`) arma esa versión así:
+Para armarla (antes lo hacía `.github/workflows/deploy.yml`):
 
 ```bash
 git worktree add ../clasica "$(cat edicion-clasica/BASE)"

@@ -479,30 +479,25 @@ npm run capture -- http://localhost:4100
 
 ## Publicarlo
 
-Hay dos ediciones publicadas desde esta misma rama:
-
-- **El link principal** (`medida.matiascolimodio.workers.dev`) muestra la
-  **edición clásica**: placares, muebles de TV, bibliotecas y bases de cama,
-  con el 3D liviano y las texturas dibujadas. Se arma desde una versión fija
-  más un parche; ver `edicion-clasica/README.md`.
-- **La edición nueva** (lo que hay en esta rama: modo foto, estudio, sillones,
-  telas) se publica en el Worker `medida-nuevo`
-  (`medida-nuevo.matiascolimodio.workers.dev`). Dice "En desarrollo" y no se
-  indexa en buscadores. Al compilarla, `NEXT_PUBLIC_MEDIDA_EDICION=nueva`.
-
-`.github/workflows/deploy.yml` verifica las dos ediciones (pruebas, tipos,
-lint), las compila, las publica en Cloudflare Workers (`medida` y
-`medida-nuevo`) y comprueba que respondan, en cada push a `main` o a una rama
-`claude/**`. El token de Cloudflare (`CLOUDFLARE_API_TOKEN`) está cargado como
-secreto de un environment de GitHub; el archivo explica cómo lo encuentra. Si
-falta el token, la ejecución falla en vez de terminar en verde sin publicar.
+El link principal (`medida.matiascolimodio.workers.dev`) publica lo que hay en
+esta rama. `.github/workflows/deploy.yml` lo verifica (pruebas, tipos, lint),
+lo compila, lo publica en el Worker `medida` de Cloudflare y comprueba que
+responda, en cada push a `main` o a una rama `claude/**`. El token de
+Cloudflare (`CLOUDFLARE_API_TOKEN`) está cargado como secreto de un
+environment de GitHub; el archivo explica cómo lo encuentra. Si falta el
+token, la ejecución falla en vez de terminar en verde sin publicar.
 
 Un commit cuyo mensaje lleva `[skip ci]` no dispara la publicación: sirve para
 guardar trabajo a medio hacer.
 
-A mano, desde la compu: la nueva con `NEXT_PUBLIC_MEDIDA_EDICION=nueva npm run
-build` y `npx wrangler deploy --name medida-nuevo`; la clásica, como dice
-`edicion-clasica/README.md`.
+A mano, desde la compu: `npm run build` y `npx wrangler deploy`. Con
+`NEXT_PUBLIC_MEDIDA_EDICION=nueva` al compilar, el sitio dice "En desarrollo"
+y no se indexa (sirve para publicar una prueba en otro Worker, con
+`--name`).
+
+Hasta el 14/11/2026 el link principal mostraba la edición clásica y la nueva
+se probaba en el Worker `medida-nuevo`, que dejó de actualizarse. La clásica
+queda guardada en `edicion-clasica/` (ver su README).
 
 ## Textos legales
 
