@@ -8,6 +8,8 @@ import { useDesigns } from "@/lib/designStore";
 
 import { ContactLink } from "./ContactLink";
 import { IconClose, IconHeart, IconMail, IconMenu, IconWhatsapp } from "./icons";
+import { IN_DEVELOPMENT } from "@/lib/edition";
+
 import { Logo } from "./Logo";
 
 const NAV = [
@@ -48,8 +50,9 @@ export function Header() {
       className={`sticky top-0 z-40 transition-all duration-300 ${scrolled || menu ? "glass !border-x-0 !border-t-0" : "border-b border-transparent"}`}
     >
       <div className="wrap flex h-14 items-center justify-between gap-4">
-        <Link href="/" aria-label="MEDIDA, inicio" className="-ml-1 rounded-md px-1 py-1">
+        <Link href="/" aria-label="MEDIDA, inicio" className="-ml-1 flex items-center gap-2 rounded-md px-1 py-1">
           <Logo />
+          {IN_DEVELOPMENT && <span className="whitespace-nowrap rounded-full border border-line px-2 py-0.5 text-[0.58rem] font-semibold uppercase tracking-[0.14em] text-ink-2">En desarrollo</span>}
         </Link>
 
         <nav aria-label="Principal" className="hidden items-center gap-7 text-sm text-ink-2 md:flex">

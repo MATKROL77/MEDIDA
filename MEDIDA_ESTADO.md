@@ -35,6 +35,13 @@ solo uso.
 por plan, panel de empresa, configurador embebible que le escribe a la
 empresa, administración.
 
+**Dos links (14/11/2026).** El link principal vuelve a la edición clásica
+(versión del 12/11 con placares, TV y bibliotecas) más una base de cama hecha
+con el motor de esa versión; la edición nueva se publica aparte, en el Worker
+`medida-nuevo`, marcada "En desarrollo" y sin indexar. Ver
+`edicion-clasica/README.md`. Verificado en local: el parche se aplica sobre la
+base, pasan sus 68 pruebas, compila y se ve a 390 y 1440 px.
+
 **Realismo y rediseño (13/11/2026).** Modo foto con trazado de rayos en el
 navegador (`three-gpu-pathtracer`): con la escena quieta, el 3D se recalcula
 con luz que rebota, luces de área en cada tira LED y un softbox, con un filtro

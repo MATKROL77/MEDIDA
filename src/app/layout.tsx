@@ -5,6 +5,7 @@ import { CookieConsent } from "@/components/site/CookieConsent";
 import { SiteProvider } from "@/components/site/SiteProvider";
 import { ConfiguratorWindow } from "@/components/site/ConfiguratorWindow";
 import { SyncAgent } from "@/components/site/SyncAgent";
+import { IN_DEVELOPMENT } from "@/lib/edition";
 import { site } from "@/lib/site";
 import "./globals.css";
 
@@ -33,6 +34,7 @@ export const metadata: Metadata = {
   },
   twitter: { card: "summary_large_image", title: `${site.name} · ${site.tagline}`, description: site.description, images: ["/og.jpg"] },
   formatDetection: { telephone: false },
+  ...(IN_DEVELOPMENT ? { robots: { index: false, follow: false } } : {}),
 };
 
 export const viewport: Viewport = {

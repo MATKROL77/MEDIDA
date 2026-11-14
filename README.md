@@ -436,9 +436,20 @@ npm run capture -- http://localhost:4100
 
 ## Publicarlo
 
-`.github/workflows/deploy.yml` verifica (pruebas, tipos, lint), compila,
-publica en Cloudflare Workers (`wrangler.jsonc`, nombre `medida`) y comprueba
-que el sitio publicado responda, en cada push a `main` o a una rama
+Hay dos ediciones publicadas desde esta misma rama:
+
+- **El link principal** (`medida.matiascolimodio.workers.dev`) muestra la
+  **edición clásica**: placares, muebles de TV, bibliotecas y bases de cama,
+  con el 3D liviano y las texturas dibujadas. Se arma desde una versión fija
+  más un parche; ver `edicion-clasica/README.md`.
+- **La edición nueva** (lo que hay en esta rama: modo foto, estudio, sillones,
+  telas) se publica en el Worker `medida-nuevo`
+  (`medida-nuevo.matiascolimodio.workers.dev`). Dice "En desarrollo" y no se
+  indexa en buscadores. Al compilarla, `NEXT_PUBLIC_MEDIDA_EDICION=nueva`.
+
+`.github/workflows/deploy.yml` verifica las dos ediciones (pruebas, tipos,
+lint), las compila, las publica en Cloudflare Workers (`medida` y
+`medida-nuevo`) y comprueba que respondan, en cada push a `main` o a una rama
 `claude/**`. El token de Cloudflare (`CLOUDFLARE_API_TOKEN`) está cargado como
 secreto de un environment de GitHub; el archivo explica cómo lo encuentra. Si
 falta el token, la ejecución falla en vez de terminar en verde sin publicar.
@@ -446,7 +457,9 @@ falta el token, la ejecución falla en vez de terminar en verde sin publicar.
 Un commit cuyo mensaje lleva `[skip ci]` no dispara la publicación: sirve para
 guardar trabajo a medio hacer.
 
-A mano, desde la compu: `npm run build` y después `npx wrangler deploy`.
+A mano, desde la compu: la nueva con `NEXT_PUBLIC_MEDIDA_EDICION=nueva npm run
+build` y `npx wrangler deploy --name medida-nuevo`; la clásica, como dice
+`edicion-clasica/README.md`.
 
 ## Textos legales
 

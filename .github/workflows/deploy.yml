@@ -1,5 +1,11 @@
 # Verifica y publica MEDIDA en Cloudflare en cada push a `main` o a una rama
-# `claude/**`.
+# `claude/**`. Publica dos ediciones:
+#
+# - la clásica, en el link principal (el Worker "medida"): la versión del
+#   12/11/2026 (commit en edicion-clasica/BASE) con los cambios de
+#   edicion-clasica/cambios.patch. Es la que se muestra.
+# - la nueva, en desarrollo, en un Worker aparte ("medida-nuevo"): lo que hay
+#   en esta rama. No se indexa y dice que está en desarrollo.
 #
 # El token de Cloudflare está cargado como secreto de un *environment* de
 # GitHub (Settings -> Environments), no como secreto del repositorio. Un job
@@ -54,6 +60,16 @@ jobs:
           npm run typecheck
           npm run lint
 
+      - name: Edición clásica, pruebas
+        run: |
+          git fetch --no-tags --depth=1 origin "$(cat edicion-clasica/BASE)"
+          git worktree add ../clasica "$(cat edicion-clasica/BASE)"
+          git -C ../clasica apply --whitespace=nowarn "$GITHUB_WORKSPACE/edicion-clasica/cambios.patch"
+          cd ../clasica
+          npm ci
+          npm test
+          npm run typecheck
+
       - name: Buscar el environment que tiene el token de Cloudflare
         id: environment
         env:
@@ -89,7 +105,19 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build
+      - name: Compilar la edición nueva
+        run: npm run build
+        env:
+          NEXT_PUBLIC_MEDIDA_EDICION: nueva
+
+      - name: Compilar la edición clásica
+        run: |
+          git fetch --no-tags --depth=1 origin "$(cat edicion-clasica/BASE)"
+          git worktree add ../clasica "$(cat edicion-clasica/BASE)"
+          git -C ../clasica apply --whitespace=nowarn "$GITHUB_WORKSPACE/edicion-clasica/cambios.patch"
+          cd ../clasica
+          npm ci
+          npm run build
 
       - name: Publicar
         env:
@@ -103,17 +131,22 @@ jobs:
             exit 1
           fi
           if [ -n "$ACCOUNT_ID" ]; then export CLOUDFLARE_ACCOUNT_ID="$ACCOUNT_ID"; fi
-          if [ -n "$EMAIL_FROM" ]; then
-            npx wrangler deploy --var "EMAIL_FROM:$EMAIL_FROM" 2>&1 | tee deploy.log
-          else
-            npx wrangler deploy 2>&1 | tee deploy.log
-          fi
-          # la clave del proveedor de email, si está cargada, pasa al Worker como secreto
+          vars=()
+          if [ -n "$EMAIL_FROM" ]; then vars=(--var "EMAIL_FROM:$EMAIL_FROM"); fi
+          set -o pipefail
+          # la nueva, en desarrollo, en su propio Worker (sus datos van aparte)
+          npx wrangler deploy --name medida-nuevo "${vars[@]}" 2>&1 | tee deploy-nueva.log
+          # la clásica, en el link principal
+          (cd ../clasica && npx wrangler deploy "${vars[@]}") 2>&1 | tee deploy-clasica.log
+          # la clave del proveedor de email, si está cargada, pasa a los dos Workers como secreto
           if [ -n "$RESEND_API_KEY" ]; then
-            printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY
+            printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY --name medida-nuevo
+            printf '%s' "$RESEND_API_KEY" | (cd ../clasica && npx wrangler secret put RESEND_API_KEY)
           fi
-          url=$(grep -o -m1 'https://[a-z0-9.-]*workers\.dev' deploy.log || true)
+          url=$(grep -o -m1 'https://[a-z0-9.-]*workers\.dev' deploy-clasica.log || true)
+          nueva=$(grep -o -m1 'https://[a-z0-9.-]*workers\.dev' deploy-nueva.log || true)
           echo "url=$url" >> "$GITHUB_ENV"
+          echo "nueva=$nueva" >> "$GITHUB_ENV"
 
       - name: Comprobar que el sitio publicado responde
         run: |
@@ -122,23 +155,31 @@ jobs:
             exit 0
           fi
           # la primera publicación de un subdominio puede tardar unos segundos
-          for path in / /configuradores/ /servicios/ /demo/ /demo/mesas/ /demo/ratonas/ /demo/tv/ /demo/bibliotecas/ /demo/sillones/ /demo/camas/ /demo/taller/ /mis-disenos/ /cuenta/ /admin/ /panel/ /embed/ /privacidad/ /cookies/ /terminos/ /api/health /api/public/site; do
-            ok=""
-            for attempt in 1 2 3 4 5 6; do
-              code=$(curl -s -o /dev/null -w '%{http_code}' "$url$path" || true)
-              if [ "$code" = "200" ]; then ok=1; break; fi
-              sleep 5
+          answers() {
+            local base=$1; shift
+            for path in "$@"; do
+              ok=""
+              for attempt in 1 2 3 4 5 6; do
+                code=$(curl -s -o /dev/null -w '%{http_code}' "$base$path" || true)
+                if [ "$code" = "200" ]; then ok=1; break; fi
+                sleep 5
+              done
+              if [ -z "$ok" ]; then
+                echo "::error::$base$path respondió $code"
+                exit 1
+              fi
+              echo "$base$path -> 200"
             done
-            if [ -z "$ok" ]; then
-              echo "::error::$url$path respondió $code"
-              exit 1
-            fi
-            echo "$url$path -> 200"
-          done
-          # que lo publicado sea esta versión y no una anterior
-          if ! curl -s "$url/" | grep -q "Infinitas configuraciones"; then
-            echo "::error::La portada publicada no es la de esta versión."
-            exit 1
+          }
+          answers "$url" / /configuradores/ /servicios/ /demo/ /demo/tv/ /demo/bibliotecas/ /demo/camas/ /demo/taller/ /mis-disenos/ /cuenta/ /admin/ /panel/ /embed/ /privacidad/ /cookies/ /terminos/ /api/health /api/public/site
+          # el link principal es la edición clásica: cuatro familias, sin las que están en desarrollo
+          home=$(curl -s "$url/")
+          echo "$home" | grep -q "Infinitas configuraciones" || { echo "::error::La portada del link principal no es la de esta versión."; exit 1; }
+          echo "$home" | grep -q "Cuatro familias" || { echo "::error::El link principal no es la edición clásica."; exit 1; }
+          if [ -n "$nueva" ]; then
+            answers "$nueva" / /configuradores/ /demo/ /demo/mesas/ /demo/ratonas/ /demo/tv/ /demo/bibliotecas/ /demo/sillones/ /demo/camas/ /api/health
+            curl -s "$nueva/" | grep -q "En desarrollo" || { echo "::error::La edición nueva no dice que está en desarrollo."; exit 1; }
+            curl -s "$nueva/robots.txt" | grep -q "Disallow: /" || { echo "::error::La edición nueva se puede indexar."; exit 1; }
           fi
           # el servidor: contesta, y sin sesión no entrega nada de nadie
           curl -s "$url/api/public/site" | tee site.json; echo
@@ -148,5 +189,6 @@ jobs:
           [ "$(curl -s -o /dev/null -w '%{http_code}' "$url/api/panel")" = "401" ] || { echo "::error::el panel de empresa quedó abierto"; exit 1; }
           {
             echo "### MEDIDA publicado"
-            echo "$url"
+            echo "- Link principal (edición clásica): $url"
+            echo "- En desarrollo (edición nueva): ${nueva:-sin dirección informada}"
           } >> "$GITHUB_STEP_SUMMARY"
