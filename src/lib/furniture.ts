@@ -126,9 +126,10 @@ export const SPECS: FurnitureSpec[] = [
       { key: "base", type: "choice", label: "Apoyo", options: choice(["patas", "Patas cónicas"], ["metal", "Patas de metal"], ["hierro", "Marco de hierro"], ["flotante", "Flotante"]) },
       { key: "grip", type: "choice", label: "Apertura", options: choice(["push", "Sin tirador"], ["unero", "Uñero"], ["barra", "Tirador"]) },
       { key: "thick", type: "toggle", label: "Tapa gruesa", hint: "Una tapa de 40 mm que sobresale apenas" },
+      { key: "curved", type: "toggle", label: "Esquinas curvas", hint: "La tapa baja a los laterales en una curva, como la madera doblada (con la tapa común, no la gruesa)" },
       LED,
     ],
-    defaults: { width: 2000, height: 450, depth: 420, fronts: "nicho-cajon", base: "metal", grip: "push", thick: true, led: true },
+    defaults: { width: 2000, height: 450, depth: 420, fronts: "nicho-cajon", base: "metal", grip: "push", thick: true, curved: false, led: true },
     body: "nogal",
     front: "nogal",
     bodyLabel: "Cuerpo",
@@ -686,8 +687,20 @@ const BUILDERS: Record<string, Builder> = {
     const modules = Math.max(2, Math.round(w / 600));
     const mw = (w - T) / modules;
     const grip = v.grip as Grip;
-    // tapa gruesa: 40 mm (dos placas encoladas) y 15 mm de vuelo adelante y a los costados
-    if (v.thick) piece(parts, "top", "Tapa", "top", c.front, [-15, base + h - T, 0], [w + 30, 40, d + 15], { band: { long: 2, short: 2 } });
+    // esquinas curvas: la tapa y los laterales de las puntas, del mismo frente, unidos por curvas de radio r
+    const curved = v.curved === true;
+    const r = curved ? Math.round(Math.min(120, h / 3, mw / 3)) : 0;
+    // lo que va bajo la tapa (la luz) no se mete en la curva
+    const span = (x: number, len: number): [number, number] => {
+      if (!curved) return [x, len];
+      const a = Math.max(x, r);
+      return [a, Math.min(x + len, w - r) - a];
+    };
+    if (curved) {
+      piece(parts, "top", "Tapa", "top", c.front, [r, base + h - T, 0], [w - 2 * r, T, d], { band: { long: 2, short: 0 } });
+      bendPiece(parts, "bend:l", c.front, "tl", 0, base + h - r, 0, r, d, T);
+      bendPiece(parts, "bend:r", c.front, "tr", w - r, base + h - r, 0, r, d, T);
+    } else if (v.thick) piece(parts, "top", "Tapa", "top", c.front, [-15, base + h - T, 0], [w + 30, 40, d + 15], { band: { long: 2, short: 2 } });
     else piece(parts, "top", "Tapa", "top", c.front, [0, base + h - T, 0], [w, T, d], { band: { long: 2, short: 2 } });
     piece(parts, "bottom", "Piso", "bottom", c.body, [0, base, 0], [w, T, d], { band: { long: 1, short: 2 } });
     const kinds = Array.from({ length: modules }, (_, i) => (v.fronts === "mixto" ? ["puertas", "abierto", "cajones", "vidrio"][i % 4] : (v.fronts as string)));
@@ -703,14 +716,16 @@ const BUILDERS: Record<string, Builder> = {
     const recessed = (i: number) => i > 0 && i < modules && fronted(kinds[i - 1]) && fronted(kinds[i]);
     for (let i = 0; i <= modules; i++) {
       const end = i === 0 || i === modules;
-      const height = niche && !end ? fh : h - 2 * T;
-      piece(parts, `div:${i}`, end ? "Lateral" : "Divisor", end ? "side" : "divider", c.body, [i * mw, base + T, 0], [T, height, d - (recessed(i) ? T : 0)]);
+      const height = niche && !end ? fh : end && curved ? h - T - r : h - 2 * T;
+      // con curvas, los laterales son del mismo frente que la tapa: la vuelta es una sola
+      piece(parts, `div:${i}`, end ? "Lateral" : "Divisor", end ? "side" : "divider", end && curved ? c.front : c.body, [i * mw, base + T, 0], [T, height, d - (recessed(i) ? T : 0)]);
     }
     if (niche) {
       piece(parts, "shelf", "Estante", "fixed-shelf", c.body, [T, base + T + fh, 0], [w - 2 * T, T, d], { band: { long: 1, short: 0 } });
       // más de 2,2 m sin apoyo la tapa se vence: un parante al medio del nicho
       if (w > 2200) piece(parts, "div:niche", "Parante", "divider", c.body, [w / 2 - T / 2, base + T + fh + T, 0], [T, h - 3 * T - fh, d]);
-      if (v.led) led(parts, "led:niche", T + 20, base + h - T - 8, d - 50, w - 2 * T - 40);
+      const [lx, ll] = span(T + 20, w - 2 * T - 40);
+      if (v.led) led(parts, "led:niche", lx, base + h - T - 8, d - 50, ll);
     }
     piece(parts, "back", "Fondo", "back", "back", [T, base + T, 0], [w - 2 * T, h - 2 * T, 3]);
     if (v.base === "patas") legs(parts, "leg", 0, 0, w, d, base, "conica", c.body, 90);
@@ -746,9 +761,23 @@ const BUILDERS: Record<string, Builder> = {
       } else {
         piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 30]);
         // en un nicho abierto la luz va arriba, escondida detrás del canto
-        if (v.led) led(parts, `led:n${i}`, i * mw + T + 20, base + h - T - 8, d - 50, mw - T - 40);
+        const [lx, ll] = span(i * mw + T + 20, mw - T - 40);
+        if (v.led) led(parts, `led:n${i}`, lx, base + h - T - 8, d - 50, ll);
         // y adentro, unos libros acostados o una suculenta
         if (i % 2 === 0) prop(parts, `deco:n${i}`, "Suculenta", "suculenta", i * mw + T + mw * 0.35, base + T + inner / 2 + T, d * 0.3);
+      }
+    }
+    // con curvas, un frente de punta que llega arriba redondea su esquina de afuera como la curva de adentro
+    if (curved) {
+      const round = Math.max(10, r - T - 3);
+      for (const p of parts) {
+        if (!(p.kind === "door" || p.kind === "drawer-front")) continue;
+        if (p.position[1] + p.size[1] < base + h - r) continue;
+        const left = p.position[0] < r;
+        const right = p.position[0] + p.size[0] > w - r;
+        if (!left && !right) continue;
+        p.corners = [left ? round : 0, right ? round : 0, 0, 0];
+        if (p.cut) p.cut.note = `esquina redondeada arriba ${left ? "a la izquierda" : "a la derecha"}, radio ${round} mm`;
       }
     }
     // la luz de abajo es para el mueble colgado: con patas no tiene dónde rebotar
@@ -759,9 +788,9 @@ const BUILDERS: Record<string, Builder> = {
     // la barra de sonido, colgada justo debajo de la tele
     const bw = Math.min(tw * 0.62, 950);
     piece(parts, "deco:sound", "Barra de sonido", "back", "tint:#1a1a1b", [(w - bw) / 2, base + h + 330 - 75, 30], [bw, 62, 90], { ...deco, geometry: "cushion" }).radius = 18;
-    const topY = base + h - T + (v.thick ? 40 : T);
+    const topY = base + h - T + (v.thick && !curved ? 40 : T);
     // arriba, como en las fotos de catálogo: un jarrón y un cuenco en una punta, una suculenta en la otra
-    tabletop(parts, "deco:top", w * 0.04, topY, d * 0.25);
+    tabletop(parts, "deco:top", Math.max(w * 0.04, r + 20), topY, d * 0.25);
     prop(parts, "deco:top:planta", "Suculenta", "suculenta", w * 0.9 - 168, topY, d * 0.3);
     return { parts, drawers, doors, wall: true };
   },
