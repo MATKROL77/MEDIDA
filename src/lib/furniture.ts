@@ -884,14 +884,22 @@ const BUILDERS: Record<string, Builder> = {
 
     // lo que la viste: colchón, acolchado y almohadas; una mesa de luz a cada lado
     const my = h - 50;
-    const c1 = (id: string, label: string, color: string, pos: Vec3, size: Vec3, radius: number) => {
-      piece(parts, id, label, "shelf", `tint:${color}`, pos, size, { ...deco, geometry: "cushion" }).radius = radius;
+    // tela de lino de verdad, con arrugas: un acolchado nunca está liso
+    const c1 = (id: string, label: string, color: string, pos: Vec3, size: Vec3, radius: number, wrinkle = 0) => {
+      const p = piece(parts, id, label, "shelf", `linen:${color}`, pos, size, { ...deco, geometry: "cushion" });
+      p.radius = radius;
+      if (wrinkle) p.wrinkle = wrinkle;
     };
-    c1("deco:mattress", "Colchón", "#ece6dc", [t + 5, my, z0 + 10], [mw - 10, 250, ml - 20], 80);
-    c1("deco:duvet", "Acolchado", "#cfc4b3", [t - 10, my + 215, z0 + ml * 0.34], [mw + 20, 70, ml * 0.66], 30);
+    c1("deco:mattress", "Colchón", "#ece6dc", [t + 5, my, z0 + 10], [mw - 10, 250, ml - 20], 80, 3);
+    // el acolchado cubre de las almohadas a los pies y cae por los costados y adelante
+    const dl = ml * 0.68;
+    const hang = 200;
+    c1("deco:duvet", "Acolchado", "#cfc4b3", [t + 5 - hang, my + 228, z0 + ml - dl], [mw - 10 + 2 * hang, 52, dl + hang], 22, 9);
+    const duvet = parts[parts.length - 1];
+    duvet.drape = { w: mw + 6, d: dl + 8, drop: 200 };
     const pillows = mw > 1200 ? 2 : 1;
     const pw = Math.min(700, mw / pillows - 60);
-    for (let k = 0; k < pillows; k++) c1(`deco:pillow${k}`, "Almohada", "#f6f2ea", [t + (mw / pillows) * k + (mw / pillows - pw) / 2, my + 240, z0 + 60], [pw, 150, 420], 70);
+    for (let k = 0; k < pillows; k++) c1(`deco:pillow${k}`, "Almohada", "#f6f2ea", [t + (mw / pillows) * k + (mw / pillows - pw) / 2, my + 240, z0 + 60], [pw, 150, 420], 70, 6);
     return { parts, drawers, doors, wall: v.head !== "no" };
   },
 

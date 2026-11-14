@@ -5,7 +5,6 @@ import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries, mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { TessellateModifier } from "three/examples/jsm/modifiers/TessellateModifier.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 
@@ -245,6 +244,145 @@ function tuftGeometry(g: THREE.BufferGeometry, size: number[], tuft: NonNullable
   g.computeVertexNormals();
 }
 
+/**
+ * Tela arrugada: la superficie se ondula con unos pliegues suaves, largos en
+ * una dirección y cortos en la otra, como un acolchado o una funda; arriba más
+ * que en los costados. Determinístico: el mismo mueble se ve siempre igual.
+ */
+function wrinkleGeometry(g: THREE.BufferGeometry, amplitude: number, seed: number) {
+  const pos = g.getAttribute("position") as THREE.BufferAttribute;
+  const nor = g.getAttribute("normal") as THREE.BufferAttribute;
+  const a = amplitude * MM;
+  const ph = seed * 6.283;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const f =
+      0.5 * Math.sin(x * 9.3 + z * 2.7 + ph) +
+      0.3 * Math.sin(x * -3.9 + z * 12.1 + 1.3 + ph * 0.7) +
+      0.2 * Math.sin((x + z) * 21 + y * 7 + 0.4 + ph * 1.3) +
+      0.12 * Math.sin(x * 37 - z * 29 + ph * 2.1);
+    // las arrugas se marcan arriba; en lo que cuelga y en el dobladillo, poco
+    const up = Math.max(0.2, nor.getY(i));
+    const k = a * f * up;
+    pos.setXYZ(i, x + nor.getX(i) * k, y + nor.getY(i) * k, z + nor.getZ(i) * k);
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+}
+
+/**
+ * La caída de una tela: lo que sobra del ancho y del largo de lo que cubre
+ * dobla sobre el canto (un radio chico) y cuelga, como un acolchado sobre el
+ * colchón. A los costados y adelante; atrás queda contra las almohadas.
+ */
+function drapeGeometry(g: THREE.BufferGeometry, size: number[], drape: NonNullable<Part["drape"]>) {
+  const pos = g.getAttribute("position") as THREE.BufferAttribute;
+  const hw = (drape.w * MM) / 2;
+  const front = -size[2] / 2 + drape.d * MM;
+  const r = 0.045;
+  const arc = (r * Math.PI) / 2;
+  const drop = drape.drop * MM;
+  // un punto que estaba `e` más allá del canto, a `h` del medio del espesor:
+  // dobla alrededor del canto (el espesor se conserva: afuera queda más lejos)
+  // y después cuelga derecho. Devuelve cuánto sale, cuánto baja y el seno y el
+  // coseno del giro, para correr el espesor.
+  const bend = (e: number) => {
+    if (e <= 0) return { out: e, down: 0, s: 0, c: 1 };
+    if (e <= arc) {
+      const t = e / r;
+      return { out: r * Math.sin(t), down: r * (1 - Math.cos(t)), s: Math.sin(t), c: Math.cos(t) };
+    }
+    return { out: r, down: Math.min(drop, r + (e - arc)), s: 1, c: 0 };
+  };
+  // los pliegues verticales de lo que cuelga: dos ondas que no se repiten igual
+  const folds = (u: number) => 0.6 * Math.sin(u * 27 + 0.7) + 0.4 * Math.sin(u * 61 + 2.1);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const h = pos.getY(i);
+    const bx = bend(Math.abs(x) - hw);
+    const bz = bend(z - front);
+    const down = Math.min(drop, bx.down + bz.down);
+    // cuánto cuelga ya (0 arriba, 1 al fondo): ahí los pliegues se marcan
+    const hx = Math.min(1, bx.down / 0.12);
+    const hz = Math.min(1, bz.down / 0.12);
+    const wave = 0.011;
+    const nx = Math.abs(x) > hw ? Math.sign(x) * (hw + bx.out + h * bx.s + wave * hx * folds(z)) : x;
+    const nz = z > front ? front + bz.out + h * bz.s + wave * hz * folds(x + 3.1) : z;
+    pos.setXYZ(i, nx, -down + h * bx.c * bz.c, nz);
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+}
+
+/**
+ * Una caja redondeada hecha de una malla pareja, para poder deformarla (el
+ * capitoné, las arrugas, la caída de una tela). Cada cara es una grilla de
+ * lado `cell` como mucho, más puntos de sobra cerca de los cantos para que el
+ * redondeo salga liso; las caras comparten exactamente los vértices de sus
+ * bordes, así que al soldarlas no quedan rajaduras.
+ */
+function gridRoundedBox(size: number[], radius: number, cell: number): THREE.BufferGeometry {
+  const r = Math.min(radius, ...size.map((v) => v / 2 - 1e-5));
+  const stops = (len: number) => {
+    const h = len / 2;
+    const inner = h - r;
+    const out: number[] = [];
+    // cerca de cada punta, puntos que caen parejos en el cuarto de círculo
+    for (let k = 0; k < 4; k++) out.push(-h + r * (1 - Math.tan((Math.PI / 4) * (1 - k / 4))));
+    const n = Math.max(1, Math.ceil((2 * inner) / cell));
+    for (let k = 0; k <= n; k++) out.push(-inner + (2 * inner * k) / n);
+    for (let k = 3; k >= 0; k--) out.push(h - r * (1 - Math.tan((Math.PI / 4) * (1 - k / 4))));
+    const sorted = out.sort((a, b) => a - b);
+    return sorted.filter((v, i) => i === 0 || v - sorted[i - 1] > 1e-6);
+  };
+  const axes = size.map(stops);
+  const half = size.map((v) => v / 2);
+  const positions: number[] = [];
+  const index: number[] = [];
+  // las seis caras: el eje que mira afuera, su signo y los dos ejes de la grilla
+  for (const [w, sign] of [[0, 1], [0, -1], [1, 1], [1, -1], [2, 1], [2, -1]] as const) {
+    const u = (w + 1) % 3;
+    const v = (w + 2) % 3;
+    const base = positions.length / 3;
+    for (const b of axes[v])
+      for (const a of axes[u]) {
+        const p = [0, 0, 0];
+        p[w] = sign * half[w];
+        p[u] = a;
+        p[v] = b;
+        positions.push(...p);
+      }
+    const nu = axes[u].length;
+    for (let j = 0; j < axes[v].length - 1; j++)
+      for (let i = 0; i < nu - 1; i++) {
+        const a = base + j * nu + i;
+        const b = a + 1;
+        const c = a + nu;
+        const d = c + 1;
+        // u × v apunta a +w: con el signo negativo se da vuelta el orden
+        if (sign > 0) index.push(a, b, d, a, d, c);
+        else index.push(a, d, b, a, c, d);
+      }
+  }
+  // el redondeo: cada punto se lleva a la superficie de la caja interior inflada en r
+  for (let i = 0; i < positions.length; i += 3) {
+    const c = [0, 1, 2].map((k) => Math.max(-(half[k] - r), Math.min(half[k] - r, positions[i + k])));
+    const d = [0, 1, 2].map((k) => positions[i + k] - c[k]);
+    const len = Math.hypot(d[0], d[1], d[2]);
+    if (len > 1e-9) for (let k = 0; k < 3; k++) positions[i + k] = c[k] + (d[k] / len) * r;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setIndex(index);
+  const welded = mergeVertices(g, 1e-6);
+  g.dispose();
+  welded.computeVertexNormals();
+  return welded;
+}
+
 function isVertical(p: Part) {
   return p.cut ? Math.abs(p.cut.length - p.size[1]) < 1 : true;
 }
@@ -258,6 +396,17 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
     // "rug:": alfombra de lana, con su trama de verdad
     if (spec.startsWith("rug:")) {
       m = dressWith(new THREE.MeshStandardMaterial({ color: spec.slice(4), roughness: 1, envMapIntensity: 0.2 }), "tela-lana", { normalScale: 1.4, roughness: 1 });
+      tints.set(spec, m);
+      return m;
+    }
+    // "linen:": ropa de cama y fundas, con la trama del lino y el brillo rasante de la tela
+    if (spec.startsWith("linen:")) {
+      const color = spec.slice(6);
+      m = dressWith(
+        new THREE.MeshPhysicalMaterial({ color, roughness: 0.95, envMapIntensity: 0.35, sheen: 0.5, sheenRoughness: 0.6, sheenColor: new THREE.Color(color).lerp(new THREE.Color("#ffffff"), 0.3) }),
+        "tela-lino",
+        { normalScale: 1.2, roughness: 1, tint: new THREE.Color(color).multiplyScalar(1 / Math.pow(205 / 255, 2.2)) },
+      );
       tints.set(spec, m);
       return m;
     }
@@ -275,7 +424,7 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
 }
 
 function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
-  if (/^(tint|gloss|rug|veneer):/.test(p.material)) return tinted(p.material);
+  if (/^(tint|gloss|rug|veneer|linen):/.test(p.material)) return tinted(p.material);
   const along = isVertical(p) ? "v" : "u";
   switch (p.material) {
     case "none":
@@ -351,22 +500,23 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     if (part.geometry !== "cushion" && !edged) return null;
     const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
     const radius = part.geometry === "cushion" ? Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) : Math.min(2.2, Math.min(...part.size) * 0.22);
-    let g: THREE.BufferGeometry = new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
-    if (part.tuft) {
-      // las caras planas de la caja redondeada son un solo rectángulo: se parten en
-      // triángulos de 3 cm para poder hundirlas, y se vuelven a soldar para que el sombreado sea suave
-      const fine = new TessellateModifier(0.03, 10).modify(g.toNonIndexed());
-      g.dispose();
-      g = mergeVertices(fine, 1e-5);
-      fine.dispose();
-      tuftGeometry(g, [sx, sy, sz], part.tuft);
+    // lo que se deforma necesita una malla pareja; lo demás, la caja redondeada liviana
+    const cell = part.tuft || part.drape ? 0.025 : 0.04;
+    const g: THREE.BufferGeometry =
+      part.tuft || part.wrinkle ? gridRoundedBox([sx, sy, sz], radius * MM, cell) : new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
+    if (part.tuft) tuftGeometry(g, [sx, sy, sz], part.tuft);
+    if (part.wrinkle) {
+      if (part.drape) drapeGeometry(g, [sx, sy, sz], part.drape);
+      let h = 0;
+      for (const ch of part.id) h = (h * 31 + ch.charCodeAt(0)) % 997;
+      wrinkleGeometry(g, part.wrinkle, h / 997);
     }
     // los frentes (puertas, cajones) comparten la veta con sus vecinos
     const front = part.front || part.kind === "door" || part.kind === "drawer-front";
     meterUvs(g, [sx, sy, sz], part.id, front ? part.position.map((v, i) => (v + part.size[i] / 2) * MM) : undefined);
     return g;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {

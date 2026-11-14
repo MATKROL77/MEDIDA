@@ -130,6 +130,13 @@ export type Part = {
   model?: string;
   /** capitoné: la cara de arriba (o la de adelante) se hunde en una grilla de botones */
   tuft?: { face: "top" | "front"; nx: number; ny: number; depth: number };
+  /** arrugado de tela (mm de onda): sábanas, acolchados, almohadas */
+  wrinkle?: number;
+  /**
+   * Caída de una tela sobre lo que cubre (un acolchado sobre el colchón): lo que
+   * sobra del ancho `w` y del largo `d` (mm, desde atrás) dobla y cuelga, hasta `drop`.
+   */
+  drape?: { w: number; d: number; drop: number };
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */
