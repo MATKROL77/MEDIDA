@@ -18,7 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DEFAULT_CONFIG, normalize } from "../src/lib/model.ts";
-import { HERO_FRAMING, HERO_SOFA, HERO_SOFA_FRAMING } from "../src/lib/presets.ts";
+import { HERO_FRAMING, HERO_SOFA, HERO_SOFA_FRAMING, HERO_SOFA_FRAMING_PORTRAIT } from "../src/lib/presets.ts";
 import { encodeConfig } from "../src/lib/share.ts";
 
 const require = createRequire(import.meta.url);
@@ -42,14 +42,17 @@ const mod = (layout, extra = {}) => ({ layout, shelves: 0, drawers: 0, width: 0,
 const run = (width, modules) => [{ width, modules }];
 const FONDO = `f6f1ea&encuadre=${HERO_FRAMING}`;
 /** la portada: el sillón curvo, en el showroom, calculado con trazado de rayos */
-const SOFA = `f=sillones&c=${Buffer.from(JSON.stringify(HERO_SOFA)).toString("base64url")}&ambiente=habitacion&encuadre=${HERO_SOFA_FRAMING}&deco=0`;
+const SOFA = `f=sillones&c=${Buffer.from(JSON.stringify(HERO_SOFA)).toString("base64url")}&ambiente=habitacion&deco=0`;
 /** muestras por píxel de las fotos calculadas: sin placa de video tarda, pero sale limpia */
 const PHOTO = (samples) => `&foto=1&muestras=${samples}&px=4000000`;
 
+/** las tarjetas de cada familia: foto calculada, al tamaño en que se muestran */
+const FAMILY = { size: [900, 675], width: 900, photo: true };
+
 /** cada imagen: de dónde sale, a qué tamaño se dibuja y a qué ancho se guarda */
 const SHOTS = [
-  { name: "hero", query: `${SOFA}${PHOTO(150)}`, size: [1400, 700], width: 1400, photo: true },
-  { name: "hero-movil", query: `${SOFA}${PHOTO(130)}`, size: [700, 875], width: 700, photo: true },
+  { name: "hero", query: `${SOFA}&encuadre=${HERO_SOFA_FRAMING}${PHOTO(150)}`, size: [1400, 700], width: 1400, photo: true },
+  { name: "hero-movil", query: `${SOFA}&encuadre=${HERO_SOFA_FRAMING_PORTRAIT}${PHOTO(130)}`, size: [700, 875], width: 700, photo: true },
   {
     name: "exp-dimensiones",
     query: `c=${cfg({ runs: run(3400, [mod("hanging"), mod("drawers-shelves", { shelves: 3, drawers: 3 }), mod("double-hanging"), mod("shelves", { shelves: 4 })]) })}&fondo=${FONDO}`,
@@ -67,16 +70,17 @@ const SHOTS = [
   },
   {
     name: "familia-placares",
-    query: `c=${cfg({ shape: "l-left", runs: [{ width: 2800, modules: [mod("shelves", { shelves: 4 }), mod("drawers-hanging", { drawers: 3 }), mod("double-hanging")] }, { width: 2000, modules: [mod("hanging"), mod("shelves", { shelves: 4 })] }], doorMaterial: "roble" })}&ambiente=habitacion&abierto=1&luces=1&encuadre=0.82&pared=arena`,
+    query: `c=${cfg({ shape: "l-left", runs: [{ width: 2800, modules: [mod("shelves", { shelves: 4 }), mod("drawers-hanging", { drawers: 3 }), mod("double-hanging")] }, { width: 2000, modules: [mod("hanging"), mod("shelves", { shelves: 4 })] }], doorMaterial: "roble" })}&ambiente=habitacion&abierto=1&luces=1&encuadre=0.82&pared=arena${PHOTO(90)}`,
     settle: 34_000,
+    ...FAMILY,
   },
-  // las otras familias, cada una en su ambiente
-  { name: "familia-mesas", query: "f=mesas&ambiente=habitacion&encuadre=0.82&pared=tiza", settle: 14_000 },
-  { name: "familia-ratonas", query: "f=ratonas&ambiente=habitacion&encuadre=0.85&pared=arena", settle: 14_000 },
-  { name: "familia-tv", query: "f=tv&ambiente=habitacion&encuadre=0.7&pared=arena&luces=1", settle: 18_000 },
-  { name: "familia-bibliotecas", query: "f=bibliotecas&ambiente=habitacion&encuadre=0.8&pared=tiza", settle: 14_000 },
-  { name: "familia-camas", query: "f=camas&ambiente=habitacion&encuadre=0.8&pared=arena&luces=1", settle: 16_000 },
-  { name: "familia-sillones", query: "f=sillones&ambiente=habitacion&encuadre=0.75&pared=tiza", settle: 14_000 },
+  // las otras familias, cada una en el estudio, calculadas con trazado de rayos
+  { name: "familia-mesas", query: `f=mesas&ambiente=habitacion&encuadre=0.82&pared=tiza${PHOTO(90)}`, settle: 14_000, ...FAMILY },
+  { name: "familia-ratonas", query: `f=ratonas&ambiente=habitacion&encuadre=0.85&pared=arena${PHOTO(90)}`, settle: 14_000, ...FAMILY },
+  { name: "familia-tv", query: `f=tv&ambiente=habitacion&encuadre=0.7&pared=arena&luces=1${PHOTO(90)}`, settle: 18_000, ...FAMILY },
+  { name: "familia-bibliotecas", query: `f=bibliotecas&ambiente=habitacion&encuadre=0.8&pared=tiza${PHOTO(90)}`, settle: 14_000, ...FAMILY },
+  { name: "familia-camas", query: `f=camas&ambiente=habitacion&encuadre=0.8&pared=arena&luces=1${PHOTO(90)}`, settle: 16_000, ...FAMILY },
+  { name: "familia-sillones", query: `f=sillones&ambiente=habitacion&encuadre=0.75&pared=tiza&deco=0${PHOTO(90)}`, settle: 14_000, ...FAMILY },
 ];
 
 await mkdir(out, { recursive: true });
@@ -115,11 +119,31 @@ async function grab(url, [w, h], settle, photo) {
   return png;
 }
 
+/**
+ * El trazado de rayos deja a veces un píxel suelto, muy claro o muy oscuro. Se
+ * reemplaza por la mediana de sus vecinos solo donde se sale mucho de ella: la
+ * trama de las telas queda intacta.
+ */
+async function despeckle(png) {
+  const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const med = await sharp(png).removeAlpha().median(3).raw().toBuffer();
+  for (let i = 0; i < data.length; i += 3) {
+    const diff = Math.abs(data[i] - med[i]) + Math.abs(data[i + 1] - med[i + 1]) + Math.abs(data[i + 2] - med[i + 2]);
+    if (diff > 90) {
+      data[i] = med[i];
+      data[i + 1] = med[i + 1];
+      data[i + 2] = med[i + 2];
+    }
+  }
+  return sharp(data, { raw: { width: info.width, height: info.height, channels: 3 } }).png().toBuffer();
+}
+
 for (const shot of SHOTS) {
   if (only && shot.name !== only) continue;
   const size = shot.size ?? [1400, 1050];
   const started = Date.now();
-  const png = await grab(`${base}/render/?${shot.query}`, size, shot.settle ?? 12_000, shot.photo);
+  const raw = await grab(`${base}/render/?${shot.query}`, size, shot.settle ?? 12_000, shot.photo);
+  const png = shot.photo ? await despeckle(raw) : raw;
   await sharp(png).resize({ width: shot.width ?? 1400 }).webp({ quality: 82 }).toFile(path.join(out, `${shot.name}.webp`));
   console.log(`${shot.name}.webp  ${Math.round((Date.now() - started) / 1000)} s`);
 }

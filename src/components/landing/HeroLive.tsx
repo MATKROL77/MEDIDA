@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { PhotoStatus } from "@/components/viewer/PhotoMode";
 import Scene from "@/components/viewer/Scene";
 import { buildFurniture, fabricById, furniturePrice, type FurnitureConfig } from "@/lib/furniture";
 import { DEFAULT_CONFIG, type WardrobeConfig } from "@/lib/model";
 import { undressed } from "@/lib/decor";
-import { HERO_SOFA_FRAMING } from "@/lib/presets";
+import { HERO_SOFA_FRAMING, HERO_SOFA_FRAMING_PORTRAIT } from "@/lib/presets";
 
 const VIEW = { name: "three" as const, nonce: 0 };
 const ENVIRONMENT = { mode: "room" as const, wall: "#e9e4dc", floor: "estudio" as const };
@@ -34,6 +34,8 @@ export default function HeroLive({ config, paused, draggable, photo, onReady, on
   const look = useMemo<WardrobeConfig>(() => ({ ...DEFAULT_CONFIG, doors: "none", bodyMaterial: config.body, doorMaterial: config.front }), [config.body, config.front]);
   const fabric = fabricById(config.fabric);
   const shown = useMemo(() => undressed(build.assembly), [build.assembly]);
+  // el mismo corte que la foto fija: en el teléfono el bloque es vertical
+  const [portrait] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
 
   return (
     <Scene
@@ -58,7 +60,7 @@ export default function HeroLive({ config, paused, draggable, photo, onReady, on
       orbit={draggable ? "rotate" : "none"}
       sway={!photo}
       paused={paused}
-      framing={HERO_SOFA_FRAMING}
+      framing={portrait ? HERO_SOFA_FRAMING_PORTRAIT : HERO_SOFA_FRAMING}
       maxDpr={1.75}
       photo={photo}
       onPhoto={onPhoto}

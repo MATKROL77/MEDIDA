@@ -184,7 +184,8 @@ Cada mueble se muestra solo, en el estudio: lo suelto sobre una tarima y lo
 que va contra la pared con un tabique detrás. La decoración (la tele sobre el
 mueble de TV, los libros, una lámpara, la ropa en el placard) se dibuja pero
 no se mide, no se corta ni se cobra, y se saca con el botón de arriba a la
-izquierda. Los sillones se tapizan en lino, pana, bouclé o cuero.
+izquierda. Los sillones se tapizan en lino, pana, bouclé o cuero de
+tapicería; el curvo es de una sola pieza.
 
 Los máximos salen de lo fabricable: ninguna pieza supera la placa refilada, y
 hay una prueba que lo comprueba en todas las combinaciones. Los sillones
@@ -193,17 +194,11 @@ como todos los precios de la demo.
 
 ## Estilo
 
-Cuero beige con luz azul marino y detalles de madera rojiza
-(`src/app/globals.css`). El fondo es una foto de cuero (Leather White, de Poly
-Haven, CC0) iluminada con su mapa de relieve por una luz cálida y una azul
-marino: lo arma `scripts/leather.mjs` en `public/img/cuero.webp`, una baldosa
-que se repite sin costura. Encima, fijas, dos manchas de luz azul y una cálida.
-
-El texto es azul noche. Lo que se toca (botones, el tramo de una medida, la
-opción elegida, la herramienta activa) es de madera: la chapa de nogal del 3D
-teñida de caoba, con un brillo de laca. Las superficies son vidrio: dejan ver
-el cuero apenas desenfocado. Títulos en la serif del sistema (Times New Roman
-y equivalentes, el de la portada en mayúsculas) y texto en Inter.
+Beige liso y azul marino liso (`src/app/globals.css`), sin texturas ni
+degradés en la página: la textura la ponen los muebles. El texto, los botones
+y lo elegido son azul marino; las superficies, blancas translúcidas sobre el
+beige. Títulos en la serif del sistema (Times New Roman y equivalentes, el de
+la portada en mayúsculas) y texto en Inter.
 
 Los configuradores se abren en una ventana sobre la página
 (`src/components/site/ConfiguratorWindow.tsx`), que queda atrás apenas fuera
@@ -211,17 +206,26 @@ de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
 
 ## Realismo del 3D
 
-- **Texturas fotográficas** de Poly Haven (CC0): chapas de nogal y roble,
-  lino, pana, bouclé, lana, cuero, cemento, baldosa, pared. Las baja y las
-  achica `npm run textures` (`scripts/textures.mjs`), con su tamaño real en
-  `src/components/viewer/textures.json`. Cada pieza lleva coordenadas de
-  textura en metros (`meterUvs` en `photo.ts`) con la veta a lo largo de su
+- **Texturas fotográficas** de Poly Haven (CC0): chapas de nogal y roble;
+  lino, pana, bouclé, lana y cuero de tapicería; cemento, baldosa, pared. Las
+  baja y las prepara `npm run textures` (`scripts/textures.mjs`), con su tamaño
+  real en `src/components/viewer/textures.json`. Cada pieza lleva coordenadas
+  de textura en metros (`meterUvs` en `photo.ts`) con la veta a lo largo de su
   lado más largo: nada se estira al cambiar una medida. Créditos en
   `public/tex/CREDITOS.md`.
-- **Estudio**: el mueble se muestra en un ciclorama, el fondo curvo sin
-  esquinas de un estudio de fotografía, con un piso de cemento que se funde en
-  él. Lo que se apoya o se cuelga de una pared tiene un tabique detrás; lo
-  suelto, una tarima baja (`Room.tsx`).
+- **Telas que se leen como telas**: cada tela tiene su trama en gris (con
+  promedio y contraste parejos; la del bouclé sale de su propio relieve), su
+  relieve y el brillo rasante de la fibra (sheen). Con el mueble entero en
+  pantalla, una trama a escala real se promedia y desaparece: como en una foto
+  de catálogo, se agranda un poco para que se lea (`READABLE` en `photo.ts`).
+- **Sillón curvo de una pieza**: la base, el respaldo y los almohadones son
+  piezas curvas (una sección redondeada barrida a lo largo del arco, con la
+  tela corriendo a lo largo de la curva), sin tramos rectos ni líneas entre
+  cuerpos. El puff va pegado al frente del asiento.
+- **Estudio**: el mueble se muestra en un ciclorama liso, el fondo curvo sin
+  esquinas de un estudio de fotografía, del beige de la página. Lo que se
+  apoya o se cuelga de una pared tiene un tabique detrás. Se puede elegir un
+  piso con foto (madera, pinotea, cemento, baldosa), que se funde en el fondo.
 - **Luz**: una foto HDR de un estudio real (Studio Small 09, CC0) da los
   reflejos y el relleno; una luz principal da las sombras.
 - **Modo foto** (`PhotoMode.tsx`, con `three-gpu-pathtracer`): cuando la
@@ -232,6 +236,8 @@ de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
   un filtro que alisa el grano sin borronear cantos, y apenas algo se mueve
   vuelve el 3D rápido. Lo que en el 3D rápido es un truco (la mancha de luz
   pintada, la sombra de contacto) lleva `userData.fake` y el trazado no lo ve.
+  Ojo: el trazado lee los colores por vértice con una transparencia que no
+  tienen, así que una geometría con `vertexColors` le desaparece.
   Arranca prendido en computadoras y apagado en teléfonos; el botón "Foto" lo
   cambia y se recuerda. Necesita WebGL 2 con texturas de punto flotante: si
   no hay, queda el 3D rápido.

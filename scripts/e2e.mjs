@@ -72,16 +72,27 @@ for (const [width, height] of [
   [390, 844],
   [1440, 900],
 ]) {
-  const { context, page, errors } = await visit(width, height);
+  const { context, page: first } = await visit(width, height);
+  await first.close();
   for (const path of PAGES) {
     await check(`${path} a ${width} px: carga, sin scroll horizontal ni errores`, async () => {
-      errors.length = 0;
-      const res = await page.goto(base + path, { waitUntil: "networkidle" });
-      assert(res.status() === 200, `respondió ${res.status()}`);
-      if (!path.startsWith("/demo/")) assert((await page.locator("h1").count()) === 1, "tiene que haber un solo h1");
-      const extra = await overflow(page);
-      assert(extra <= 0, `sobran ${extra} px de ancho`);
-      assert(errors.length === 0, `error en la página: ${errors[0]}`);
+      // cada página en su pestaña, como cuando alguien entra: sin placa de video,
+      // desarmar el 3D de la anterior traba la carga de la siguiente
+      const page = await context.newPage();
+      page.setDefaultTimeout(90_000);
+      page.setDefaultNavigationTimeout(120_000);
+      const errors = [];
+      page.on("pageerror", (e) => errors.push(String(e)));
+      try {
+        const res = await page.goto(base + path, { waitUntil: "networkidle" });
+        assert(res.status() === 200, `respondió ${res.status()}`);
+        if (!path.startsWith("/demo/")) assert((await page.locator("h1").count()) === 1, "tiene que haber un solo h1");
+        const extra = await overflow(page);
+        assert(extra <= 0, `sobran ${extra} px de ancho`);
+        assert(errors.length === 0, `error en la página: ${errors[0]}`);
+      } finally {
+        await page.close();
+      }
     });
   }
   await context.close();
@@ -139,7 +150,8 @@ for (const [width, height] of [
     const first = await frame.locator('section[aria-label="Otros configuradores"] a').evaluateAll((as) => as.slice(0, 3).map((a) => a.getAttribute("href")));
     assert(JSON.stringify(first) === JSON.stringify(["/demo/tv/", "/demo/sillones/", "/demo/camas/"]), `recomendados: ${first}`);
     await frame.getByRole("link", { name: "Sillones modulares" }).click();
-    await page.getByRole("dialog", { name: /Configurador de sillones/ }).waitFor();
+    // la página de adentro y la de atrás comparten el hilo: con el 3D por software, el título tarda
+    await page.getByRole("dialog", { name: /Configurador de sillones/ }).waitFor({ timeout: 180_000 });
     assert(page.url() === base + "/", "pasar a otro configurador no tiene que cambiar la página de atrás");
     await page.keyboard.press("Escape");
     await page.getByRole("dialog").waitFor({ state: "hidden" });

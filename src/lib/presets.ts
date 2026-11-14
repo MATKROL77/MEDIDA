@@ -28,3 +28,5 @@ export const HERO_SOFA: FurnitureConfig = {
 
 /** la portada se mira de cerca: el sillón ocupa el cuadro, como en una foto de catálogo */
 export const HERO_SOFA_FRAMING = 0.6;
+/** en un teléfono el cuadro es vertical: la cámara se aleja para que entre el sillón entero */
+export const HERO_SOFA_FRAMING_PORTRAIT = 0.86;

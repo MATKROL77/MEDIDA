@@ -29,7 +29,6 @@ export function ConfiguratorWindow() {
 
   useEffect(() => {
     const framed = window.self !== window.top;
-    if (framed) window.parent.postMessage({ medida: "configurador", path: window.location.pathname }, window.location.origin);
     const onMessage = (e: MessageEvent) => {
       if (e.origin === window.location.origin && e.data?.medida === "configurador" && typeof e.data.path === "string") setInside(e.data.path);
     };
@@ -60,6 +59,11 @@ export function ConfiguratorWindow() {
   }, []);
 
   useEffect(() => setHref(null), [pathname]);
+  // adentro de la ventana, cada cambio de dirección se avisa a la página de atrás (también
+  // al pasar de un configurador a otro, que no recarga): el título de la ventana lo acompaña
+  useEffect(() => {
+    if (window.self !== window.top) window.parent.postMessage({ medida: "configurador", path: window.location.pathname }, window.location.origin);
+  }, [pathname]);
   // lo que quedó atrás (el 3D de la portada) deja de dibujar mientras la ventana está abierta
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("medida:ventana", { detail: !!href }));

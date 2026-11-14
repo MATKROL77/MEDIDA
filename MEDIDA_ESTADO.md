@@ -38,16 +38,15 @@ empresa, administración.
 **Realismo y rediseño (13/11/2026).** Modo foto con trazado de rayos en el
 navegador (`three-gpu-pathtracer`): con la escena quieta, el 3D se recalcula
 con luz que rebota, luces de área en cada tira LED y un softbox, con un filtro
-de grano; apenas algo se mueve vuelve el 3D rápido. Estudio tipo ciclorama
-(fondo curvo sin esquinas) con piso de cemento que se funde en él; luz y
-reflejos de una foto HDR de estudio (CC0). Coordenadas de textura en metros en
-cada pieza. Cuero en los sillones (suela y negro, con recargo de muestra). La
-página pasa a cuero beige iluminado con luz azul marino, texto azul noche,
-botones y detalles de madera rojiza y superficies de vidrio más
-transparentes; la portada es el sillón curvo de bouclé calculado con
-trazado de rayos, con modelo, tela y cuerpos para cambiar; una sección
-muestra las texturas reales del motor. La barra de precio del configurador
-quedó más chica.
+de grano; apenas algo se mueve vuelve el 3D rápido. Estudio liso tipo
+ciclorama (fondo curvo sin esquinas) del beige de la página; luz y reflejos
+de una foto HDR de estudio (CC0). Telas con trama, relieve y brillo de fibra
+que se leen a distancia de catálogo; cuero de tapicería con poro y pliegues.
+Sillón curvo de una sola pieza (sin líneas entre cuerpos) y puff pegado al
+frente. La página pasa a beige liso y azul marino liso, sin texturas, con la
+portada del sillón curvo calculado con trazado de rayos y sus opciones
+(modelo, tela, cuerpos), una sección con las texturas reales del motor y la
+barra de precio del configurador más chica.
 
 Evidencia, corrida en este repositorio:
 
