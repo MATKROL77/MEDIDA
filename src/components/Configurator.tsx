@@ -23,7 +23,7 @@ import { Watermark } from "@/components/Watermark";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { ContactLink } from "@/components/site/ContactLink";
 import { IconCheck, IconClose, IconDecor, IconHeart, IconWhatsapp } from "@/components/site/icons";
-import { Dimension, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
+import { Dimension, ExpandToggle, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber, usePortraitPhone } from "@/components/controls";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import { PhotoBadge, PhotoToggle, usePhotoMode } from "@/components/PhotoControls";
 import type { ViewName } from "@/components/viewer/Scene";
@@ -108,6 +108,9 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
   const [explode, setExplode] = useState(false);
   const [lights, setLights] = useState(false);
   const photo = usePhotoMode();
+  // en el teléfono: el 3D agrandado y la cámara más cerca
+  const [big, setBig] = useState(false);
+  const portrait = usePortraitPhone();
   const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({
     mode: "room",
     wall: WALL_COLORS[0].hex,
@@ -337,7 +340,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
     <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_440px]">
       {/* visor: arriba en el teléfono, a la izquierda en pantalla grande. En el
           teléfono queda fijo mientras se recorren las opciones, para ver cada cambio */}
-      <section className="sticky top-0 z-20 h-[max(46dvh,300px)] overflow-hidden lg:relative lg:z-auto lg:h-full">
+      <section className={`sticky top-0 z-20 overflow-hidden transition-[height] duration-500 lg:relative lg:z-auto lg:h-full ${big ? "h-[80dvh]" : "h-[max(58dvh,320px)]"}`}>
         <Poster config={config} assembly={result.assembly} />
         <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
           <Viewer3D
@@ -355,6 +358,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
             view={view}
             onReady={() => setTimeout(() => setReady(true), 120)}
             captureRef={captureRef}
+            framing={portrait ? 0.82 : undefined}
             photo={photo.on}
             onPhoto={photo.onStatus}
           />
@@ -375,7 +379,8 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
         <Watermark />
 
         <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
-          <div className="flex flex-col items-start">
+          <div className="flex flex-col items-start gap-2">
+          <ExpandToggle big={big} onToggle={() => setBig((b) => !b)} />
           {workshop ? (
             <div className="pointer-events-auto rounded-2xl bg-surface/90 px-4 py-2.5 shadow-sm backdrop-blur">
               <p className="font-display text-base font-semibold leading-tight">{workshop.name}</p>

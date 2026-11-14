@@ -90,19 +90,20 @@ export function ConfiguratorWindow() {
   return (
     <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label={`Configurador de ${family.name.toLowerCase()}`}>
       <button type="button" aria-label="Cerrar el configurador" tabIndex={-1} className="sheet-backdrop veil absolute inset-0" onClick={() => setHref(null)} />
-      <div className="window-in glass absolute inset-x-2 bottom-2 top-3 flex flex-col overflow-hidden rounded-[1.9rem] p-1.5 sm:inset-x-[3vw] sm:bottom-[3vh] sm:top-[3vh] lg:inset-x-[5vw]">
-        <div className="flex items-center justify-between gap-3 px-3 py-1.5">
-          <p className="truncate font-display text-lg">{family.name}</p>
+      {/* en el teléfono, la pantalla entera: cada centímetro es para el 3D */}
+      <div className="window-in glass absolute inset-0 flex flex-col overflow-hidden rounded-none p-0 sm:inset-x-[3vw] sm:bottom-[3vh] sm:top-[3vh] sm:rounded-[1.9rem] sm:p-1.5 lg:inset-x-[5vw]">
+        <div className="flex items-center justify-between gap-3 px-3 pb-1 pt-[max(0.25rem,env(safe-area-inset-top))] sm:py-1.5">
+          <p className="truncate font-display text-base sm:text-lg">{family.name}</p>
           <div className="flex items-center gap-1">
             <a href={href} target="_blank" rel="noopener noreferrer" className="hidden rounded-full px-3 py-1.5 text-xs text-ink-2 hover:bg-surface/70 hover:text-ink sm:block">
               Abrir en pantalla completa
             </a>
-            <button type="button" onClick={() => setHref(null)} className="grid size-9 place-items-center rounded-full bg-surface/70 text-ink hover:bg-surface" aria-label="Cerrar" autoFocus>
+            <button type="button" onClick={() => setHref(null)} className="grid size-8 place-items-center rounded-full bg-surface/70 text-ink hover:bg-surface sm:size-9" aria-label="Cerrar" autoFocus>
               <IconClose width={18} height={18} />
             </button>
           </div>
         </div>
-        <iframe src={href} title={`Configurador de ${family.name.toLowerCase()}`} className="min-h-0 w-full flex-1 rounded-[1.5rem] bg-surface" allow="clipboard-write; web-share" />
+        <iframe src={href} title={`Configurador de ${family.name.toLowerCase()}`} className="min-h-0 w-full flex-1 rounded-none bg-surface sm:rounded-[1.5rem]" allow="clipboard-write; web-share" />
       </div>
     </div>
   );

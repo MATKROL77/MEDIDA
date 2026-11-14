@@ -484,6 +484,16 @@ body {
     pointer-events: none;
     animation: fade-in 320ms ease both;
   }
+  /* en el teléfono, la barra del visor más compacta: deja más lugar al mueble */
+  @media (max-width: 639px) {
+    .tool {
+      height: 2.15rem;
+      padding: 0 0.6rem;
+    }
+    .toolbar {
+      padding: 0.25rem;
+    }
+  }
   /* el botón de la decoración, abajo a la izquierda: a la altura del aviso de la foto */
   .deco-toggle {
     position: absolute;

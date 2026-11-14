@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IconBulb, IconDoor, IconExplode, IconFront, IconThree } from "@/components/icons";
 import { OtherConfigurators } from "@/components/OtherConfigurators";
 import { SendSheet } from "@/components/SendSheet";
-import { Dimension, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
+import { Dimension, ExpandToggle, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber, usePortraitPhone } from "@/components/controls";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { IconCheck, IconClose, IconDecor, IconHeart } from "@/components/site/icons";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
@@ -57,6 +57,9 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const [ready, setReady] = useState(false);
   // el módulo tocado en el 3D, para cambiarlo solo (en las familias que lo permiten)
   const [picked, setPicked] = useState<number | null>(null);
+  // en el teléfono: el 3D agrandado y la cámara más cerca
+  const [big, setBig] = useState(false);
+  const portrait = usePortraitPhone();
   const [designId, setDesignId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -147,7 +150,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
 
   return (
     <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_440px]">
-      <section className="sticky top-0 z-20 h-[max(46dvh,300px)] overflow-hidden bg-[#f0efed] lg:relative lg:z-auto lg:h-full">
+      <section className={`sticky top-0 z-20 overflow-hidden bg-[#f0efed] transition-[height] duration-500 lg:relative lg:z-auto lg:h-full ${big ? "h-[80dvh]" : "h-[max(58dvh,320px)]"}`}>
         <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
           <Viewer3D
             config={look}
@@ -166,6 +169,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
             confine
             onReady={() => setTimeout(() => setReady(true), 120)}
             captureRef={captureRef}
+            framing={portrait ? 0.8 : undefined}
             photo={photo.on}
             onPhoto={photo.onStatus}
           />
@@ -184,7 +188,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           {deco ? "Con decoración" : "Sin decoración"}
         </button>
 
-        <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-end gap-3 p-3 sm:p-4">
+        <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
+          <ExpandToggle big={big} onToggle={() => setBig((b) => !b)} />
           <Link href="/mis-disenos/" className="glass pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium">
             <IconHeart width={17} height={17} />
             <span className="hidden sm:inline">Mis diseños</span>

@@ -232,3 +232,38 @@ export function useAnimatedNumber(value: number) {
   }, [value]);
   return shown;
 }
+
+/**
+ * En el teléfono, el 3D ocupa la parte de arriba y los controles van abajo:
+ * este botón lo agranda hasta casi toda la pantalla, para mirar el mueble, y
+ * lo vuelve a achicar. En la computadora no hace falta.
+ */
+export function ExpandToggle({ big, onToggle }: { big: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={big}
+      aria-label={big ? "Achicar el 3D" : "Agrandar el 3D"}
+      title={big ? "Achicar el 3D" : "Agrandar el 3D"}
+      className="glass pointer-events-auto grid size-9 place-items-center rounded-full lg:hidden"
+    >
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {big ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /> : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
+      </svg>
+    </button>
+  );
+}
+
+/** la pantalla es la de un teléfono parado (para acercar la cámara y agrandar el 3D) */
+export function usePortraitPhone(): boolean {
+  const [portrait, setPortrait] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia("(max-width: 1023px) and (orientation: portrait)");
+    const update = () => setPortrait(q.matches);
+    update();
+    q.addEventListener("change", update);
+    return () => q.removeEventListener("change", update);
+  }, []);
+  return portrait;
+}
