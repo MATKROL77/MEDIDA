@@ -42,6 +42,18 @@ con el motor de esa versión; la edición nueva se publica aparte, en el Worker
 `edicion-clasica/README.md`. Verificado en local: el parche se aplica sobre la
 base, pasan sus 68 pruebas, compila y se ve a 390 y 1440 px.
 
+**Modelos más reales (14/11/2026), solo en la edición nueva.** Comparados con
+las fotos de referencia que mandó Matías: el mueble de TV se arma como uno
+real (frentes que tapan medio divisor con 3 mm de luz y, en "nicho y cajón",
+un nicho corrido con la luz a lo largo); las juntas entre frentes se ven
+oscuras; los cantos ya no brillan a puntitos. Sillones con almohadones
+rellenos y arrugas, almohadón de adorno con forma de almohadón, capitoné con
+celdas infladas, sillón curvo con las puntas redondeadas. Cama con acolchado
+que cae por los costados, almohadas de pluma y manta a los pies. La mesa de
+comedor lleva jarrón y cuenco, no velador. Verificado con capturas en
+Chromium (3D rápido y trazado de rayos); `npm test` (77 pruebas, una nueva
+sobre las juntas), `typecheck`, `lint` y `build` sin errores.
+
 **Realismo y rediseño (13/11/2026).** Modo foto con trazado de rayos en el
 navegador (`three-gpu-pathtracer`): con la escena quieta, el 3D se recalcula
 con luz que rebota, luces de área en cada tira LED y un softbox, con un filtro

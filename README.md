@@ -230,6 +230,26 @@ de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
   (`src/lib/decor-models.ts`); un estante chico los achica enteros, nunca los
   deforma. Son ambientación: no entran en el despiece ni en el precio.
   Créditos en `public/models/CREDITOS.md`.
+- **Telas con cuerpo** (`PartNode.tsx`): lo que se deforma se arma sobre una
+  caja redondeada de malla pareja (`gridRoundedBox`), con las caras soldadas
+  sin rajaduras. Sobre ella: el relleno de un almohadón (`puff`: cada cara se
+  infla en el medio), las arrugas de la funda (`wrinkle`), el capitoné
+  (`tuft`: celdas infladas entre líneas de botones hundidos), la caída de una
+  tela sobre lo que cubre (`drape`: el acolchado y la manta doblan sobre el
+  canto del colchón conservando su espesor y cuelgan con pliegues) y el
+  almohadón de adorno (`pinch`: fino en el borde, con las puntas
+  pellizcadas). El sillón curvo hace lo mismo sobre su sección barrida, con
+  las puntas redondeadas como un almohadón.
+- **Juntas en sombra** (`src/lib/gaps.ts`): las caras de una placa metidas en
+  una ranura (el costado de un frente contra el del vecino, el canto de un
+  divisor detrás de dos frentes) se detectan en el armado y van en una malla
+  aparte con una variante oscura del material: la junta se ve como la línea
+  oscura de una foto. Al abrir, despiezar o mirar con rayos X vuelven al
+  material de siempre. Es una malla aparte y no un grupo de materiales porque
+  el trazado de rayos no respeta los grupos dentro de una malla.
+- **Cantos**: las placas tienen cantos redondeados de 2 mm con facetas planas;
+  con normales suaves, en menos de un píxel el suavizado de bordes los hacía
+  brillar a puntitos. La textura se proyecta por triángulo.
 - **Veta continua**: los frentes vecinos (cajones, puertas) toman la foto de
   la madera desde su posición en el mueble, así la veta sigue de uno a otro
   como si salieran de la misma placa enchapada.

@@ -774,9 +774,10 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     }
 
     const m = mesh.current;
-    // abierto o despiezado, la ranura deja de existir: todas las caras con el material de siempre
+    // abierto o despiezado, la ranura deja de existir: todas las caras con el material de
+    // siempre; con rayos X también (los frentes se vuelven transparentes y la copia no los sigue)
     if (shadedMesh.current && shadedMaterial && material) {
-      const apart = drawer > 0.01 || e > 0.01 || Math.abs(slideX) > 1 || (door !== null && anim.open.v > 0.01);
+      const apart = drawer > 0.01 || e > 0.01 || anim.xray.v > 0.01 || Math.abs(slideX) > 1 || (door !== null && anim.open.v > 0.01);
       shadedMesh.current.material = apart ? material : shadedMaterial;
     }
     if (m) {
