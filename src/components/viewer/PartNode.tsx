@@ -537,8 +537,12 @@ function shadedOf(material: THREE.Material): THREE.Material {
   return out;
 }
 
-/** reordena los triángulos (sin índice) en dos grupos: las caras a la vista y las metidas en una ranura */
-function groupHidden(g: THREE.BufferGeometry, hidden: number) {
+/**
+ * Separa los triángulos (sin índice) en dos geometrías: las caras a la vista y
+ * las metidas en una ranura. Van en dos mallas con un material cada una: el
+ * trazador de rayos no respeta los grupos de materiales dentro de una malla.
+ */
+function splitHidden(g: THREE.BufferGeometry, hidden: number): { visible: THREE.BufferGeometry; shaded: THREE.BufferGeometry } | null {
   const nor = g.getAttribute("normal") as THREE.BufferAttribute;
   const tris = g.getAttribute("position").count / 3;
   const shade: boolean[] = [];
@@ -553,25 +557,25 @@ function groupHidden(g: THREE.BufferGeometry, hidden: number) {
     const axis = a[0] >= a[1] && a[0] >= a[2] ? 0 : a[1] >= a[2] ? 1 : 2;
     shade.push(Boolean(hidden & (1 << (axis * 2 + (n[axis] > 0 ? 1 : 0)))));
   }
-  const order = [...Array(tris).keys()].sort((x, y) => Number(shade[x]) - Number(shade[y]));
-  for (const name of Object.keys(g.attributes)) {
-    const attr = g.getAttribute(name) as THREE.BufferAttribute;
-    const size = attr.itemSize;
-    const src = attr.array as Float32Array;
-    const dst = new Float32Array(src.length);
-    order.forEach((t, i) => dst.set(src.subarray(t * 3 * size, (t + 1) * 3 * size), i * 3 * size));
-    g.setAttribute(name, new THREE.BufferAttribute(dst, size));
-  }
-  const visible = shade.filter((x) => !x).length;
-  g.clearGroups();
-  g.addGroup(0, visible * 3, 0);
-  g.addGroup(visible * 3, (tris - visible) * 3, 1);
+  const count = shade.filter(Boolean).length;
+  if (count === 0) return null;
+  const pick = (want: boolean) => {
+    const out = new THREE.BufferGeometry();
+    const n = want ? count : tris - count;
+    for (const name of Object.keys(g.attributes)) {
+      const attr = g.getAttribute(name) as THREE.BufferAttribute;
+      const size = attr.itemSize;
+      const src = attr.array as Float32Array;
+      const dst = new Float32Array(n * 3 * size);
+      let i = 0;
+      for (let t = 0; t < tris; t++) if (shade[t] === want) dst.set(src.subarray(t * 3 * size, (t + 1) * 3 * size), i++ * 3 * size);
+      out.setAttribute(name, new THREE.BufferAttribute(dst, size));
+    }
+    return out;
+  };
+  return { visible: pick(false), shaded: pick(true) };
 }
 
-/**
- * Una pieza animada. Medidas, posición y giro siguen a sus valores con
- * resortes; al aparecer crece con un rebote y al irse se encoge.
- */
 export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden = 0 }: NodeProps) {
   const anim = useSceneAnim();
   const outer = useRef<THREE.Group>(null);
@@ -625,10 +629,9 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     const flat = g.index ? g.toNonIndexed() : g;
     if (flat !== g) g.dispose();
     meterUvs(flat, [sx, sy, sz], part.id, front ? part.position.map((v, i) => (v + part.size[i] / 2) * MM) : undefined);
-    if (edged && hidden) groupHidden(flat, hidden);
     return flat;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.drape && JSON.stringify(part.drape), edged && hidden, (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {
@@ -688,9 +691,9 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
 
     const m = mesh.current;
     // abierto o despiezado, la ranura deja de existir: todas las caras con el material de siempre
-    if (m && shaded && material) {
+    if (shadedMesh.current && shadedMaterial && material) {
       const apart = drawer > 0.01 || e > 0.01 || Math.abs(slideX) > 1 || (door !== null && anim.open.v > 0.01);
-      m.material = apart ? material : shaded;
+      shadedMesh.current.material = apart ? material : shadedMaterial;
     }
     if (m) {
       if (trap && trapGeo) {
@@ -735,8 +738,17 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
   // las terminaciones de menos de un milímetro de relieve no proyectan sombra:
   // el mapa de sombras no las resuelve y salpica la puerta de rayas
   const castShadow = !["glow", "glass", "groove", "mirror", "led"].includes(part.kind);
-  // con caras en sombra, la malla lleva dos materiales: el de siempre y su variante oscura
-  const shaded = useMemo(() => (material && edged && hidden ? [material, shadedOf(material)] : null), [material, edged, hidden]);
+  // las caras en sombra van en una malla hija, con la variante oscura del material
+  const split = useMemo(() => (cushion && edged && hidden ? splitHidden(cushion, hidden) : null), [cushion, edged, hidden]);
+  useEffect(
+    () => () => {
+      split?.visible.dispose();
+      split?.shaded.dispose();
+    },
+    [split],
+  );
+  const shadedMaterial = useMemo(() => (material && split ? shadedOf(material) : null), [material, split]);
+  const shadedMesh = useRef<THREE.Mesh>(null);
 
   const leafClick =
     part.slide && onLeaf
@@ -753,14 +765,17 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
         {material && (
           <mesh
             ref={mesh}
-            geometry={trap && trapGeo ? trapGeo : (cushion ?? geometry)}
-            material={shaded ?? material}
+            geometry={trap && trapGeo ? trapGeo : (split?.visible ?? cushion ?? geometry)}
+            material={material}
             rotation={part.geometry === "glow" ? glowRotation : undefined}
             castShadow={castShadow}
             receiveShadow={part.kind !== "glow"}
             onClick={handleClick}
             renderOrder={part.kind === "glow" ? 2 : part.front ? 1 : 0}
-          />
+          >
+            {/* hija de la malla: sigue su posición y su escala */}
+            {split && shadedMaterial && <mesh ref={shadedMesh} geometry={split.shaded} material={shadedMaterial} castShadow={castShadow} receiveShadow />}
+          </mesh>
         )}
         {part.kind === "led" && <LedLight part={part} kit={kit} />}
         {part.geometry === "model" && part.model && <DecorModel id={part.model} size={part.size} />}
