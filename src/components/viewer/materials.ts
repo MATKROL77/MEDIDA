@@ -14,6 +14,18 @@ import { materialById } from "@/lib/catalog";
 
 import { dressWith, tintFor, type PhotoId } from "./photo";
 
+/**
+ * Con suavizado de bordes (MSAA), un triángulo más fino que un píxel se sombrea
+ * en el centro del píxel aunque caiga afuera: la normal sale extrapolada y un
+ * canto redondeado brilla a puntitos. Interpolada en el centroide (la parte
+ * del píxel que el triángulo sí cubre), la normal queda siempre adentro y el
+ * brillo del canto es una línea pareja, como en una foto.
+ */
+for (const key of ["normal_pars_fragment", "normal_pars_vertex"] as const) {
+  const chunk = THREE.ShaderChunk[key];
+  if (!chunk.includes("centroid")) THREE.ShaderChunk[key] = chunk.replace("varying vec3 vNormal;", "centroid varying vec3 vNormal;");
+}
+
 /** qué terminaciones del catálogo tienen foto de verdad */
 const VENEERS: Record<string, PhotoId> = { nogal: "nogal", roble: "roble" };
 /**

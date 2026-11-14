@@ -23,6 +23,7 @@ let shared: {
   puff: THREE.BufferGeometry;
   cyl: THREE.BufferGeometry;
   cone: THREE.BufferGeometry;
+  shade: THREE.BufferGeometry;
   plane: THREE.PlaneGeometry;
   sphere: THREE.SphereGeometry;
   quarterLeft: THREE.CylinderGeometry;
@@ -38,6 +39,8 @@ function geometries() {
       cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 40),
       // pata cónica: más fina abajo
       cone: new THREE.CylinderGeometry(0.5, 0.28, 1, 32),
+      // pantalla de lámpara: abierta arriba y abajo, apenas más ancha abajo
+      shade: new THREE.CylinderGeometry(0.42, 0.5, 1, 48, 1, true),
       plane: new THREE.PlaneGeometry(1, 1),
       sphere: new THREE.SphereGeometry(0.5, 28, 18),
       // cuartos de cilindro de radio 1: escalados en x y z quedan elipses
@@ -621,6 +624,19 @@ function shadedOf(material: THREE.Material): THREE.Material {
   return out;
 }
 
+const twoSidedCache = new WeakMap<THREE.Material, THREE.Material>();
+function twoSided(material: THREE.Material): THREE.Material {
+  let out = twoSidedCache.get(material);
+  if (!out) {
+    out = material.clone();
+    out.onBeforeCompile = material.onBeforeCompile;
+    out.customProgramCacheKey = material.customProgramCacheKey;
+    out.side = THREE.DoubleSide;
+    twoSidedCache.set(material, out);
+  }
+  return out;
+}
+
 /**
  * Separa los triángulos (sin índice) en dos geometrías: las caras a la vista y
  * las metidas en una ranura. Van en dos mallas con un material cada una: el
@@ -671,7 +687,9 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
   const born = useRef<number | null>(null);
   const door = part.kind === "door" && part.hinge ? part.hinge : null;
   const trap = part.geometry === "trapezoid";
-  const material = pickMaterial(kit, part);
+  // una pantalla abierta se ve por adentro: su tela va de los dos lados
+  const picked = pickMaterial(kit, part);
+  const material = picked && part.geometry === "shade" ? twoSided(picked) : picked;
 
   const target = [...part.position, ...part.size, part.rotationZ ?? 0, part.trapezoid?.left ?? 0, part.trapezoid?.right ?? 0];
   const sv = useRef<SpringVec | null>(null);
@@ -727,6 +745,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     if (part.geometry === "puff") return g.puff;
     if (part.geometry === "cyl") return g.cyl;
     if (part.geometry === "cone") return g.cone;
+    if (part.geometry === "shade") return g.shade;
     return g.box;
   }, [part.geometry, part.quarter]);
 
@@ -776,6 +795,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     const m = mesh.current;
     // abierto o despiezado, la ranura deja de existir: todas las caras con el material de
     // siempre; con rayos X también (los frentes se vuelven transparentes y la copia no los sigue)
+    if (m && closedBox && material) m.material = drawer > 0.01 || e > 0.01 || anim.xray.v > 0.01 ? material : closedBox;
     if (shadedMesh.current && shadedMaterial && material) {
       const apart = drawer > 0.01 || e > 0.01 || anim.xray.v > 0.01 || Math.abs(slideX) > 1 || (door !== null && anim.open.v > 0.01);
       shadedMesh.current.material = apart ? material : shadedMaterial;
@@ -834,6 +854,10 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
   );
   const shadedMaterial = useMemo(() => (material && split ? shadedOf(material) : null), [material, split]);
   const shadedMesh = useRef<THREE.Mesh>(null);
+  // la caja de un cajón cerrado solo se ve por la ranura entre frentes, donde es
+  // sombra: va oscura hasta que el cajón sale
+  const boxPart = part.kind === "drawer-side" || part.kind === "drawer-end" || part.kind === "drawer-bottom";
+  const closedBox = useMemo(() => (boxPart && material ? shadedOf(material) : null), [boxPart, material]);
 
   const leafClick =
     part.slide && onLeaf

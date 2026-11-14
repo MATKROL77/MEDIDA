@@ -495,10 +495,14 @@ function shelfDecor(list: Part[], id: string, x: number, y: number, z: number, w
   else if (width >= bw + 40 && space >= bh + 30) prop(list, `${id}:jarron`, "Jarrón", "jarron-bronce", x + width / 2 - bw / 2, y, z + 20);
   else books(list, id, x, y, z, 4 + (seed % 3), 150);
 }
+/** una lámpara de mesa: pie de cerámica (escaneado), cuello de bronce y pantalla de lino abierta */
 function lamp(list: Part[], id: string, x: number, y: number, z: number) {
-  piece(list, `${id}:base`, "Lámpara", "shelf", "gloss:#b9a27c", [x, y, z], [110, 14, 110], { ...deco, geometry: "cyl" });
-  piece(list, `${id}:stem`, "Lámpara", "shelf", "gloss:#b9a27c", [x + 48, y + 14, z + 48], [14, 230, 14], { ...deco, geometry: "cyl" });
-  piece(list, `${id}:shade`, "Lámpara", "shelf", "tint:#efe7d8", [x - 35, y + 220, z - 35], [180, 120, 180], { ...deco, geometry: "cone" });
+  const base = prop(list, `${id}:base`, "Lámpara", "jarron", x, y, z, 0.55);
+  const [bw, bh, bd] = base.size;
+  const cx = x + bw / 2;
+  const cz = z + bd / 2;
+  piece(list, `${id}:neck`, "Lámpara", "shelf", "gloss:#b9a27c", [cx - 8, y + bh - 6, cz - 8], [16, 80, 16], { ...deco, geometry: "cyl" });
+  piece(list, `${id}:shade`, "Lámpara", "shelf", "linen:#efe7d8", [cx - 150, y + bh + 40, cz - 150], [300, 210, 300], { ...deco, geometry: "shade" });
 }
 
 /** `wall`: el mueble va contra una pared (la tele, lo que se cuelga, lo que se apoya atrás) */

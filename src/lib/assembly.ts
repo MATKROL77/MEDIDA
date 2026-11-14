@@ -61,7 +61,7 @@ export type PartKind =
   | "glow";
 
 /** "soft": caja de cantos redondeados, para almohadones y tapizados */
-export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "none";
+export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "shade" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "none";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
