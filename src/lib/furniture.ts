@@ -80,15 +80,26 @@ export const SPECS: FurnitureSpec[] = [
     label: "Mesa",
     title: "Mesas y escritorios",
     controls: [
-      // la tapa es una sola pieza: tiene que entrar en la placa refilada (2580 mm)
-      { key: "width", type: "size", label: "Largo", min: 900, max: 2500 },
-      { key: "depth", type: "size", label: "Ancho", min: 550, max: 1100 },
+      { key: "kind", type: "choice", label: "Tipo", options: choice(["mesa", "Mesa"], ["escritorio", "Escritorio"]) },
+      // largo y ancho con el mismo rango: se puede hacer cuadrada. Si la tapa no
+      // entra en una placa, va en dos mitades unidas
+      { key: "width", type: "size", label: "Largo", min: 600, max: 2500 },
+      { key: "depth", type: "size", label: "Ancho", min: 600, max: 2500 },
       { key: "height", type: "size", label: "Alto", min: 700, max: 1100 },
-      { key: "top", type: "choice", label: "Tapa", options: choice(["recta", "Recta"], ["redonda", "Redondeada"], ["vidrio", "De vidrio"]) },
+      { key: "shape", type: "choice", label: "Forma", options: choice(["recta", "Recta"], ["redondeada", "Esquinas redondeadas"], ["redonda", "Redonda u ovalada"]) },
+      { key: "top", type: "choice", label: "Tapa", options: choice(["madera", "De madera"], ["vidrio", "De vidrio, con marco"]) },
       { key: "legs", type: "choice", label: "Base", options: choice(["madera", "Patas rectas"], ["conicas", "Patas cónicas"], ["hierro", "Pórticos de hierro"], ["panel", "Laterales llenos"], ["pedestal", "Con cajonera"]) },
       LED,
     ],
-    defaults: { width: 2000, depth: 950, height: 750, top: "redonda", legs: "conicas", led: false },
+    defaults: { kind: "mesa", width: 2000, depth: 950, height: 750, shape: "redondeada", top: "madera", legs: "conicas", led: false },
+    locks(v) {
+      const out: Record<string, string> = {};
+      // una mesa redonda va con patas: los pórticos, los laterales y la cajonera son rectos y se saldrían del borde
+      if (v.shape === "redonda") for (const id of ["hierro", "panel", "pedestal"]) out[`legs:${id}`] = "Una mesa redonda va con patas";
+      // la cajonera es de escritorio
+      if (v.kind !== "escritorio") out["legs:pedestal"] = "La cajonera es para escritorios";
+      return out;
+    },
     body: "nogal",
     front: "nogal",
     bodyLabel: "Base",
@@ -560,8 +571,47 @@ const BUILDERS: Record<string, Builder> = {
     const h = v.height as number;
     const parts: Part[] = [];
     const glass = v.top === "vidrio";
-    const top = glass ? 12 : 36;
-    piece(parts, "top", glass ? "Tapa de vidrio" : "Tapa", glass ? "glass" : "top", glass ? "glass" : c.front, [0, h - top, 0], [w, top, d], { geometry: v.top === "redonda" ? "soft" : "box", band: { long: 2, short: 2 } });
+    const round = v.shape === "redonda";
+    // el redondeo es el mismo en las cuatro esquinas (un radio, no un porcentaje de cada lado)
+    const r = v.shape === "redondeada" ? Math.min(160, Math.min(w, d) / 4) : 4;
+    const corners: [number, number, number, number] = [r, r, r, r];
+    // el vidrio va en un marco de la misma terminación que la base: de hierro si la base es de hierro
+    const frameMat = v.legs === "hierro" ? "iron" : c.front;
+    const top = glass ? 30 : 36;
+    const usable = catalog.board.width - 2 * catalog.board.trim;
+    if (glass) {
+      const ring = 45;
+      if (!round && r <= 4) {
+        // marco recto: cuatro largueros con las puntas a 45°
+        for (const [id, label, pos, size] of [
+          ["frame:b", "Larguero del marco", [0, h - top, 0], [w, top, ring]],
+          ["frame:f", "Larguero del marco", [0, h - top, d - ring], [w, top, ring]],
+          ["frame:l", "Travesaño del marco", [0, h - top, ring], [ring, top, d - 2 * ring]],
+          ["frame:r", "Travesaño del marco", [w - ring, h - top, ring], [ring, top, d - 2 * ring]],
+        ] as [string, string, Vec3, Vec3][]) {
+          const p = piece(parts, id, label, "top", frameMat, pos, size, frameMat === "iron" ? { noCut: true } : { band: { long: 1, short: 0 } });
+          if (p.cut) p.cut.note = "puntas a 45°, con rebaje para el vidrio";
+        }
+      } else {
+        // marco curvo: un aro de madera laminada (o de hierro rolado), del contorno de la tapa
+        const p = piece(parts, "frame", "Marco de la tapa", "top", frameMat, [0, h - top, 0], [w, top, d], { noCut: true });
+        p.plan = round ? { ellipse: true, ring } : { corners, ring };
+      }
+      const g = piece(parts, "top", "Tapa de vidrio", "glass", "glass", [ring - 12, h - 10, ring - 12], [w - 2 * ring + 24, 10, d - 2 * ring + 24], { noCut: true });
+      const gr = Math.max(4, r - ring + 12);
+      g.plan = round ? { ellipse: true } : { corners: [gr, gr, gr, gr] };
+    } else if (Math.min(w, d) <= usable) {
+      const p = piece(parts, "top", "Tapa", "top", c.front, [0, h - top, 0], [w, top, d], { band: { long: 2, short: 2 } });
+      p.plan = round ? { ellipse: true } : { corners };
+      if (p.cut && v.shape !== "recta") p.cut.note = round ? "contorno elíptico, en CNC" : `esquinas redondeadas, radio ${Math.round(r)} mm`;
+    } else {
+      // más ancha que una placa: dos mitades a lo largo, unidas con espigas
+      for (const [k, side] of (["left", "right"] as const).entries()) {
+        const p = piece(parts, `top:${k}`, "Tapa (mitad)", "top", c.front, [k * (w / 2), h - top, 0], [w / 2, top, d], { band: { long: 1, short: 2 } });
+        p.plan = round ? { ellipse: side } : { corners: side === "left" ? [r, 0.5, 0.5, r] : [0.5, r, r, 0.5] };
+        if (p.cut) p.cut.note = "media tapa: se une a la otra con espigas" + (round ? ", contorno elíptico en CNC" : "");
+      }
+    }
     const under = h - top;
     let drawers = 0;
     if (v.legs === "panel" || v.legs === "pedestal") {
@@ -597,7 +647,8 @@ const BUILDERS: Record<string, Builder> = {
       piece(parts, "frame:bar", "Larguero de hierro", "divider", "iron", [190, under - 40, d / 2 - 20], [w - 380, 40, 40], { noCut: true });
     } else {
       const conic = v.legs === "conicas";
-      const inset = conic ? 110 : 60;
+      // en una mesa redonda las patas van más adentro, para quedar bajo el borde
+      const inset = round ? Math.round(Math.min(w, d) * 0.19) : conic ? 110 : 60;
       const s = conic ? 58 : 64;
       legs(parts, "leg", 0, 0, w, d, under, conic ? "conica" : "recta", c.body, inset);
       // faldón: une las patas bajo la tapa, por los cuatro lados
@@ -606,7 +657,7 @@ const BUILDERS: Record<string, Builder> = {
       for (const [id, x] of [["l", inset + s / 2 - 9], ["r", w - inset - s / 2 - 9]] as const) piece(parts, `apron:${id}`, "Faldón", "divider", c.body, [x, under - 90, a], [T, 80, d - 2 * a]);
     }
     if (v.led) led(parts, "led", 120, under - 8, d - 150, w - 240, { y: 14, depth: d * 0.9 });
-    if (d >= 800 && v.legs !== "pedestal") {
+    if (v.kind !== "escritorio") {
       // una mesa de comedor: al centro, un jarrón y un cuenco; un velador no va
       prop(parts, "deco:top:jarron", "Jarrón", "jarron-antiguo", w / 2 - 280, h, d / 2 - 128);
       prop(parts, "deco:top:cuenco", "Cuenco", "cuenco", w / 2 + 10, h, d / 2 - 155);

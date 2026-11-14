@@ -178,6 +178,52 @@ function cornersGeometry(part: Part): THREE.BufferGeometry {
   return g.index ? g.toNonIndexed() : g;
 }
 
+/**
+ * Una tapa vista desde arriba: el contorno (rectángulo de esquinas
+ * redondeadas, elipse o media elipse) extruido en el espesor, con el canto
+ * apenas suavizado. Con `ring`, un marco: el mismo contorno con un hueco.
+ */
+function planGeometry(part: Part): THREE.BufferGeometry {
+  const plan = part.plan!;
+  const [w, t, d] = part.size.map((v) => v * MM);
+  const edge = Math.min(0.0015, t / 4);
+  // el contorno, en un plano donde x es el ancho e y va hacia atrás (después se acuesta)
+  const outline = (inset: number) => {
+    const shape = new THREE.Path();
+    const hw = w / 2 - edge - inset;
+    const hd = d / 2 - edge - inset;
+    if (plan.ellipse) {
+      if (plan.ellipse === true) shape.absellipse(0, 0, hw, hd, 0, 2 * Math.PI, false, 0);
+      else {
+        // media elipse: la izquierda (o la derecha) de la mesa entera, cortada al medio
+        const cx = plan.ellipse === "left" ? hw : -hw;
+        const a0 = plan.ellipse === "left" ? Math.PI / 2 : -Math.PI / 2;
+        shape.absellipse(cx, 0, 2 * hw, hd, a0, a0 + Math.PI, false, 0);
+        shape.closePath();
+      }
+      return shape;
+    }
+    const [tl, tr, br, bl] = (plan.corners ?? [0, 0, 0, 0]).map((v) => Math.max(0.0005, Math.min(v * MM - inset, hw, hd)));
+    shape.moveTo(-hw + bl, -hd);
+    shape.lineTo(hw - br, -hd);
+    shape.absarc(hw - br, -hd + br, br, -Math.PI / 2, 0, false);
+    shape.lineTo(hw, hd - tr);
+    shape.absarc(hw - tr, hd - tr, tr, 0, Math.PI / 2, false);
+    shape.lineTo(-hw + tl, hd);
+    shape.absarc(-hw + tl, hd - tl, tl, Math.PI / 2, Math.PI, false);
+    shape.lineTo(-hw, -hd + bl);
+    shape.absarc(-hw + bl, -hd + bl, bl, Math.PI, 1.5 * Math.PI, false);
+    return shape;
+  };
+  const shape = new THREE.Shape(outline(0).getPoints(48));
+  if (plan.ring) shape.holes.push(new THREE.Path(outline(plan.ring * MM).getPoints(48).reverse()));
+  const g = new THREE.ExtrudeGeometry(shape, { depth: t - 2 * edge, bevelEnabled: true, bevelThickness: edge, bevelSize: edge, bevelSegments: 2, curveSegments: 24 });
+  g.translate(0, 0, -(t - 2 * edge) / 2);
+  // acostada: el espesor pasa a ser el alto y el "hacia atrás" del dibujo, -z
+  g.rotateX(-Math.PI / 2);
+  return g.index ? g.toNonIndexed() : g;
+}
+
 function arcGeometry(part: Part): THREE.BufferGeometry {
   const a = part.arc!;
   const [x0, , z0] = part.position;
@@ -845,6 +891,11 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
   const cushion = useMemo(() => {
     if (part.geometry === "arc" && part.arc) return arcGeometry(part);
     if (part.geometry === "bend" && part.bend) return bendGeometry(part);
+    if (part.plan) {
+      const g = planGeometry(part);
+      meterUvs(g, part.size.map((v) => v * MM), part.id);
+      return g;
+    }
     if (part.corners) {
       const g = cornersGeometry(part);
       const front = part.front || part.kind === "door" || part.kind === "drawer-front";
@@ -884,7 +935,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     }
     return flat;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.welt, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.plan && JSON.stringify(part.plan), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.welt, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {

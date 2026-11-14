@@ -336,7 +336,9 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     handle: new THREE.MeshStandardMaterial({ color: "#2a2a2a", metalness: 0.75, roughness: 0.28, transparent: true }),
     groove: new THREE.MeshStandardMaterial({ color: "#191714", roughness: 0.9, transparent: true }),
     mirror: new THREE.MeshStandardMaterial({ color: "#f2f5f6", metalness: 1, roughness: 0.035, envMapIntensity: 1.4, transparent: true }),
-    glass: new THREE.MeshStandardMaterial({ color: "#3a4246", metalness: 0.2, roughness: 0.05, transparent: true, opacity: GLASS_OPACITY, envMapIntensity: 1.2 }),
+    // el vidrio no escribe profundidad: si no, según desde dónde se mire tapa lo que está
+    // detrás y es transparente (las patas de una mesa, que toman el material de los frentes)
+    glass: new THREE.MeshStandardMaterial({ color: "#3a4246", metalness: 0.2, roughness: 0.05, transparent: true, opacity: GLASS_OPACITY, envMapIntensity: 1.2, depthWrite: false }),
     frame: new THREE.MeshStandardMaterial({ color: "#b8bcc1", metalness: 1, roughness: 0.3, transparent: true }),
     led: new THREE.MeshStandardMaterial({ color: "#e6e6e6", roughness: 0.4, emissive: "#000000", emissiveIntensity: 0 }),
     glow: {

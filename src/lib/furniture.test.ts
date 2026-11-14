@@ -75,8 +75,8 @@ test("agrandar o sumar cosas nunca abarata, y el precio es un número redondo", 
     assert.ok(prices[0] <= prices[1] && prices[1] <= prices[2], `${spec.id}: ${prices}`);
     assert.ok(prices.every((p) => p > 0 && p % 1000 === 0));
   }
-  const sin = furniturePrice(normalizeFurniture({ family: "mesas", values: { legs: "panel" } }));
-  const con = furniturePrice(normalizeFurniture({ family: "mesas", values: { legs: "pedestal" } }));
+  const sin = furniturePrice(normalizeFurniture({ family: "mesas", values: { kind: "escritorio", legs: "panel" } }));
+  const con = furniturePrice(normalizeFurniture({ family: "mesas", values: { kind: "escritorio", legs: "pedestal" } }));
   assert.ok(con > sin, "la cajonera suma");
   const apagada = furniturePrice(normalizeFurniture({ family: "tv", values: { led: false } }));
   const prendida = furniturePrice(normalizeFurniture({ family: "tv", values: { led: true } }));

@@ -161,6 +161,14 @@ export type Part = {
    * frente (plano x-y) y tiene el espesor en z.
    */
   corners?: [number, number, number, number];
+  /**
+   * Placa horizontal (una tapa) con su contorno en planta: esquinas
+   * redondeadas (`corners`, mm: atrás a la izquierda, atrás a la derecha,
+   * adelante a la derecha, adelante a la izquierda), elipse (`ellipse`, o la
+   * mitad izquierda o derecha de una) y, si es un marco, el ancho del aro
+   * (`ring`, mm): adentro queda hueco.
+   */
+  plan?: { corners?: [number, number, number, number]; ellipse?: boolean | "left" | "right"; ring?: number };
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */
