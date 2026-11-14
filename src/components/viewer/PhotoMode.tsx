@@ -100,7 +100,7 @@ function cameraPrint(camera: THREE.Camera): number {
   let sum = 0;
   camera.matrixWorld.elements.forEach((v, k) => (sum += Math.round(v * 1e4) * (k + 1)));
   const p = camera as THREE.PerspectiveCamera;
-  return sum + Math.round((p.fov ?? 0) * 100) + Math.round((p.aspect ?? 0) * 1e4) * 31;
+  return sum + Math.round((p.fov ?? 0) * 100) + Math.round((p.aspect ?? 0) * 1e4) * 31 + Math.round((p.zoom ?? 1) * 1e4) * 17;
 }
 
 type Props = {

@@ -1,6 +1,6 @@
 # MEDIDA — estado operativo compartido
 
-Actualizado: 2026-11-13 (Argentina).
+Actualizado: 2026-11-14 (Argentina).
 
 ## Verificado
 
@@ -62,6 +62,20 @@ Verificado: `npm test` (81 pruebas), `typecheck`, `lint` y `build` sin
 errores; capturas en Chromium de cada mueble; edición de un módulo probada
 tocándolo en el 3D; sin scroll horizontal a 390 y 1440 px en la portada y
 en los siete configuradores.
+
+**Teléfono: el 3D se achica siguiendo el dedo (14/11/2026, a la noche).**
+Al entrar a un configurador desde el teléfono, el 3D ocupa el 78 % del alto
+con una seña animada de "Deslizá". Al deslizar se achica de a poco, al ritmo
+del dedo, hasta el 46 %; mientras tanto el panel sube entero pegado al borde
+del 3D (en el placard, también las solapas), y recién con el 3D chico se
+desplaza lo de adentro del panel. Al volver arriba se agranda de a poco. El
+mueble se ve entero en todo el recorrido: el lienzo no cambia de tamaño y la
+cámara se aleja en la misma medida. Verificado en Chromium emulando un iPhone
+13: a 100 px de deslizamiento el 3D mide 418 px y el panel empieza en 418 px;
+desde 213 px queda en 305 px y el panel pasa por debajo; con el panel
+plegado igual se puede achicar. Sin scroll horizontal a 390 y 1440 px;
+`npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
+y `build` sin errores. Falta probarlo en un teléfono real.
 
 **Link principal con la edición nueva (14/11/2026, más tarde).** A pedido
 de Matías, el link principal publica la edición nueva (beige y azul marino,

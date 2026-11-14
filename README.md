@@ -204,6 +204,17 @@ Los configuradores se abren en una ventana sobre la página
 (`src/components/site/ConfiguratorWindow.tsx`), que queda atrás apenas fuera
 de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
 
+En el teléfono parado, el 3D de cada configurador arranca grande (78 % del
+alto) con una seña animada de "Deslizá". Al deslizar se achica de a poco,
+siguiendo el dedo, hasta el 46 % del alto; mientras tanto el panel sube
+entero, pegado al borde del 3D, y recién cuando el 3D llegó a su tamaño chico
+se desplaza lo de adentro del panel (herrajes, luces y demás). Al volver
+arriba del todo se agranda otra vez; el botón de la barra hace lo mismo de un
+toque. El lienzo del 3D no cambia de tamaño (rehacerlo en cada cuadro traba
+el teléfono): se recorta al centro y la cámara se aleja en la misma medida
+(`zoom` del visor, `src/lib/framing.ts`), así el mueble se ve entero todo el
+tiempo. Está en `useScrollShrink` (`src/components/controls.tsx`).
+
 ## Realismo del 3D
 
 - **Texturas fotográficas** de Poly Haven (CC0): chapas de nogal y roble;
@@ -477,6 +488,7 @@ npm run capture -- http://localhost:4100
 | Cómo se anima cada pieza | `src/components/viewer/PartNode.tsx` |
 | Habitación, paredes, ventana | `src/components/viewer/Room.tsx` |
 | Panel y barra del configurador | `src/components/Configurator.tsx` |
+| Panel de las otras familias, 3D que se achica al deslizar en el teléfono | `src/components/FurnitureConfigurator.tsx`, `src/components/controls.tsx` |
 | "Enviar al taller" | `src/components/SendSheet.tsx` |
 | Mis diseños | `src/components/designs/` |
 | La vista del taller | `src/components/Workshop.tsx` |

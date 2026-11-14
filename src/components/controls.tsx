@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { shrinkZoom } from "@/lib/framing";
 
 import { catalog } from "@/lib/catalog";
 
@@ -312,33 +313,93 @@ export function DimensionCards({ items, onChange }: { items: { key: string; labe
 }
 
 /**
- * En el teléfono parado, el 3D arranca agrandado: se ve el mueble entero.
- * Al deslizar para ver las opciones se achica solo, y al volver arriba del
- * todo se agranda otra vez. El botón de agrandar y achicar sigue andando (si
- * se lo achica arriba de todo, no se vuelve a agrandar hasta que se desliza).
+ * En el teléfono parado, el 3D arranca grande y se achica de a poco siguiendo
+ * el dedo. Mientras se achica, el panel sube entero pegado a su borde (lo que
+ * el 3D pierde lo ocupa `spacer`); recién con el 3D chico se desplaza lo de
+ * adentro del panel. El lienzo no cambia de tamaño (rehacerlo en cada cuadro
+ * traba el teléfono): queda del alto grande, recortado al centro, y la cámara
+ * se aleja en la misma medida con `zoom`, así el mueble se ve entero todo el
+ * tiempo. `follow` (las solapas del placard) se pega al borde del 3D.
  */
-export function useScrollExpand(portrait: boolean) {
-  const [big, setBig] = useState(false);
+export function useScrollShrink(
+  enabled: boolean,
+  section: RefObject<HTMLElement | null>,
+  spacer: RefObject<HTMLElement | null>,
+  canvas: RefObject<HTMLElement | null>,
+  follow?: RefObject<HTMLElement | null>,
+) {
+  const [expanded, setExpanded] = useState(true);
   const [atTop, setAtTop] = useState(true);
-  const started = useRef(false);
+  const sizes = useRef({ big: 0, small: 0, width: 0, vh: 0 });
+  const zoom = useRef(1);
   useEffect(() => {
-    if (!portrait) return;
-    if (!started.current) {
-      started.current = true;
-      if (window.scrollY <= 2) setBig(true);
+    // lo que viene después del espacio (el panel) tiene alto mínimo para que siempre se pueda achicar
+    const els = () => [section.current, spacer.current, canvas.current, follow?.current, spacer.current?.nextElementSibling as HTMLElement | null | undefined];
+    if (!enabled) {
+      for (const el of els()) el?.removeAttribute("style");
+      zoom.current = 1;
+      return;
     }
-    let last = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      if (y > 24 && last <= 24) setBig(false);
-      if (y <= 2 && last > 2) setBig(true);
-      setAtTop(y <= 2);
-      last = y;
+    // la barra de direcciones que se esconde al deslizar cambia el alto: solo se recalcula al girar
+    // o si el alto cambió de verdad, para que el 3D no salte mientras el dedo se mueve
+    const measure = () => {
+      const c = sizes.current;
+      if (c.width === window.innerWidth && Math.abs(c.vh - window.innerHeight) < window.innerHeight * 0.2) return;
+      sizes.current = { ...shrinkSizes(), width: window.innerWidth, vh: window.innerHeight };
     };
+    let frame = 0;
+    let lastExpanded = true;
+    let lastTop = true;
+    const apply = () => {
+      frame = 0;
+      measure();
+      const { big, small, vh } = sizes.current;
+      const y = Math.max(0, window.scrollY);
+      const h = Math.max(small, Math.min(big, big - y));
+      const [s, sp, cv, f, panel] = els();
+      if (s) s.style.height = `${h}px`;
+      if (sp) sp.style.height = `${big - h}px`;
+      if (panel) panel.style.minHeight = `${vh - small}px`;
+      if (cv) {
+        // achicado, la barra de herramientas tapa más parte del visor: el mueble se aleja
+        // un poco más y sube, para que la base no quede detrás de la barra
+        const t = big > small ? (big - h) / (big - small) : 0;
+        cv.style.height = `${big}px`;
+        cv.style.top = `${(h - big) / 2 - 16 * t}px`;
+        cv.style.bottom = "auto";
+        zoom.current = shrinkZoom(cv.clientWidth || window.innerWidth, big, h) * (1 - 0.08 * t);
+      }
+      if (f) f.style.top = `${h}px`;
+      const ex = h > small + 1;
+      if (ex !== lastExpanded) setExpanded((lastExpanded = ex));
+      const top = y <= 2;
+      if (top !== lastTop) setAtTop((lastTop = top));
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(apply);
+    };
+    apply();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [portrait]);
-  return { big, setBig, atTop };
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [enabled, section, spacer, canvas, follow]);
+  const expand = () => window.scrollTo({ top: 0, behavior: "smooth" });
+  const collapse = () => {
+    const { big, small } = sizes.current;
+    window.scrollTo({ top: big - small, behavior: "smooth" });
+  };
+  return { expanded, atTop, expand, collapse, zoom };
+}
+
+/** el alto del 3D agrandado y chico, en píxeles de la pantalla de ahora */
+function shrinkSizes() {
+  const vh = window.innerHeight;
+  const big = Math.round(vh * 0.78);
+  return { big, small: Math.min(big, Math.round(Math.max(vh * 0.46, 300))) };
 }
 
 /**

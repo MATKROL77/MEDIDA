@@ -23,7 +23,7 @@ import { Watermark } from "@/components/Watermark";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { ContactLink } from "@/components/site/ContactLink";
 import { IconCheck, IconClose, IconDecor, IconHeart, IconWhatsapp } from "@/components/site/icons";
-import { Dimension, DimensionCards, ExpandToggle, OptionCard, Section, Segmented, Stepper, Swatches, SwipeHint, Toggle, useAnimatedNumber, usePortraitPhone, useScrollExpand } from "@/components/controls";
+import { Dimension, DimensionCards, ExpandToggle, OptionCard, Section, Segmented, Stepper, Swatches, SwipeHint, Toggle, useAnimatedNumber, usePortraitPhone, useScrollShrink } from "@/components/controls";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import { PhotoBadge, PhotoToggle, usePhotoMode } from "@/components/PhotoControls";
 import type { ViewName } from "@/components/viewer/Scene";
@@ -110,8 +110,12 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
   const photo = usePhotoMode();
   // en el teléfono: el 3D agrandado y la cámara más cerca
   const portrait = usePortraitPhone();
-  // arranca agrandado; al deslizar se achica y al volver arriba se agranda
-  const { big, setBig, atTop } = useScrollExpand(portrait);
+  // en el teléfono el 3D arranca agrandado y se achica de a poco siguiendo el dedo; las solapas lo siguen
+  const sectionRef = useRef<HTMLElement>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const tabsRef = useRef<HTMLElement>(null);
+  const shrink = useScrollShrink(portrait, sectionRef, spacerRef, canvasRef, tabsRef);
   const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({
     mode: "room",
     wall: WALL_COLORS[0].hex,
@@ -341,9 +345,9 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
     <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_440px]">
       {/* visor: arriba en el teléfono, a la izquierda en pantalla grande. En el
           teléfono queda fijo mientras se recorren las opciones, para ver cada cambio */}
-      <section className={`sticky top-0 z-20 overflow-hidden transition-[height] duration-500 max-lg:rounded-b-[1.75rem] lg:relative lg:z-auto lg:h-full ${big ? "h-[78dvh]" : "h-[max(46dvh,300px)]"}`}>
+      <section ref={sectionRef} className={`sticky top-0 z-20 overflow-hidden max-lg:rounded-b-[1.75rem] lg:relative lg:z-auto lg:h-full ${portrait ? "h-[78dvh]" : "h-[max(46dvh,300px)]"}`}>
         <Poster config={config} assembly={result.assembly} />
-        <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
+        <div ref={canvasRef} className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
           <Viewer3D
             config={config}
             assembly={deco ? clothed : result.assembly}
@@ -359,13 +363,14 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
             view={view}
             onReady={() => setTimeout(() => setReady(true), 120)}
             captureRef={captureRef}
+            zoom={shrink.zoom}
             framing={portrait ? 0.82 : undefined}
             photo={photo.on}
             onPhoto={photo.onStatus}
           />
         </div>
         <PhotoBadge status={photo.status} />
-        <SwipeHint show={portrait && big && atTop} />
+        <SwipeHint show={portrait && shrink.atTop} />
         {/* abajo a la izquierda, a la altura del aviso de la foto realista */}
         <button
           type="button"
@@ -448,14 +453,16 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                 <span className="hidden sm:inline">Luces</span>
               </button>
             )}
-            <ExpandToggle big={big} onToggle={() => setBig((b) => !b)} />
+            <ExpandToggle big={portrait && shrink.expanded} onToggle={() => (shrink.expanded ? shrink.collapse() : shrink.expand())} />
           </div>
         </div>
       </section>
+      {/* lo que el 3D se achica lo ocupa este espacio: el panel queda pegado a su borde */}
+      {portrait && <div ref={spacerRef} aria-hidden="true" className="lg:hidden" />}
 
       <aside className="flex flex-col border-line bg-surface lg:min-h-0 lg:border-l">
         {/* las solapas quedan pegadas justo debajo del 3D, que en el teléfono cambia de alto */}
-        <nav className={`sticky z-20 flex justify-between gap-1 border-b border-line bg-surface/95 px-5 backdrop-blur lg:top-0 ${big ? "top-[78dvh]" : "top-[max(46dvh,300px)]"}`} role="tablist">
+        <nav ref={tabsRef} className={`sticky z-20 flex justify-between gap-1 border-b border-line bg-surface/95 px-5 backdrop-blur lg:top-0 ${portrait ? "" : "top-[max(46dvh,300px)]"}`} role="tablist">
           {TABS.map((t) => (
             <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className="tab" onClick={() => setTab(t.id)}>
               {t.label}

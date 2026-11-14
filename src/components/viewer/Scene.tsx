@@ -8,6 +8,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } 
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
+import { aspectReach } from "@/lib/framing";
 import type { Assembly, RunAssembly } from "@/lib/assembly";
 import { ledHex, type WardrobeConfig } from "@/lib/model";
 
@@ -62,6 +63,8 @@ export type ViewerProps = {
   maxDpr?: number;
   /** encuadre: menos de 1 acerca la cámara (sin barras encima del visor sobra margen) */
   framing?: number;
+  /** acercamiento que cambia en vivo: el visor del teléfono se achica al deslizar sin cambiar el tamaño del lienzo */
+  zoom?: { current: number };
   /** fija la calidad, como ?calidad= en la dirección; la herramienta de capturas la cambia en vivo */
   quality?: "alta" | "baja";
   /** cuenta los cuadros dibujados en window.__medidaFrames, para la herramienta de capturas */
@@ -357,7 +360,7 @@ function CameraRig({ assembly, view, intro, sway, framing, minRadius }: { assemb
     const aspect = size.width / size.height;
     // margen para la barra de arriba y la de abajo del visor
     let dist = (radius / Math.sin(fov / 2)) * 1.1 * framing;
-    if (aspect < 1) dist /= Math.pow(aspect, 0.85);
+    dist *= aspectReach(aspect);
     const target = new THREE.Vector3(0, dims[1] * 0.46 * MM, 0);
     return { pos: target.clone().addScaledVector(dir.clone().normalize(), dist), target };
   };
@@ -603,6 +606,18 @@ function StudioFallback() {
   );
 }
 
+/** el acercamiento en vivo del visor del teléfono (ver `useScrollShrink`) */
+function ViewZoom({ zoom }: { zoom?: { current: number } }) {
+  const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
+  useFrame(() => {
+    const z = zoom?.current ?? 1;
+    if (Math.abs(camera.zoom - z) < 1e-4) return;
+    camera.zoom = z;
+    camera.updateProjectionMatrix();
+  });
+  return null;
+}
+
 /** foto HDR de un estudio fotográfico real (Poly Haven, CC0): reflejos y luz de relleno creíbles */
 export const STUDIO_HDRI = "/env/studio_small_09-1k.hdr";
 
@@ -624,6 +639,7 @@ function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoO
       {/* sombras de borde difuso, que se abren con la distancia, como bajo la luz de un showroom */}
       <SoftShadows size={22} samples={10} focus={0.55} />
       <Wardrobe props={props} kit={kit} />
+      <ViewZoom zoom={props.zoom} />
       <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway && !props.photoOn} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
       <OrbitControls
         makeDefault

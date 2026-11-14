@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IconBulb, IconDoor, IconExplode, IconFront, IconThree } from "@/components/icons";
 import { OtherConfigurators } from "@/components/OtherConfigurators";
 import { SendSheet } from "@/components/SendSheet";
-import { Dimension, DimensionCards, ExpandToggle, Section, Segmented, Stepper, Swatches, SwipeHint, Toggle, useAnimatedNumber, usePortraitPhone, useScrollExpand } from "@/components/controls";
+import { Dimension, DimensionCards, ExpandToggle, Section, Segmented, Stepper, Swatches, SwipeHint, Toggle, useAnimatedNumber, usePortraitPhone, useScrollShrink } from "@/components/controls";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { IconCheck, IconClose, IconDecor, IconHeart } from "@/components/site/icons";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
@@ -59,8 +59,11 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const [picked, setPicked] = useState<number | null>(null);
   // en el teléfono: el 3D agrandado y la cámara más cerca
   const portrait = usePortraitPhone();
-  // arranca agrandado; al deslizar se achica y al volver arriba se agranda
-  const { big, setBig, atTop } = useScrollExpand(portrait);
+  // en el teléfono el 3D arranca agrandado y se achica de a poco siguiendo el dedo
+  const sectionRef = useRef<HTMLElement>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const shrink = useScrollShrink(portrait, sectionRef, spacerRef, canvasRef);
   // en el teléfono el panel de controles se pliega: queda el título y el precio, y el 3D crece
   const [panelOpen, setPanelOpen] = useState(true);
   const [designId, setDesignId] = useState<string | null>(null);
@@ -153,8 +156,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
 
   return (
     <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_440px]">
-      <section className={`sticky top-0 z-20 overflow-hidden bg-[#f0efed] transition-[height] duration-500 max-lg:rounded-b-[1.75rem] lg:relative lg:z-auto lg:h-full ${big || !panelOpen ? "h-[78dvh]" : "h-[max(46dvh,300px)]"}`}>
-        <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
+      <section ref={sectionRef} className={`sticky top-0 z-20 overflow-hidden bg-[#f0efed] max-lg:rounded-b-[1.75rem] lg:relative lg:z-auto lg:h-full ${portrait ? "h-[78dvh]" : "h-[max(46dvh,300px)]"}`}>
+        <div ref={canvasRef} className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
           <Viewer3D
             config={look}
             assembly={shown}
@@ -172,13 +175,14 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
             confine
             onReady={() => setTimeout(() => setReady(true), 120)}
             captureRef={captureRef}
+            zoom={shrink.zoom}
             framing={portrait ? 0.8 : undefined}
             photo={photo.on}
             onPhoto={photo.onStatus}
           />
         </div>
         <PhotoBadge status={photo.status} />
-        <SwipeHint show={portrait && big && atTop} />
+        <SwipeHint show={portrait && shrink.atTop} />
 
         {/* abajo a la izquierda, a la altura del aviso de la foto realista */}
         <button
@@ -230,10 +234,12 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
               <IconExplode />
               <span className="hidden sm:inline">Explotar</span>
             </button>
-            <ExpandToggle big={big} onToggle={() => setBig((b) => !b)} />
+            <ExpandToggle big={portrait && shrink.expanded} onToggle={() => (shrink.expanded ? shrink.collapse() : shrink.expand())} />
           </div>
         </div>
       </section>
+      {/* lo que el 3D se achica lo ocupa este espacio: el panel queda pegado a su borde */}
+      {portrait && <div ref={spacerRef} aria-hidden="true" className="lg:hidden" />}
 
       <aside className="flex flex-col border-line bg-surface lg:min-h-0 lg:border-l">
         {/* en el teléfono, el panel se pliega para dejarle la pantalla al 3D */}
