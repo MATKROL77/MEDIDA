@@ -238,7 +238,9 @@ de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
   tela sobre lo que cubre (`drape`: el acolchado y la manta doblan sobre el
   canto del colchón conservando su espesor y cuelgan con pliegues) y el
   almohadón de adorno (`pinch`: fino en el borde, con las puntas
-  pellizcadas). El sillón curvo hace lo mismo sobre su sección barrida, con
+  pellizcadas) y el vivo (`welt`: un cordón de tela que rodea las caras
+  grandes siguiendo el canto). La ropa del placard es de lino, con pliegues
+  y el gancho de la percha. El sillón curvo hace lo mismo sobre su sección barrida, con
   las puntas redondeadas como un almohadón.
 - **Juntas en sombra** (`src/lib/gaps.ts`): las caras de una placa metidas en
   una ranura (el costado de un frente contra el del vecino, el canto de un

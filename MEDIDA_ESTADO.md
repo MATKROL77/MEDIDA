@@ -53,7 +53,11 @@ que cae por los costados, almohadas de pluma y manta a los pies. La mesa de
 comedor lleva jarrón y cuenco, no velador; el velador es un pie de cerámica
 escaneado con pantalla de lino. Esquinas curvas de madera doblada (MDF
 flexible en el despiece) en mesas de luz y ratonas, con el cajón colgado bajo
-la tapa como en la referencia, y como opción en el mueble de TV. Verificado con capturas en
+la tapa como en la referencia, y como opción en el mueble de TV. Vivo en los
+almohadones del sillón y en el respaldo tapizado de la cama. La ropa del
+placard es de tela, con perchas, y la página de render viste el placard como
+el configurador. Los selectores de muchas opciones pasan a filas: a 390 px
+el de frentes del mueble de TV se salía del panel. Verificado con capturas en
 Chromium (3D rápido y trazado de rayos); `npm test` (78 pruebas: una
 nueva sobre las juntas y otra sobre el despiece de las curvas), `typecheck`, `lint` y `build` sin errores.
 
