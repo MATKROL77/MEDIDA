@@ -58,6 +58,8 @@ const WALL_HEIGHT = 2900;
 const WALL_THICK = 110;
 /** cuánto sobra el tabique a cada lado del mueble */
 const WALL_MARGIN = 900;
+/** el tabique más angosto que se dibuja (mm) */
+const MIN_WALL = 4800;
 
 type FloorLook = { map: THREE.Texture | null; normalMap: THREE.Texture | null; roughnessMap: THREE.Texture | null; roughness: number; color: THREE.Color };
 
@@ -160,9 +162,11 @@ export function Room({ min, max, walls, wall, floor }: Props) {
   const back = walls !== "none";
   const left = walls === "l-left";
   const right = walls === "l-right";
+  // con un mueble chico (una mesa de luz) el tabique no puede quedar angosto: se le ve el borde
+  const middle = (min[0] + max[0]) / 2;
   const target = [
-    min[0] - (left ? 0 : WALL_MARGIN),
-    max[0] + (right ? 0 : WALL_MARGIN),
+    left ? min[0] : Math.min(min[0] - WALL_MARGIN, middle - MIN_WALL / 2),
+    right ? max[0] : Math.max(max[0] + WALL_MARGIN, middle + MIN_WALL / 2),
     min[2],
     max[2] + WALL_MARGIN,
   ];

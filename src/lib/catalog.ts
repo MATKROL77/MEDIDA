@@ -60,6 +60,8 @@ export const catalog = {
 
   hardware: {
     hinge: 3200,
+    /** una ruedita de mueble (las de adelante con freno) */
+    caster: 4200,
     /** par de correderas telescópicas */
     slidePair: 13500,
     /** par de suplementos para correr la corredera hacia adentro (cajones detrás de corredizas) */

@@ -111,15 +111,31 @@ export const SPECS: FurnitureSpec[] = [
     title: "Mesas ratonas y de luz",
     controls: [
       { key: "kind", type: "choice", label: "Tipo", options: choice(["ratona", "Ratona"], ["luz", "Mesa de luz"]) },
-      { key: "style", type: "choice", label: "Estilo", options: choice(["clasica", "Con cajones"], ["puente", "Puente"], ["curva", "Esquinas curvas"], ["losa", "Losa"], ["vidrio", "Tapa de vidrio"]) },
+      { key: "style", type: "choice", label: "Estilo", options: choice(["clasica", "Cerrada"], ["puente", "Puente"], ["curva", "Esquinas curvas"], ["losa", "Losa"], ["vidrio", "Tapa de vidrio"]) },
       { key: "width", type: "size", label: "Ancho", min: 350, max: 1400 },
       { key: "depth", type: "size", label: "Profundidad", min: 300, max: 800 },
       { key: "height", type: "size", label: "Alto", min: 280, max: 700 },
       { key: "drawers", type: "count", label: "Cajones", min: 0, max: 3 },
-      { key: "floating", type: "toggle", label: "Flotante", hint: "La mesa de luz con cajones, colgada de la pared" },
+      { key: "doors", type: "choice", label: "Puerta", options: choice(["no", "Sin puerta"], ["madera", "De madera"], ["vidrio", "De vidrio"]) },
+      { key: "floating", type: "toggle", label: "Flotante", hint: "Colgada de la pared" },
+      { key: "wheels", type: "toggle", label: "Con rueditas", hint: "Cuatro ruedas, las de adelante con freno" },
       LED,
     ],
-    defaults: { kind: "ratona", style: "puente", width: 1200, depth: 600, height: 360, drawers: 0, floating: false, led: false },
+    defaults: { kind: "ratona", style: "puente", width: 1200, depth: 600, height: 360, drawers: 0, doors: "no", floating: false, wheels: false, led: false },
+    locks(v) {
+      const out: Record<string, string> = {};
+      // la losa es una losa: no lleva cajones
+      if (v.style === "losa") out.drawers = "La losa no lleva cajones";
+      if (v.style !== "clasica") {
+        out["doors:madera"] = out["doors:vidrio"] = "La puerta va en la mesa cerrada";
+        out.floating = "Se cuelga la mesa cerrada";
+        out.wheels = "Las rueditas van en la mesa cerrada";
+      }
+      if (v.kind !== "luz") out.floating = "Se cuelga la mesa de luz";
+      if (v.floating) out.wheels = "Colgada de la pared no lleva rueditas";
+      if (v.wheels) out.floating = "Con rueditas no se cuelga";
+      return out;
+    },
     body: "nogal",
     front: "nogal",
     bodyLabel: "Cuerpo",
@@ -450,6 +466,24 @@ function tufted(p: Part, face: "top" | "front", nx: number, ny: number, depth: n
   return p;
 }
 
+/**
+ * Cuatro rueditas bajo un cuerpo de w × d: la rueda (de canto, girada) y la
+ * placa que la atornilla, metidas 45 mm desde cada esquina. Alto total: `h`.
+ */
+function casters(list: Part[], id: string, w: number, d: number, h: number) {
+  const r = Math.min(56, h - 14);
+  let k = 0;
+  for (const x of [45, w - 45])
+    for (const z of [45, d - 45]) {
+      const wheel = piece(list, `${id}:${k}`, "Ruedita", "plinth", "tint:#1c1c1d", [x - r / 2, 0, z - r / 2], [r, 22, r], { geometry: "cyl", noCut: true });
+      // de canto: el cilindro acostado, con el eje a lo ancho
+      wheel.rotationZ = Math.PI / 2;
+      wheel.position = [x - r / 2, r / 2 - 11, z - r / 2];
+      piece(list, `${id}:${k}:p`, "Soporte de la ruedita", "plinth", "metal", [x - 22, r, z - 22], [44, h - r, 44], { noCut: true });
+      k++;
+    }
+}
+
 /** cuatro patas en las esquinas de un rectángulo, metidas `inset` desde cada borde */
 function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d: number, h: number, kind: "recta" | "conica" | "hierro" | "metal", material: string, inset: number) {
   const s = kind === "hierro" ? 28 : kind === "metal" ? 30 : kind === "conica" ? 58 : 64;
@@ -677,6 +711,7 @@ const BUILDERS: Record<string, Builder> = {
     const bedside = v.kind === "luz";
     const parts: Part[] = [];
     let drawers = 0;
+    let doors = 0;
     const floating = bedside && v.style === "clasica" && v.floating === true;
     const lift = floating ? 300 : 0;
 
@@ -730,33 +765,62 @@ const BUILDERS: Record<string, Builder> = {
       for (const [id, x] of [["l", 0], ["r", w - s]] as const) piece(parts, `rail:${id}`, "Travesaño", "divider", c.body, [x + (s - T) / 2, h - s, s], [T, s, d - 2 * s]);
       piece(parts, "glass", "Tapa de vidrio", "glass", "glass", [s - 8, h - 14, s - 8], [w - 2 * s + 16, 10, d - 2 * s + 16], { noCut: true });
       piece(parts, "shelf", "Estante", "shelf", c.front, [s / 2, 90, s / 2], [w - s, T, d - s]);
+      // un cajón colgado del marco, bajo el vidrio
+      if (n > 0 && h - s - 90 - T > 200) {
+        const fh = Math.min(130, h - s - 90 - T - 80);
+        drawer(parts, "dr0", 0, s + 3, h - s - 3 - fh, d - s, w - 2 * s - 6, fh, d - 2 * s, c.front, "barra", [s, w - 2 * s], v.led === true);
+        drawers = 1;
+      }
       if (v.led) led(parts, "led", s, h - s - 8, d - s - 20, w - 2 * s);
     } else {
-      const leg = floating ? 0 : bedside ? 110 : 130;
+      const wheels = v.wheels === true && !floating;
+      const leg = floating ? 0 : wheels ? 72 : bedside ? 110 : 130;
       const y0 = lift + leg;
       piece(parts, "top", "Tapa", "top", c.front, [0, lift + h - T, 0], [w, T, d], { band: { long: 2, short: 2 } });
       piece(parts, "bottom", "Piso", "bottom", c.body, [T, y0, 0], [w - 2 * T, T, d - T]);
       piece(parts, "side:l", "Lateral", "side", c.body, [0, y0, 0], [T, h - T - leg, d]);
       piece(parts, "side:r", "Lateral", "side", c.body, [w - T, y0, 0], [T, h - T - leg, d]);
       piece(parts, "back", "Fondo", "back", "back", [T, y0 + T, 0], [w - 2 * T, h - leg - 2 * T, 3]);
-      if (!floating) legs(parts, "leg", 0, 0, w, d, leg, "conica", c.body, 40);
+      if (wheels) casters(parts, "rueda", w, d, leg);
+      else if (!floating) legs(parts, "leg", 0, 0, w, d, leg, "conica", c.body, 40);
       const inner = h - T - leg - T;
-      const count = Math.min(n, Math.max(0, Math.floor(inner / 110)));
-      if (count > 0) {
-        const fh = (inner - 4 * (count + 1)) / count;
-        for (let i = 0; i < count; i++) drawer(parts, `dr${i}`, 0, T + 3, y0 + T + 4 + i * (fh + 4), d - T, w - 2 * T - 6, fh, d - T, c.front, "barra", [T, w - 2 * T], v.led === true);
+      const doorKind = v.doors as string;
+      if (doorKind === "no") {
+        const count = Math.min(n, Math.max(0, Math.floor(inner / 110)));
+        if (count > 0) {
+          const fh = (inner - 4 * (count + 1)) / count;
+          for (let i = 0; i < count; i++) drawer(parts, `dr${i}`, 0, T + 3, y0 + T + 4 + i * (fh + 4), d - T, w - 2 * T - 6, fh, d - T, c.front, "barra", [T, w - 2 * T], v.led === true);
+        }
+        drawers = count;
+      } else {
+        // cajones arriba (de 13 cm) y una puerta abajo, de madera o de vidrio, con un estante adentro
+        const fh = 130;
+        const count = Math.min(n, Math.max(0, Math.floor((inner - 200) / (fh + 4))));
+        const top = y0 + T + inner;
+        for (let i = 0; i < count; i++) drawer(parts, `dr${i}`, 0, T + 3, top - (i + 1) * (fh + 4), d - T, w - 2 * T - 6, fh, d - T, c.front, "barra", [T, w - 2 * T], v.led === true);
+        drawers = count;
+        const doorTop = top - count * (fh + 4);
+        const dh = doorTop - (y0 + T) - 4;
+        const glass = doorKind === "vidrio";
+        door(parts, "door", T + 3, y0 + T + 2, d - (glass ? 8 : T), w - 2 * T - 6, dh, glass ? "glass" : c.front, "left");
+        doors = 1;
+        if (dh > 300) piece(parts, "shelf", "Estante", "shelf", c.body, [T, y0 + T + dh / 2, 0], [w - 2 * T, T, d - 40]);
+        // si es de vidrio, una luz adentro deja ver lo que hay
+        if (v.led) {
+          led(parts, "led:in", T + 20, doorTop - 12, d - 70, w - 2 * T - 40);
+          wash(parts, "led:in", T, w - 2 * T, doorTop - 4, dh > 300 ? y0 + T + dh / 2 + T : y0 + T, 3, d - 40);
+        }
       }
-      drawers = count;
       if (v.led) led(parts, "led", 40, y0 - 8, d * 0.5, w - 80, { y: 4, depth: d * 1.3 });
     }
 
     const topY = lift + h;
     if (bedside) {
       lamp(parts, "deco:lamp", w * 0.5 - 55, topY, d * 0.3);
-      return { parts, drawers, doors: 0, wall: true };
+      return { parts, drawers, doors, wall: true };
     }
     tabletop(parts, "deco:top", w * 0.18, topY, d * 0.3);
-    return { parts, drawers, doors: 0, center: true };
+    return { parts, drawers, doors, center: true };
   },
 
   tv(v, c) {
@@ -1395,6 +1459,7 @@ export function furniturePrice(config: FurnitureConfig, build: FurnitureBuild = 
   if (build.assembly.ledMeters > 0) cost += build.assembly.ledMeters * (catalog.led.whiteStripPerMeter + catalog.led.profilePerMeter + catalog.led.installPerMeter) + catalog.led.powerSupply60W;
   cost += build.doors * (2 * catalog.hardware.hinge + catalog.hardware.handle.bar + catalog.labor.perDoor);
   cost += build.drawers * (catalog.hardware.slidePair + catalog.hardware.handle.bar + catalog.labor.perDrawer);
+  cost += build.parts.filter((p) => p.label === "Ruedita").length * catalog.hardware.caster;
   cost += catalog.labor.perModule + catalog.hardware.fittingsPerModule;
   if (config.family === "sillones") {
     const v = config.values;
