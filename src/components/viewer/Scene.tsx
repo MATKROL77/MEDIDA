@@ -14,6 +14,7 @@ import { ledHex, type WardrobeConfig } from "@/lib/model";
 import { clampDt, DRAWER, FIRM, HEAVY, type SceneAnim, SceneAnimContext, SOFT, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
 import { drawerGroupsOf, isCovered, leavesOf, overlaps, sweep } from "@/lib/motion";
 import { createKit, disposeKit, frontMaterials, GLASS_OPACITY, type MaterialKit } from "./materials";
+import { hiddenFaces } from "@/lib/gaps";
 import { MM, PartNode, Presence } from "./PartNode";
 import type { FloorType } from "./constants";
 import { createPhotoBus, photoCapable, type PhotoBus, PhotoMode, type PhotoStatus } from "./PhotoMode";
@@ -556,6 +557,8 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   const anim = useSceneAnim();
   const totalH = Math.max(1, props.assembly.bounds.max[1]);
   const walls = wallsOf(props);
+  // las caras metidas en ranuras (entre frentes, detrás de ellos): van en sombra
+  const hidden = useMemo(() => new Map(props.assembly.runs.map((r) => [r.index, hiddenFaces(r.parts)])), [props.assembly]);
   return (
     <Centered assembly={props.assembly}>
       <Room
@@ -574,7 +577,7 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
               // al cargar, el placard se arma de abajo hacia arriba
               const age = typeof performance === "undefined" ? 0 : (performance.now() - anim.bornAt) / 1000;
               const delay = props.intro !== false && age < 1.2 ? 0.15 + (p.position[1] / totalH) * 0.55 + run.index * 0.12 : 0;
-              return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={delay} onSelect={props.onSelect} onLeaf={props.onLeaf} />;
+              return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={delay} onSelect={props.onSelect} onLeaf={props.onLeaf} hidden={hidden.get(run.index)?.get(p.id)} />;
             }}
           </Presence>
           {props.selection && props.selection.run === run.index && <SelectionBox run={run} module={props.selection.module} />}

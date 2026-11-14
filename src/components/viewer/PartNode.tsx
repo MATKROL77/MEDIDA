@@ -214,27 +214,27 @@ function tuftGeometry(g: THREE.BufferGeometry, size: number[], tuft: NonNullable
   const va = top ? size[2] : size[1];
   const cu = ua / tuft.nx;
   const cv = va / tuft.ny;
-  const well = Math.min(cu, cv) * 0.17;
-  const crease = Math.min(cu, cv) * 0.06;
   const depth = tuft.depth * MM;
+  const pinch = Math.min(cu, cv) * 0.11;
+  // 0 sobre la línea de botones, 1 a media celda: la tela se infla entre líneas
+  // y hace un pliegue marcado en cada una (también afuera, hasta el canto)
+  const swell = (w: number, c: number, n: number) => {
+    const i = Math.min(n - 1, Math.max(0, Math.round(w / c - 0.5)));
+    const t = Math.min(1, Math.abs(w - (i + 0.5) * c) / (c / 2));
+    return { t: Math.pow(Math.sin((Math.PI / 2) * t), 0.6), at: (i + 0.5) * c };
+  };
   for (let i = 0; i < pos.count; i++) {
     const n = top ? nor.getY(i) : nor.getZ(i);
     if (n < 0.25) continue;
     const u = pos.getX(i) + ua / 2;
     const v = (top ? pos.getZ(i) : pos.getY(i)) + va / 2;
-    // el botón más cercano
-    const iu = Math.min(tuft.nx - 1, Math.max(0, Math.floor(u / cu)));
-    const iv = Math.min(tuft.ny - 1, Math.max(0, Math.floor(v / cv)));
-    const bu = iu * cu + cu / 2;
-    const bv = iv * cv + cv / 2;
-    let k = Math.exp(-((u - bu) ** 2 + (v - bv) ** 2) / (2 * well * well));
-    // los pliegues: la tela tira de un botón al otro, en las líneas que los unen
-    const firstU = cu / 2;
-    const lastU = ua - cu / 2;
-    const firstV = cv / 2;
-    const lastV = va - cv / 2;
-    if (tuft.nx > 1 && v > firstV - cv * 0.35 && v < lastV + cv * 0.35) k = Math.max(k, 0.42 * Math.exp(-((v - bv) ** 2) / (2 * crease * crease)) * (u > firstU && u < lastU ? 1 : 0));
-    if (tuft.ny > 1 && u > firstU - cu * 0.35 && u < lastU + cu * 0.35) k = Math.max(k, 0.42 * Math.exp(-((u - bu) ** 2) / (2 * crease * crease)) * (v > firstV && v < lastV ? 1 : 0));
+    const su = swell(u, cu, tuft.nx);
+    const sv = swell(v, cv, tuft.ny);
+    // la celda inflada: alta en el medio, baja en los pliegues
+    const dome = su.t * sv.t;
+    // el botón tira la tela hacia adentro, más hondo que el pliegue
+    const button = Math.exp(-((u - su.at) ** 2 + (v - sv.at) ** 2) / (2 * pinch * pinch));
+    const k = 0.5 * (1 - dome) + 0.5 * button;
     // más suave sobre los cantos redondeados
     const d = depth * k * Math.min(1, (n - 0.25) / 0.45);
     if (top) pos.setY(i, pos.getY(i) - d);
@@ -464,13 +464,66 @@ type NodeProps = {
   onSelect?: (run: number, module: number) => void;
   /** tocar una hoja corrediza la corre para el otro lado */
   onLeaf?: (id: string) => void;
+  /** caras metidas en una ranura (máscara de hiddenFaces): van en sombra */
+  hidden?: number;
 };
+
+/**
+ * La variante en sombra de un material, para las caras metidas en una ranura:
+ * más oscura y casi sin reflejo (adentro de una ranura de 3 mm no llega el cielo).
+ */
+const shadedCache = new WeakMap<THREE.Material, THREE.Material>();
+function shadedOf(material: THREE.Material): THREE.Material {
+  let out = shadedCache.get(material);
+  if (!out) {
+    out = material.clone();
+    // clone() no copia los retoques del sombreador (la veta en metros, el detalle de la tela)
+    out.onBeforeCompile = material.onBeforeCompile;
+    out.customProgramCacheKey = material.customProgramCacheKey;
+    const m = out as THREE.MeshStandardMaterial;
+    if (m.color) m.color.multiplyScalar(0.3);
+    if (typeof m.envMapIntensity === "number") m.envMapIntensity *= 0.15;
+    shadedCache.set(material, out);
+  }
+  return out;
+}
+
+/** reordena los triángulos (sin índice) en dos grupos: las caras a la vista y las metidas en una ranura */
+function groupHidden(g: THREE.BufferGeometry, hidden: number) {
+  const nor = g.getAttribute("normal") as THREE.BufferAttribute;
+  const tris = g.getAttribute("position").count / 3;
+  const shade: boolean[] = [];
+  for (let t = 0; t < tris; t++) {
+    const n = [0, 0, 0];
+    for (let k = 0; k < 3; k++) {
+      n[0] += nor.getX(t * 3 + k);
+      n[1] += nor.getY(t * 3 + k);
+      n[2] += nor.getZ(t * 3 + k);
+    }
+    const a = n.map(Math.abs);
+    const axis = a[0] >= a[1] && a[0] >= a[2] ? 0 : a[1] >= a[2] ? 1 : 2;
+    shade.push(Boolean(hidden & (1 << (axis * 2 + (n[axis] > 0 ? 1 : 0)))));
+  }
+  const order = [...Array(tris).keys()].sort((x, y) => Number(shade[x]) - Number(shade[y]));
+  for (const name of Object.keys(g.attributes)) {
+    const attr = g.getAttribute(name) as THREE.BufferAttribute;
+    const size = attr.itemSize;
+    const src = attr.array as Float32Array;
+    const dst = new Float32Array(src.length);
+    order.forEach((t, i) => dst.set(src.subarray(t * 3 * size, (t + 1) * 3 * size), i * 3 * size));
+    g.setAttribute(name, new THREE.BufferAttribute(dst, size));
+  }
+  const visible = shade.filter((x) => !x).length;
+  g.clearGroups();
+  g.addGroup(0, visible * 3, 0);
+  g.addGroup(visible * 3, (tris - visible) * 3, 1);
+}
 
 /**
  * Una pieza animada. Medidas, posición y giro siguen a sus valores con
  * resortes; al aparecer crece con un rebote y al irse se encoge.
  */
-export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodeProps) {
+export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden = 0 }: NodeProps) {
   const anim = useSceneAnim();
   const outer = useRef<THREE.Group>(null);
   const rot = useRef<THREE.Group>(null);
@@ -501,9 +554,14 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
     const radius = part.geometry === "cushion" ? Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) : Math.min(2.2, Math.min(...part.size) * 0.22);
     // lo que se deforma necesita una malla pareja; lo demás, la caja redondeada liviana
-    const cell = part.tuft || part.drape ? 0.025 : 0.04;
+    const cell = part.tuft ? 0.018 : part.drape ? 0.025 : 0.04;
     const g: THREE.BufferGeometry =
       part.tuft || part.wrinkle ? gridRoundedBox([sx, sy, sz], radius * MM, cell) : new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
+    // en una placa el redondeo mide menos de un píxel: con normales suaves, el
+    // suavizado de bordes las lee fuera del triángulo y el canto brilla a
+    // puntitos. Con facetas planas (sin índice, cada triángulo con su normal)
+    // el brillo del canto sale parejo, una línea fina como en la madera real
+    if (edged) g.computeVertexNormals();
     if (part.tuft) tuftGeometry(g, [sx, sy, sz], part.tuft);
     if (part.wrinkle) {
       if (part.drape) drapeGeometry(g, [sx, sy, sz], part.drape);
@@ -513,10 +571,13 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     }
     // los frentes (puertas, cajones) comparten la veta con sus vecinos
     const front = part.front || part.kind === "door" || part.kind === "drawer-front";
-    meterUvs(g, [sx, sy, sz], part.id, front ? part.position.map((v, i) => (v + part.size[i] / 2) * MM) : undefined);
-    return g;
+    const flat = g.index ? g.toNonIndexed() : g;
+    if (flat !== g) g.dispose();
+    meterUvs(flat, [sx, sy, sz], part.id, front ? part.position.map((v, i) => (v + part.size[i] / 2) * MM) : undefined);
+    if (edged && hidden) groupHidden(flat, hidden);
+    return flat;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.drape && JSON.stringify(part.drape), edged && hidden, (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {
@@ -575,6 +636,11 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
     }
 
     const m = mesh.current;
+    // abierto o despiezado, la ranura deja de existir: todas las caras con el material de siempre
+    if (m && shaded && material) {
+      const apart = drawer > 0.01 || e > 0.01 || Math.abs(slideX) > 1 || (door !== null && anim.open.v > 0.01);
+      m.material = apart ? material : shaded;
+    }
     if (m) {
       if (trap && trapGeo) {
         updateTrapezoid(trapGeo, sx, tl, tr, sz);
@@ -618,6 +684,8 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
   // las terminaciones de menos de un milímetro de relieve no proyectan sombra:
   // el mapa de sombras no las resuelve y salpica la puerta de rayas
   const castShadow = !["glow", "glass", "groove", "mirror", "led"].includes(part.kind);
+  // con caras en sombra, la malla lleva dos materiales: el de siempre y su variante oscura
+  const shaded = useMemo(() => (material && edged && hidden ? [material, shadedOf(material)] : null), [material, edged, hidden]);
 
   const leafClick =
     part.slide && onLeaf
@@ -635,7 +703,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
           <mesh
             ref={mesh}
             geometry={trap && trapGeo ? trapGeo : (cushion ?? geometry)}
-            material={material}
+            material={shaded ?? material}
             rotation={part.geometry === "glow" ? glowRotation : undefined}
             castShadow={castShadow}
             receiveShadow={part.kind !== "glow"}

@@ -100,6 +100,8 @@ function hash(text: string): number {
  * valen igual para el 3D rápido y para el modo foto.
  */
 export function meterUvs(geometry: THREE.BufferGeometry, size: number[], key: string, origin?: number[]) {
+  // va triángulo por triángulo: la geometría tiene que venir sin índice
+  if (geometry.index) throw new Error("meterUvs necesita una geometría sin índice");
   const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
   const nor = geometry.getAttribute("normal") as THREE.BufferAttribute;
   if (!pos || !nor) return;
@@ -109,16 +111,27 @@ export function meterUvs(geometry: THREE.BufferGeometry, size: number[], key: st
   const ox = origin ? 0 : hash(key) * 3;
   const oy = origin ? 0 : hash(`${key}:y`) * 3;
   const uv = new Float32Array(pos.count * 2);
-  for (let i = 0; i < pos.count; i++) {
-    const p = origin ? [pos.getX(i) + origin[0], pos.getY(i) + origin[1], pos.getZ(i) + origin[2]] : [pos.getX(i), pos.getY(i), pos.getZ(i)];
-    const n = [Math.abs(nor.getX(i)), Math.abs(nor.getY(i)), Math.abs(nor.getZ(i))];
-    const face = n[0] >= n[1] && n[0] >= n[2] ? 0 : n[1] >= n[2] ? 1 : 2;
+  // la cara se elige por triángulo, no por vértice: en un canto redondeado un
+  // triángulo con vértices proyectados en caras distintas estira la foto
+  // entera en un hilo y el canto se ve con una costura clara punteada
+  for (let t = 0; t + 2 < pos.count; t += 3) {
+    const n = [0, 0, 0];
+    for (let k = 0; k < 3; k++) {
+      n[0] += nor.getX(t + k);
+      n[1] += nor.getY(t + k);
+      n[2] += nor.getZ(t + k);
+    }
+    const a = n.map(Math.abs);
+    const face = a[0] >= a[1] && a[0] >= a[2] ? 0 : a[1] >= a[2] ? 1 : 2;
     // los dos ejes de la cara; el que va con la veta queda en V
-    const axes = [0, 1, 2].filter((a) => a !== face);
+    const axes = [0, 1, 2].filter((x) => x !== face);
     const along = axes.includes(g) ? g : axes[1];
-    const across = axes.find((a) => a !== along)!;
-    uv[i * 2] = p[across] + ox;
-    uv[i * 2 + 1] = p[along] + oy;
+    const across = axes.find((x) => x !== along)!;
+    for (let i = t; i < t + 3; i++) {
+      const p = origin ? [pos.getX(i) + origin[0], pos.getY(i) + origin[1], pos.getZ(i) + origin[2]] : [pos.getX(i), pos.getY(i), pos.getZ(i)];
+      uv[i * 2] = p[across] + ox;
+      uv[i * 2 + 1] = p[along] + oy;
+    }
   }
   geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
 }

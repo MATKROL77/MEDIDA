@@ -343,7 +343,12 @@ function gripFor(id: string, grip: Grip, w: number, h: number, bar: Part): Part[
   return [bar];
 }
 
-function drawer(list: Part[], id: string, module: number, x: number, y: number, z: number, w: number, h: number, depth: number, material: string, grip: Grip = "barra") {
+/**
+ * Un cajón: el frente en (x, y, z) de w × h y la caja adentro. `opening` es el
+ * hueco entre las caras del mueble (desde dónde, cuánto mide): la caja deja
+ * 16 mm por lado para la corredera. Si no se da, el frente va metido 3 mm en el hueco.
+ */
+function drawer(list: Part[], id: string, module: number, x: number, y: number, z: number, w: number, h: number, depth: number, material: string, grip: Grip = "barra", opening: [number, number] = [x - 3, w + 6]) {
   const out: Vec3 = [0, 0, Math.min(depth - 60, 420)];
   piece(list, `${id}:f`, "Frente de cajón", "drawer-front", material, [x, y, z], [w, h, T], {
     front: true,
@@ -352,7 +357,7 @@ function drawer(list: Part[], id: string, module: number, x: number, y: number, 
     band: { long: 2, short: 2 },
     details: gripFor(id, grip, w, h, handle(`${id}:h`, w / 2 - Math.min(70, w / 4), h - 30, Math.min(140, w / 2))),
   });
-  drawerBox(list, id, module, out, [x + 13, y + 14, z - depth + 40], [w - 26, h - 46, depth - 40], "z");
+  drawerBox(list, id, module, out, [opening[0] + 16, y + 14, z - depth + 40], [opening[1] - 32, h - 46, depth - 40], "z");
 }
 
 /**
@@ -632,9 +637,27 @@ const BUILDERS: Record<string, Builder> = {
     if (v.thick) piece(parts, "top", "Tapa", "top", c.front, [-15, base + h - T, 0], [w + 30, 40, d + 15], { band: { long: 2, short: 2 } });
     else piece(parts, "top", "Tapa", "top", c.front, [0, base + h - T, 0], [w, T, d], { band: { long: 2, short: 2 } });
     piece(parts, "bottom", "Piso", "bottom", c.body, [0, base, 0], [w, T, d], { band: { long: 1, short: 2 } });
+    const kinds = Array.from({ length: modules }, (_, i) => (v.fronts === "mixto" ? ["puertas", "abierto", "cajones", "vidrio"][i % 4] : (v.fronts as string)));
+    const fronted = (k: string | undefined) => k === "puertas" || k === "vidrio" || k === "cajones" || k === "nicho-cajon";
+    const inner = h - 2 * T;
+    // nicho y cajón: los cajones abajo, y arriba un solo nicho corrido de punta
+    // a punta, como en los muebles de catálogo; los divisores quedan abajo
+    const niche = v.fronts === "nicho-cajon";
+    const fh = Math.round(inner * 0.56);
+    // un divisor entre dos módulos con frente queda 18 mm atrás y los frentes
+    // lo tapan a medias, con 3 mm de luz entre uno y otro (como en un mueble
+    // real); al lado de un módulo abierto llega hasta adelante
+    const recessed = (i: number) => i > 0 && i < modules && fronted(kinds[i - 1]) && fronted(kinds[i]);
     for (let i = 0; i <= modules; i++) {
       const end = i === 0 || i === modules;
-      piece(parts, `div:${i}`, end ? "Lateral" : "Divisor", end ? "side" : "divider", c.body, [i * mw, base + T, 0], [T, h - 2 * T, d - (end ? 0 : T)]);
+      const height = niche && !end ? fh : h - 2 * T;
+      piece(parts, `div:${i}`, end ? "Lateral" : "Divisor", end ? "side" : "divider", c.body, [i * mw, base + T, 0], [T, height, d - (recessed(i) ? T : 0)]);
+    }
+    if (niche) {
+      piece(parts, "shelf", "Estante", "fixed-shelf", c.body, [T, base + T + fh, 0], [w - 2 * T, T, d], { band: { long: 1, short: 0 } });
+      // más de 2,2 m sin apoyo la tapa se vence: un parante al medio del nicho
+      if (w > 2200) piece(parts, "div:niche", "Parante", "divider", c.body, [w / 2 - T / 2, base + T + fh + T, 0], [T, h - 3 * T - fh, d]);
+      if (v.led) led(parts, "led:niche", T + 20, base + h - T - 8, d - 50, w - 2 * T - 40);
     }
     piece(parts, "back", "Fondo", "back", "back", [T, base + T, 0], [w - 2 * T, h - 2 * T, 3]);
     if (v.base === "patas") legs(parts, "leg", 0, 0, w, d, base, "conica", c.body, 90);
@@ -645,27 +668,27 @@ const BUILDERS: Record<string, Builder> = {
     }
     let drawers = 0;
     let doors = 0;
-    const inner = h - 2 * T;
     for (let i = 0; i < modules; i++) {
-      const x = i * mw + T + 3;
-      const fw = mw - T - 6;
-      const kind = v.fronts === "mixto" ? ["puertas", "abierto", "cajones", "vidrio"][i % 4] : (v.fronts as string);
+      // el hueco entre las caras de los divisores, y el frente: hasta el medio
+      // del divisor si está retirado, o 3 mm adentro de la cara si llega adelante
+      const opening: [number, number] = [i * mw + T, mw - T];
+      const left = recessed(i) ? i * mw + T / 2 + 1.5 : i * mw + T + 3;
+      const right = recessed(i + 1) ? (i + 1) * mw + T / 2 - 1.5 : (i + 1) * mw - 3;
+      const x = left;
+      const fw = right - left;
+      const kind = kinds[i];
       if (kind === "puertas" || kind === "vidrio") {
         if (kind === "vidrio") piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 50]);
         door(parts, `door:${i}`, x, base + T + 3, d - (kind === "vidrio" ? 8 : T), fw, inner - 6, kind === "vidrio" ? "glass" : c.front, i % 2 ? "right" : "left", grip);
         doors++;
       } else if (kind === "nicho-cajon") {
-        // abajo un cajón; arriba un nicho abierto, con la luz escondida bajo la tapa
-        const fh = Math.round(inner * 0.56);
-        drawer(parts, `dr${i}:0`, i, x, base + T + 4, d - T, fw, fh - 8, d - T, c.front, grip);
+        drawer(parts, `dr${i}:0`, i, x, base + T + 4, d - T, fw, fh - 8, d - T, c.front, grip, opening);
         drawers++;
-        piece(parts, `shelf:${i}`, "Estante", "fixed-shelf", c.body, [i * mw + T, base + T + fh, 0], [mw - T, T, d], { band: { long: 1, short: 0 } });
-        if (v.led) led(parts, `led:n${i}`, i * mw + T + 20, base + h - T - 8, d - 50, mw - T - 40);
         if (i % 2 === 1) prop(parts, `deco:n${i}`, "Cuenco", "cuenco", i * mw + T + mw * 0.3, base + T + fh + T, d * 0.25);
       } else if (kind === "cajones") {
         const n = inner > 380 ? 2 : 1;
-        const fh = (inner - 4 * (n + 1)) / n;
-        for (let k = 0; k < n; k++) drawer(parts, `dr${i}:${k}`, i, x, base + T + 4 + k * (fh + 4), d - T, fw, fh, d - T, c.front, grip);
+        const dh = (inner - 4 * (n + 1)) / n;
+        for (let k = 0; k < n; k++) drawer(parts, `dr${i}:${k}`, i, x, base + T + 4 + k * (dh + 4), d - T, fw, dh, d - T, c.front, grip, opening);
         drawers += n;
       } else {
         piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 30]);
@@ -1004,11 +1027,13 @@ const BUILDERS: Record<string, Builder> = {
       const depth = chaise ? d + 640 : d;
       const fz = (depth - d) / 2;
       if (bubbles) {
-        const rows = chaise ? 3 : 2;
-        // cada cuerpo es un almohadón grande, capitoné: botones hundidos y la tela inflada entre ellos
+        // cada cuerpo es un almohadón grande, capitoné: botones hundidos cada 30 cm
+        // más o menos y la tela inflada entre ellos
         const seatD = depth - 300;
-        tufted(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift, -d / 2 + 300 + seatD / 2, [sw - 8, 380, seatD - 6], 105), "top", 2, rows, 70);
-        tufted(put(f, `back:${i}`, "Almohadón de respaldo", "back", "fabric", 0, lift + 230, -d / 2 + 160, [sw - 8, 420, 320], 120), "front", 2, 1, 58);
+        const across = Math.max(2, Math.round(sw / 300));
+        const rows = Math.max(2, Math.round(seatD / 320));
+        tufted(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift, -d / 2 + 300 + seatD / 2, [sw - 8, 380, seatD - 6], 105), "top", across, rows, 80);
+        tufted(put(f, `back:${i}`, "Almohadón de respaldo", "back", "fabric", 0, lift + 230, -d / 2 + 160, [sw - 8, 420, 320], 120), "front", across, 1, 64);
       } else {
         if (!curved) {
           put(f, `base:${i}`, "Base del módulo", "bottom", "fabric", 0, lift, fz, [sw, 210, depth], 55);
