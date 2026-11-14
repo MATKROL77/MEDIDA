@@ -1,48 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { IconCamera } from "@/components/icons";
 import type { PhotoStatus } from "@/components/viewer/PhotoMode";
 
-const KEY = "medida:foto";
-
 /**
- * Si el modo foto arranca prendido: en una computadora sí; en un teléfono
- * arranca apagado (gasta batería) y se prende a mano. Lo que elija la persona
- * se recuerda.
+ * El modo realista arranca apagado siempre y se calcula solo cuando la persona
+ * aprieta "Realismo": el trazado de rayos usa la placa de video del equipo y
+ * no tiene que cargarlo sin que nadie lo pida. Mientras está prendido, cada
+ * vez que la escena se queda quieta se vuelve a calcular.
  */
 export function usePhotoMode() {
   const [on, setOn] = useState(false);
   const [status, setStatus] = useState<PhotoStatus>({ state: "off", progress: 0 });
-  useEffect(() => {
-    let stored: string | null = null;
-    try {
-      stored = localStorage.getItem(KEY);
-    } catch {
-      stored = null;
-    }
-    const desktop = window.matchMedia("(pointer: fine)").matches && window.innerWidth >= 900;
-    setOn(stored ? stored === "1" : desktop);
-  }, []);
-  const toggle = useCallback(() => {
-    setOn((v) => {
-      try {
-        localStorage.setItem(KEY, v ? "0" : "1");
-      } catch {
-        // sin almacenamiento, vale para esta visita
-      }
-      return !v;
-    });
-  }, []);
+  const toggle = useCallback(() => setOn((v) => !v), []);
   return { on, toggle, status, onStatus: setStatus };
 }
 
 export function PhotoToggle({ on, toggle }: { on: boolean; toggle: () => void }) {
   return (
-    <button type="button" className="tool" aria-pressed={on} onClick={toggle} title={on ? "Apagar la foto realista" : "Foto realista: luz calculada con trazado de rayos"}>
+    <button type="button" className="tool" aria-pressed={on} onClick={toggle} title={on ? "Volver al 3D rápido" : "Realismo: la luz calculada con trazado de rayos"}>
       <IconCamera />
-      <span className="hidden sm:inline">Foto</span>
+      <span>Realismo</span>
     </button>
   );
 }

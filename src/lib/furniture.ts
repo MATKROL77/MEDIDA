@@ -349,7 +349,7 @@ function gripFor(id: string, grip: Grip, w: number, h: number, bar: Part): Part[
  * hueco entre las caras del mueble (desde dónde, cuánto mide): la caja deja
  * 16 mm por lado para la corredera. Si no se da, el frente va metido 3 mm en el hueco.
  */
-function drawer(list: Part[], id: string, module: number, x: number, y: number, z: number, w: number, h: number, depth: number, material: string, grip: Grip = "barra", opening: [number, number] = [x - 3, w + 6]) {
+function drawer(list: Part[], id: string, module: number, x: number, y: number, z: number, w: number, h: number, depth: number, material: string, grip: Grip = "barra", opening: [number, number] = [x - 3, w + 6], light = false) {
   const out: Vec3 = [0, 0, Math.min(depth - 60, 420)];
   piece(list, `${id}:f`, "Frente de cajón", "drawer-front", material, [x, y, z], [w, h, T], {
     front: true,
@@ -359,6 +359,13 @@ function drawer(list: Part[], id: string, module: number, x: number, y: number, 
     details: gripFor(id, grip, w, h, handle(`${id}:h`, w / 2 - Math.min(70, w / 4), h - 30, Math.min(140, w / 2))),
   });
   drawerBox(list, id, module, out, [opening[0] + 16, y + 14, z - depth + 40], [opening[1] - 32, h - 46, depth - 40], "z");
+  // una tira adentro, contra el frente, que sale con el cajón: al abrirlo se ve lo que hay
+  if (light) {
+    const p = piece(list, `${id}:led`, "Tira LED del cajón", "led", "led", [opening[0] + 40, y + h - 40, z - 24], [opening[1] - 80, 6, 10], { noCut: true });
+    p.module = module;
+    p.openShift = out;
+    wash(list, `${id}:luz`, opening[0] + 31, opening[1] - 62, y + h - 40, y + 17, z - depth + 55, depth - 80, { module, openShift: out });
+  }
 }
 
 /**
@@ -452,6 +459,22 @@ function led(list: Part[], id: string, x: number, y: number, z: number, length: 
   if (pool) piece(list, `${id}:g`, "Luz", "glow", "glow", [x - 260, pool.y, z - pool.depth * 0.8], [length + 520, 2, pool.depth * 1.6], { geometry: "glow", glow: "y", noCut: true });
 }
 
+/**
+ * La luz que tira una tira LED dentro de un hueco, para el 3D rápido: una
+ * mancha que baja por el fondo desde la tira y otra en el piso del hueco (en
+ * el modo foto no se ven: la luz de verdad la da la tira). `x` y `w`, el ancho
+ * del hueco; `ledY`, la altura de la tira; `floorY`, el piso del hueco; `back`,
+ * la cara del fondo; `depth`, cuánto entra la luz hacia adelante.
+ */
+function wash(list: Part[], id: string, x: number, w: number, ledY: number, floorY: number, back: number, depth: number, move?: { module: number; openShift: Vec3 }) {
+  const gap = ledY - floorY;
+  if (gap <= 0 || w <= 0) return;
+  const card = Math.min(gap, 520);
+  const extra = { geometry: "glow" as const, noCut: true, ...(move ?? {}) };
+  if (!move) piece(list, `${id}:gb`, "Luz", "glow", "glow", [x, ledY - card, back + 0.6], [w, card, 1], { ...extra, glow: "z" });
+  if (gap <= 820) piece(list, `${id}:gp`, "Luz", "glow", "glow", [x, floorY + 0.6, back], [w, 1, depth], { ...extra, glow: "y" });
+}
+
 // ---- ambientación: lo que rodea al mueble para verlo en un lugar de verdad
 
 const deco = { decor: true, noCut: true } as const;
@@ -491,12 +514,16 @@ function tabletop(list: Part[], id: string, x: number, y: number, z: number) {
 function shelfDecor(list: Part[], id: string, x: number, y: number, z: number, width: number, space: number, seed: number) {
   const [lw, lh] = DECOR_MODELS.libros;
   const [bw, bh] = DECOR_MODELS["jarron-bronce"];
-  const [fw, fh] = DECOR_MODELS.portarretrato;
+  const [, fh, fd] = DECOR_MODELS.portarretrato;
   // los libros se achican enteros hasta entrar (hay libros de todos los tamaños), nunca menos del 75 %
   const k = Math.min(1, (width - 10) / lw, (space - 15) / lh);
   const kind = seed % 4;
   if (kind !== 3 && k >= 0.75) prop(list, `${id}:libros`, "Libros", "libros", x + 5, y, z, k);
-  else if (kind === 3 && seed % 8 === 3 && width >= fw + 40 && space >= fh + 30) prop(list, `${id}:foto`, "Portarretrato", "portarretrato", x + width * 0.3, y, z);
+  else if (kind === 3 && seed % 8 === 3 && width >= fd + 40 && space >= fh + 30) {
+    // el modelo viene parado de costado: se gira para que la foto mire al frente
+    const frame = prop(list, `${id}:foto`, "Portarretrato", "portarretrato", x + width * 0.3, y, z + 40);
+    frame.rotationY = -Math.PI / 2;
+  }
   else if (width >= bw + 40 && space >= bh + 30) prop(list, `${id}:jarron`, "Jarrón", "jarron-bronce", x + width / 2 - bw / 2, y, z + 20);
   else books(list, id, x, y, z, 4 + (seed % 3), 150);
 }
@@ -611,7 +638,7 @@ const BUILDERS: Record<string, Builder> = {
       if (n > 0 && h - t - 60 - T > 150) {
         const fh = Math.min(170, h - t - 60 - T - 30);
         piece(parts, "box:b", "Piso del cajón", "bottom", c.body, [t, h - t - fh - T - 6, 0], [w - 2 * t, T, d - T]);
-        drawer(parts, "dr0", 0, t + 3, h - t - fh - 3, d - T, w - 2 * t - 6, fh, d - T, c.front);
+        drawer(parts, "dr0", 0, t + 3, h - t - fh - 3, d - T, w - 2 * t - 6, fh, d - T, c.front, "barra", [t, w - 2 * t], v.led === true);
         drawers = 1;
       }
       if (v.led) led(parts, "led", t + 30, h - t - 8, d - 60, w - 2 * t - 60);
@@ -629,7 +656,7 @@ const BUILDERS: Record<string, Builder> = {
       if (n > 0 && h - t > 220) {
         const fh = Math.min(170, h - t - 120);
         // sin tirador: se abre tomándolo de abajo, como en las mesas de madera doblada
-        drawer(parts, "dr0", 0, t + 3, h - t - 3 - fh, d - T, w - 2 * t - 6, fh, d - T, c.front, "push");
+        drawer(parts, "dr0", 0, t + 3, h - t - 3 - fh, d - T, w - 2 * t - 6, fh, d - T, c.front, "push", [t, w - 2 * t], v.led === true);
         const front = parts.find((p) => p.id === "dr0:f")!;
         const round = Math.max(10, inner - 3);
         front.corners = [round, round, 12, 12];
@@ -666,7 +693,7 @@ const BUILDERS: Record<string, Builder> = {
       const count = Math.min(n, Math.max(0, Math.floor(inner / 110)));
       if (count > 0) {
         const fh = (inner - 4 * (count + 1)) / count;
-        for (let i = 0; i < count; i++) drawer(parts, `dr${i}`, 0, T + 3, y0 + T + 4 + i * (fh + 4), d - T, w - 2 * T - 6, fh, d - T, c.front);
+        for (let i = 0; i < count; i++) drawer(parts, `dr${i}`, 0, T + 3, y0 + T + 4 + i * (fh + 4), d - T, w - 2 * T - 6, fh, d - T, c.front, "barra", [T, w - 2 * T], v.led === true);
       }
       drawers = count;
       if (v.led) led(parts, "led", 40, y0 - 8, d * 0.5, w - 80, { y: 4, depth: d * 1.3 });
@@ -729,7 +756,10 @@ const BUILDERS: Record<string, Builder> = {
       // más de 2,2 m sin apoyo la tapa se vence: un parante al medio del nicho
       if (w > 2200) piece(parts, "div:niche", "Parante", "divider", c.body, [w / 2 - T / 2, base + T + fh + T, 0], [T, h - 3 * T - fh, d]);
       const [lx, ll] = span(T + 20, w - 2 * T - 40);
-      if (v.led) led(parts, "led:niche", lx, base + h - T - 8, d - 50, ll);
+      if (v.led) {
+        led(parts, "led:niche", lx, base + h - T - 8, d - 50, ll);
+        wash(parts, "led:niche", lx, ll, base + h - T, base + T + fh + T, 3, d - 30);
+      }
     }
     piece(parts, "back", "Fondo", "back", "back", [T, base + T, 0], [w - 2 * T, h - 2 * T, 3]);
     if (v.base === "patas") legs(parts, "leg", 0, 0, w, d, base, "conica", c.body, 90);
@@ -749,24 +779,40 @@ const BUILDERS: Record<string, Builder> = {
       const x = left;
       const fw = right - left;
       const kind = kinds[i];
+      // la luz va en cada hueco: arriba de cada módulo, abajo de cada estante y adentro de cada cajón
+      const [lx, ll] = span(i * mw + T + 20, mw - T - 40);
       if (kind === "puertas" || kind === "vidrio") {
         if (kind === "vidrio") piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 50]);
         door(parts, `door:${i}`, x, base + T + 3, d - (kind === "vidrio" ? 8 : T), fw, inner - 6, kind === "vidrio" ? "glass" : c.front, i % 2 ? "right" : "left", grip);
         doors++;
+        if (v.led) {
+          led(parts, `led:n${i}`, lx, base + h - T - 8, d - 70, ll);
+          const mid = base + T + inner / 2;
+          wash(parts, `led:n${i}`, lx, ll, base + h - T, kind === "vidrio" ? mid + T : base + T, 3, d - 40);
+          if (kind === "vidrio") {
+            led(parts, `led:s${i}`, lx, mid - 8, d - 90, ll);
+            wash(parts, `led:s${i}`, lx, ll, mid, base + T, 3, d - 60);
+          }
+        }
       } else if (kind === "nicho-cajon") {
-        drawer(parts, `dr${i}:0`, i, x, base + T + 4, d - T, fw, fh - 8, d - T, c.front, grip, opening);
+        drawer(parts, `dr${i}:0`, i, x, base + T + 4, d - T, fw, fh - 8, d - T, c.front, grip, opening, v.led === true);
         drawers++;
         if (i % 2 === 1) prop(parts, `deco:n${i}`, "Cuenco", "cuenco", i * mw + T + mw * 0.3, base + T + fh + T, d * 0.25);
       } else if (kind === "cajones") {
         const n = inner > 380 ? 2 : 1;
         const dh = (inner - 4 * (n + 1)) / n;
-        for (let k = 0; k < n; k++) drawer(parts, `dr${i}:${k}`, i, x, base + T + 4 + k * (dh + 4), d - T, fw, dh, d - T, c.front, grip, opening);
+        for (let k = 0; k < n; k++) drawer(parts, `dr${i}:${k}`, i, x, base + T + 4 + k * (dh + 4), d - T, fw, dh, d - T, c.front, grip, opening, v.led === true);
         drawers += n;
       } else {
         piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 30]);
-        // en un nicho abierto la luz va arriba, escondida detrás del canto
-        const [lx, ll] = span(i * mw + T + 20, mw - T - 40);
-        if (v.led) led(parts, `led:n${i}`, lx, base + h - T - 8, d - 50, ll);
+        // en un nicho abierto la luz va arriba, escondida detrás del canto, y abajo del estante
+        if (v.led) {
+          const mid = base + T + inner / 2;
+          led(parts, `led:n${i}`, lx, base + h - T - 8, d - 50, ll);
+          wash(parts, `led:n${i}`, lx, ll, base + h - T, mid + T, 3, d - 30);
+          led(parts, `led:s${i}`, lx, mid - 8, d - 70, ll);
+          wash(parts, `led:s${i}`, lx, ll, mid, base + T, 3, d - 30);
+        }
         // y adentro, unos libros acostados o una suculenta
         if (i % 2 === 0) prop(parts, `deco:n${i}`, "Suculenta", "suculenta", i * mw + T + mw * 0.35, base + T + inner / 2 + T, d * 0.3);
       }
@@ -930,7 +976,7 @@ const BUILDERS: Record<string, Builder> = {
         for (let k = 0; k < 2; k++) {
           const x = t + 3 + k * (dw + 3);
           if (storeFoot === "cajones") {
-            drawer(parts, `dr${k}`, k, x, fy, z0 + len - T, dw, fh, STORE_DEPTH, c.front);
+            drawer(parts, `dr${k}`, k, x, fy, z0 + len - T, dw, fh, STORE_DEPTH, c.front, "barra", [x - 3, dw + 6], v.led === true);
             drawers++;
           } else {
             door(parts, `door${k}`, x, fy, z0 + len - T, dw, fh, c.front, "bottom");
@@ -956,6 +1002,11 @@ const BUILDERS: Record<string, Builder> = {
           const grip: Part = { id: `sd${k}:h`, label: "Tirador", kind: "handle", material: "handle", run: 0, module: null, position: [T, fh - 30, dl / 2 - 70], size: [26, 10, 140], geometry: "box", cut: null, explode: [0, 0, 0] };
           piece(parts, `sd${k}:f`, "Frente de cajón", "drawer-front", c.front, [w - T, fy, z], [T, fh, dl - 6], { front: true, module: 10 + k, openShift: out, band: { long: 2, short: 2 }, details: [grip] });
           drawerBox(parts, `sd${k}`, 10 + k, out, [w - T - STORE_DEPTH + 20, fy + 14, z + 12], [STORE_DEPTH - 20, fh - 46, dl - 30], "x");
+          if (v.led) {
+            const l = piece(parts, `sd${k}:led`, "Tira LED del cajón", "led", "led", [w - T - 40, fh - 20, z + 40], [10, 6, dl - 86], { noCut: true });
+            l.module = 10 + k;
+            l.openShift = out;
+          }
           drawers++;
         }
       }
@@ -993,7 +1044,8 @@ const BUILDERS: Record<string, Builder> = {
       // el zócalo va metido hacia adentro y a oscuras: la cama parece no tocar el piso
       piece(parts, "plinth", "Zócalo", "plinth", "tint:#201812", [220, 0, z0 + 220], [w - 440, lift, len - 440], { noCut: true });
     }
-    if (v.led && v.base === "flotante") led(parts, "led", 260, lift - 8, z0 + len * 0.5, w - 520, { y: 5, depth: len * 1.25 });
+    // luz abajo de la base cuando hay lugar entre la cama y el piso (con patas o flotante)
+    if (v.led && v.base !== "caja") led(parts, "led", 260, lift - 8, z0 + len * 0.5, w - 520, { y: 5, depth: len * 1.25 });
 
     // lo que la viste: colchón, acolchado y almohadas; una mesa de luz a cada lado
     const my = h - 50;

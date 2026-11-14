@@ -226,7 +226,9 @@ export function PhotoMode({ enabled, bus, onStatus, maxPixels, samples }: Props)
         if (!s.pt) {
           const pt = new WebGLPathTracer(gl);
           pt.rasterizeScene = false;
-          pt.minSamples = 6;
+          // sin grano: la foto tapa el 3D recién cuando tiene casi todas sus pasadas;
+          // hasta ahí se ve el 3D de siempre con el porcentaje calculado
+          pt.minSamples = Math.max(6, Math.floor(samples * 0.85));
           pt.fadeDuration = 650;
           pt.renderDelay = 0;
           pt.bounces = 6;

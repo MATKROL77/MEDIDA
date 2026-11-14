@@ -10,7 +10,6 @@ import { SendSheet } from "@/components/SendSheet";
 import { Dimension, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { IconCheck, IconClose, IconDecor, IconHeart } from "@/components/site/icons";
-import { Logo } from "@/components/site/Logo";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import { PhotoBadge, PhotoToggle, usePhotoMode } from "@/components/PhotoControls";
 import type { ViewName } from "@/components/viewer/Scene";
@@ -170,23 +169,19 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
         </div>
         <PhotoBadge status={photo.status} />
 
-        <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
-          <div className="flex flex-col items-start">
-          <Link href="/" className="glass pointer-events-auto rounded-2xl px-4 py-2.5" aria-label="MEDIDA, volver al inicio">
-            <Logo />
-            <p className="mt-0.5 text-xs text-ink-2">{spec.title}</p>
-          </Link>
-            <button
-              type="button"
-              aria-pressed={deco}
-              onClick={() => setDeco((d) => !d)}
-              className="glass pointer-events-auto mt-2 flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
-              title={deco ? "Sacar la decoración" : "Mostrar la decoración"}
-            >
-              <IconDecor width={15} height={15} />
-              {deco ? "Con decoración" : "Sin decoración"}
-            </button>
-          </div>
+        {/* abajo a la izquierda, a la altura del aviso de la foto realista */}
+        <button
+          type="button"
+          aria-pressed={deco}
+          onClick={() => setDeco((d) => !d)}
+          className="glass deco-toggle flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+          title={deco ? "Sacar la decoración" : "Mostrar la decoración"}
+        >
+          <IconDecor width={15} height={15} />
+          {deco ? "Con decoración" : "Sin decoración"}
+        </button>
+
+        <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-end gap-3 p-3 sm:p-4">
           <Link href="/mis-disenos/" className="glass pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium">
             <IconHeart width={17} height={17} />
             <span className="hidden sm:inline">Mis diseños</span>
@@ -208,15 +203,15 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
             ))}
             <span className="tool-sep shrink-0" />
             {movable && (
-              <button type="button" className="tool" aria-pressed={open} onClick={() => setOpen((o) => !o)}>
+              <button type="button" className="tool" aria-pressed={open} onClick={() => setOpen((o) => !o)} aria-label={open ? "Cerrar" : "Abrir"}>
                 <IconDoor />
-                <span>{open ? "Cerrar" : "Abrir"}</span>
+                <span className="hidden sm:inline">{open ? "Cerrar" : "Abrir"}</span>
               </button>
             )}
             {hasLed(config) && (
-              <button type="button" className="tool" aria-pressed={lights} onClick={() => setLights((l) => !l)} title="Encender las luces">
+              <button type="button" className="tool" aria-pressed={lights} onClick={() => setLights((l) => !l)} title="Encender las luces" aria-label="Luces">
                 <IconBulb />
-                <span>Luces</span>
+                <span className="hidden sm:inline">Luces</span>
               </button>
             )}
             <PhotoToggle on={photo.on} toggle={photo.toggle} />

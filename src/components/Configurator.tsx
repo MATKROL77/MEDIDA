@@ -23,7 +23,6 @@ import { Watermark } from "@/components/Watermark";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { ContactLink } from "@/components/site/ContactLink";
 import { IconCheck, IconClose, IconDecor, IconHeart, IconWhatsapp } from "@/components/site/icons";
-import { Logo } from "@/components/site/Logo";
 import { Dimension, OptionCard, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber } from "@/components/controls";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
 import { PhotoBadge, PhotoToggle, usePhotoMode } from "@/components/PhotoControls";
@@ -361,6 +360,17 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
           />
         </div>
         <PhotoBadge status={photo.status} />
+        {/* abajo a la izquierda, a la altura del aviso de la foto realista */}
+        <button
+          type="button"
+          aria-pressed={deco}
+          onClick={() => setDeco((d) => !d)}
+          className="glass deco-toggle flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+          title={deco ? "Sacar la decoración" : "Mostrar la decoración"}
+        >
+          <IconDecor width={15} height={15} />
+          {deco ? "Con decoración" : "Sin decoración"}
+        </button>
 
         <Watermark />
 
@@ -371,22 +381,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
               <p className="font-display text-base font-semibold leading-tight">{workshop.name}</p>
               <p className="text-xs text-ink-2">{catalog.brand.tagline}</p>
             </div>
-          ) : (
-            <Link href="/" className="pointer-events-auto rounded-2xl bg-surface/90 px-4 py-2.5 shadow-sm backdrop-blur transition-colors hover:bg-surface" aria-label="MEDIDA, volver al inicio">
-              <Logo />
-              <p className="mt-0.5 text-xs text-ink-2">{catalog.brand.tagline}</p>
-            </Link>
-          )}
-            <button
-              type="button"
-              aria-pressed={deco}
-              onClick={() => setDeco((d) => !d)}
-              className="glass pointer-events-auto mt-2 flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
-              title={deco ? "Sacar la decoración" : "Mostrar la decoración"}
-            >
-              <IconDecor width={15} height={15} />
-              {deco ? "Con decoración" : "Sin decoración"}
-            </button>
+          ) : null}
           </div>
           {demo && (
             <Link

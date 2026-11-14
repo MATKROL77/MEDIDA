@@ -484,6 +484,13 @@ body {
     pointer-events: none;
     animation: fade-in 320ms ease both;
   }
+  /* el botón de la decoración, abajo a la izquierda: a la altura del aviso de la foto */
+  .deco-toggle {
+    position: absolute;
+    left: 0.85rem;
+    bottom: 4.6rem;
+    z-index: 10;
+  }
   .photo-badge-bar {
     position: absolute;
     left: 0;
