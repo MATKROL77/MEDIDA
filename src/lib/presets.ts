@@ -14,13 +14,13 @@ export const HERO_CONFIG: WardrobeConfig = normalize({ ...DEFAULT_CONFIG, bodyMa
 export const HERO_FRAMING = 0.9;
 
 /**
- * El mueble de la portada: un sillón curvo de bouclé crudo, apoyado al piso,
- * con su puff. Es lo que mejor muestra la luz calculada: la trama, las curvas,
+ * El mueble de la portada: el sillón curvo de bouclé crudo, sobre su zócalo
+ * de madera y con la mesita de piedra. Es lo que mejor muestra la luz calculada: la trama, las curvas,
  * la sombra que hace al apoyarse.
  */
 export const HERO_SOFA: FurnitureConfig = {
   family: "sillones",
-  values: { style: "curvo", seats: 3, seatWidth: 900, depth: 1000, base: "piso", chaise: "no", arms: true, ottoman: true },
+  values: { style: "curvo", seats: 3, seatWidth: 900, depth: 1000, base: "madera", chaise: "no", bow: 450, table: "izquierda", arms: false, ottoman: false },
   body: "nogal",
   front: "nogal",
   fabric: "crudo",

@@ -61,7 +61,7 @@ export type PartKind =
   | "glow";
 
 /** "soft": caja de cantos redondeados, para almohadones y tapizados */
-export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "shade" | "bend" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "none";
+export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "shade" | "bend" | "sweep" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "none";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
@@ -169,6 +169,14 @@ export type Part = {
    * (`ring`, mm): adentro queda hueco.
    */
   plan?: { corners?: [number, number, number, number]; ellipse?: boolean | "left" | "right"; ring?: number };
+  /**
+   * Pieza barrida (geometry "sweep"): una sección de cantos redondeados que
+   * recorre una curva cualquiera en planta, como el sillón orgánico. `path`,
+   * el recorrido (mm, coordenadas del mueble); `from` y `to`, de qué lado a
+   * qué lado de la curva va la sección (positivo hacia adelante); `heights`,
+   * el alto en cada punto del recorrido (la sección arranca en position[1]).
+   */
+  sweep?: { path: [number, number][]; from: number; to: number; heights: number[]; round: number };
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */

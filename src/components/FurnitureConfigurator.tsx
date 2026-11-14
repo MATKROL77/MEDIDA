@@ -229,7 +229,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
             {spec.controls.map((c) => {
               const v = config.values[c.key];
               const why = locked[c.key];
-              if (c.type === "size") return <Dimension key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(mm) => set(c.key, mm)} />;
+              if (c.type === "size") return why ? null : <Dimension key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(mm) => set(c.key, mm)} />;
               // un número que no aplica con lo elegido (los cajones de una losa) no se muestra
               if (c.type === "count") return why ? null : <Stepper key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(n) => set(c.key, n)} />;
               if (c.type === "toggle") return <Toggle key={c.key} label={c.label} hint={why ?? c.hint} disabled={!!why} checked={v as boolean} onChange={(on) => set(c.key, on)} />;

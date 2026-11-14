@@ -171,5 +171,22 @@
       "normal",
       "roughness"
     ]
+  },
+  "piedra": {
+    "size": [
+      1.5,
+      1.5
+    ],
+    "grain": null,
+    "maps": [
+      "color",
+      "normal",
+      "roughness"
+    ],
+    "average": [
+      177,
+      157,
+      122
+    ]
   }
 }

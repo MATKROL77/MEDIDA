@@ -193,10 +193,26 @@ export const SPECS: FurnitureSpec[] = [
       { key: "depth", type: "size", label: "Profundidad", min: 850, max: 1100 },
       { key: "base", type: "choice", label: "Apoyo", options: choice(["piso", "Al piso"], ["madera", "Base de madera"], ["patas", "Patas de madera"], ["metal", "Patas de metal"]) },
       { key: "chaise", type: "choice", label: "Chaise", options: choice(["no", "Sin chaise"], ["izquierda", "A la izquierda"], ["derecha", "A la derecha"]) },
+      { key: "bow", type: "size", label: "Curvatura", min: 0, max: 900 },
+      { key: "table", type: "choice", label: "Mesita", options: choice(["no", "Sin mesita"], ["izquierda", "A la izquierda"], ["derecha", "A la derecha"]) },
       { key: "arms", type: "toggle", label: "Con apoyabrazos" },
       { key: "ottoman", type: "toggle", label: "Con puff", hint: "Un módulo suelto, sin respaldo" },
     ],
-    defaults: { style: "recto", seats: 3, seatWidth: 900, depth: 980, base: "patas", chaise: "no", arms: true, ottoman: true },
+    defaults: { style: "recto", seats: 3, seatWidth: 900, depth: 980, base: "patas", chaise: "no", bow: 450, table: "izquierda", arms: true, ottoman: true },
+    locks(v) {
+      const out: Record<string, string> = {};
+      if (v.style !== "curvo") {
+        out.bow = "La curvatura es del curvo";
+        out["table:izquierda"] = out["table:derecha"] = "La mesita va en el curvo";
+      } else {
+        // el curvo es una pieza de diseño: el respaldo da la vuelta, apoya en un zócalo y lleva su mesita
+        out.arms = "El curvo no lleva apoyabrazos: el respaldo da la vuelta";
+        out.ottoman = "El curvo lleva la mesita en vez del puff";
+        out["chaise:izquierda"] = out["chaise:derecha"] = "El curvo no lleva chaise";
+        out["base:patas"] = out["base:metal"] = "El curvo apoya en un zócalo";
+      }
+      return out;
+    },
     body: "nogal",
     front: "nogal",
     bodyLabel: "Zócalo o patas",
@@ -596,6 +612,96 @@ function bendPiece(list: Part[], id: string, material: string, corner: "tl" | "t
   const arc = Math.round((Math.PI / 2) * (r - t / 2));
   p.cut = { length: Math.max(d, arc), width: Math.min(d, arc), thickness: t, band: { long: 0, short: 0 }, note: `MDF flexible curvado, radio ${r} mm` };
   return p;
+}
+
+/**
+ * El sillón curvo: una pieza de diseño, no un recto doblado. El asiento es un
+ * solo volumen que sigue una curva libre (el centro se mete `bow` mm y la
+ * forma es apenas asimétrica, como un poroto); el respaldo baja de una punta
+ * a la otra y da la vuelta; todo apoya en un zócalo que sigue la forma; en la
+ * punta alta, una mesita de madera doblada con tapa de piedra y un nicho.
+ */
+function organicSofa(v: Record<string, Value>, c: FurnitureConfig): ReturnType<Builder> {
+  const seats = v.seats as number;
+  const sw = v.seatWidth as number;
+  const d = v.depth as number;
+  const bow = v.bow as number;
+  const table = v.table as string;
+  const parts: Part[] = [];
+  const L = seats * sw;
+  // la mesita va en la punta alta del respaldo
+  const tableAtStart = table !== "derecha";
+  const pod = table === "no" ? 0 : 560;
+  const x0 = tableAtStart ? pod : 0;
+  // el recorrido: el medio del asiento, de punta a punta
+  const steps = 64;
+  const path: [number, number][] = [];
+  for (let k = 0; k <= steps; k++) {
+    const u = k / steps;
+    const z = -bow * Math.pow(Math.sin(Math.PI * u), 0.9) + 0.14 * bow * Math.sin(2 * Math.PI * u);
+    path.push([x0 + u * L, d / 2 + bow * 0.55 + z]);
+  }
+  const lift = v.base === "piso" ? 40 : 110;
+  /** una pieza barrida a lo largo del recorrido; su caja se calcula con la sección */
+  const swept = (id: string, label: string, kind: PartKind, material: string, y: number, from: number, to: number, heights: number[], round: number) => {
+    let [ax, bx, az, bz] = [Infinity, -Infinity, Infinity, -Infinity];
+    for (let i = 0; i < path.length; i++) {
+      const a = path[Math.max(0, i - 1)];
+      const b = path[Math.min(path.length - 1, i + 1)];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const n = [-(b[1] - a[1]) / l, (b[0] - a[0]) / l];
+      for (const r of [from, to]) {
+        ax = Math.min(ax, path[i][0] + n[0] * r);
+        bx = Math.max(bx, path[i][0] + n[0] * r);
+        az = Math.min(az, path[i][1] + n[1] * r);
+        bz = Math.max(bz, path[i][1] + n[1] * r);
+      }
+    }
+    const top = Math.max(...heights);
+    const p = piece(parts, id, label, kind, material, [ax, y, az], [bx - ax, top, bz - az], { geometry: "sweep", noCut: true });
+    p.sweep = { path, from, to, heights, round };
+    return p;
+  };
+  const flat = (h: number) => path.map(() => h);
+  // el zócalo: de madera a la vista, o oscuro y metido si va al piso
+  const plinth = swept("plinth", "Zócalo curvo", "plinth", v.base === "madera" ? c.body : "tint:#241c16", 0, -d / 2 + (v.base === "madera" ? 30 : 120), d / 2 - (v.base === "madera" ? 30 : 120), flat(lift + 4), 10);
+  plinth.cut = null;
+  // el asiento: un solo volumen relleno, sin almohadones sueltos
+  soft(swept("seat", "Asiento", "shelf", "fabric", lift, -d / 2 + 210, d / 2, flat(420), 120), 18, 2.5);
+  // el respaldo: alto en la punta de la mesita y bajando hacia la otra, donde da la vuelta
+  const backH = path.map((_, k) => {
+    const u = tableAtStart ? k / steps : 1 - k / steps;
+    return 800 - 330 * Math.pow(u, 1.25);
+  });
+  soft(swept("backrest", "Respaldo", "back", "fabric", lift, -d / 2, -d / 2 + 260, backH, 125), 10, 1.5);
+  // un almohadón redondo, apoyado cerca de la punta baja
+  const ball = path[tableAtStart ? Math.round(steps * 0.78) : Math.round(steps * 0.22)];
+  piece(parts, "deco:ball", "Almohadón redondo", "shelf", "fabric", [ball[0] - 130, lift + 420, ball[1] - d / 2 + 250], [260, 260, 260], { geometry: "knob", noCut: true, decor: true });
+
+  if (table !== "no") {
+    // la mesita: madera doblada en una vuelta (arriba, el lado del sillón y abajo), abierta hacia afuera, y una tapa de piedra
+    const end = path[tableAtStart ? 0 : steps];
+    const H = lift + 400;
+    const t = 30;
+    const r = 120;
+    const pd = d - 160;
+    const pz = end[1] - pd / 2;
+    const px = tableAtStart ? end[0] - pod - 40 : end[0] + 40;
+    const pw = pod;
+    const inner = tableAtStart ? px + pw - t : px;
+    // de qué lado están las curvas: del lado del sillón
+    const [ct, cb] = tableAtStart ? (["tr", "br"] as const) : (["tl", "bl"] as const);
+    piece(parts, "table:top", "Tapa de la mesita", "top", c.body, [tableAtStart ? px : px + r, H - t, pz], [pw - r, t, pd], { band: { long: 2, short: 1 } });
+    piece(parts, "table:bottom", "Piso de la mesita", "bottom", c.body, [tableAtStart ? px : px + r, 0, pz], [pw - r, t, pd], { band: { long: 2, short: 1 } });
+    piece(parts, "table:side", "Lateral de la mesita", "side", c.body, [inner, r, pz], [t, H - 2 * r, pd], { band: { long: 1, short: 0 } });
+    piece(parts, "table:back", "Fondo de la mesita", "back", c.body, [tableAtStart ? px : px + t, t, pz], [pw - t, H - 2 * t, T], { band: { long: 1, short: 0 } });
+    bendPiece(parts, "table:bend:t", c.body, ct, tableAtStart ? px + pw - r : px, H - r, pz, r, pd, t);
+    bendPiece(parts, "table:bend:b", c.body, cb, tableAtStart ? px + pw - r : px, 0, pz, r, pd, t);
+    const stone = piece(parts, "table:stone", "Tapa de piedra", "top", "stone:#e6dfd3", [px - 50, H, pz - 40], [pw + 100, 30, pd + 80], { noCut: true });
+    stone.plan = { ellipse: true };
+    prop(parts, "deco:table:jarron", "Jarrón", "jarron-alto", px + pw / 2 - 56, H + 30, pz + pd / 2 - 56);
+  }
+  return { parts, drawers: 0, doors: 0, gap: 160 };
 }
 
 /** una lámpara de mesa: pie de cerámica (escaneado), cuello de bronce y pantalla de lino abierta */
@@ -1242,6 +1348,7 @@ const BUILDERS: Record<string, Builder> = {
   },
 
   sillones(v, c) {
+    if (v.style === "curvo") return organicSofa(v, c);
     const seats = v.seats as number;
     const sw = v.seatWidth as number;
     const d = v.depth as number;
@@ -1441,6 +1548,7 @@ export function buildFurniture(config: FurnitureConfig): FurnitureBuild {
       p.position = [p.position[0], p.position[1], p.position[2] + shift];
       // una pieza curva lleva su centro de arco con ella
       if (p.arc) p.arc = { ...p.arc, cz: p.arc.cz + shift };
+      if (p.sweep) p.sweep = { ...p.sweep, path: p.sweep.path.map(([x, z]) => [x, z + shift] as [number, number]) };
     }
   const min: Vec3 = [Infinity, 0, Infinity];
   const max: Vec3 = [-Infinity, 0, -Infinity];
@@ -1482,7 +1590,7 @@ export function buildFurniture(config: FurnitureConfig): FurnitureBuild {
 // ------------------------------------------------------------------ precio y resumen
 
 /** valores de muestra de lo que no sale de placa; como todo precio de la demo, hay que reemplazarlos */
-const SAMPLE = { sofaModule: 520_000, sofaArm: 140_000, sofaChaise: 260_000, leg: 9_000, metalLeg: 22_000, ironPerMeter: 14_000, leatherPerModule: 310_000 };
+const SAMPLE = { sofaModule: 520_000, sofaArm: 140_000, sofaChaise: 260_000, sofaTable: 240_000, leg: 9_000, metalLeg: 22_000, ironPerMeter: 14_000, leatherPerModule: 310_000 };
 
 /**
  * Precio estimado, con valores de muestra: la placa que consume cada pieza
@@ -1511,7 +1619,7 @@ export function furniturePrice(config: FurnitureConfig, build: FurnitureBuild = 
   cost += catalog.labor.perModule + catalog.hardware.fittingsPerModule;
   if (config.family === "sillones") {
     const v = config.values;
-    cost += (v.seats as number) * SAMPLE.sofaModule + (v.arms ? 2 * SAMPLE.sofaArm : 0) + (v.chaise !== "no" ? SAMPLE.sofaChaise : 0);
+    cost += (v.seats as number) * SAMPLE.sofaModule + (v.arms ? 2 * SAMPLE.sofaArm : 0) + (v.chaise !== "no" ? SAMPLE.sofaChaise : 0) + (v.style === "curvo" && v.table !== "no" ? SAMPLE.sofaTable : 0);
     // el cuero cuesta más que la tela: un recargo de muestra por cuerpo
     if (fabricById(config.fabric).weave === "cuero") cost += (v.seats as number) * SAMPLE.leatherPerModule;
   }

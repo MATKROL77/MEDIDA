@@ -141,26 +141,29 @@ test("la habitación envuelve al mueble y a lo que lo acompaña", () => {
   }
 });
 
-test("el sillón curvo es una sola curva: base, respaldo y almohadones de una pieza, y el puff pegado al frente", () => {
-  const curvo = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "curvo", seats: 4, ottoman: true } }));
-  for (const id of ["base", "backrest", "seat", "pillow"]) {
-    const arc = curvo.parts.find((p) => p.id === id);
-    assert.ok(arc?.geometry === "arc" && arc.arc, `${id} tiene que ser una pieza curva`);
-    assert.ok(arc.arc.rOut > arc.arc.rIn && arc.arc.length > 0.5, `${id}: arco ${JSON.stringify(arc.arc)}`);
-    // la caja de la pieza contiene las dos puntas del arco
-    for (const t of [arc.arc.start, arc.arc.start + arc.arc.length]) {
-      const x = arc.arc.cx + arc.arc.rOut * Math.sin(t);
-      assert.ok(x >= arc.position[0] - 1 && x <= arc.position[0] + arc.size[0] + 1, `${id}: la punta queda fuera de su caja`);
+test("el sillón curvo es una pieza de diseño: asiento y respaldo barridos sobre una curva libre, con zócalo y mesita", () => {
+  const curvo = buildFurniture(normalizeFurniture({ family: "sillones", values: { style: "curvo", seats: 3, bow: 500, table: "izquierda" } }));
+  for (const id of ["plinth", "seat", "backrest"]) {
+    const p = curvo.parts.find((x) => x.id === id);
+    assert.ok(p?.geometry === "sweep" && p.sweep && p.sweep.path.length > 10, `${id} tiene que ser una pieza barrida`);
+    // la caja de la pieza contiene el recorrido
+    for (const [x, z] of [p.sweep.path[0], p.sweep.path[p.sweep.path.length - 1]]) {
+      assert.ok(x >= p.position[0] - 1 && x <= p.position[0] + p.size[0] + 1 && z >= p.position[2] - 600 && z <= p.position[2] + p.size[2] + 600, `${id}: la punta queda fuera de su caja`);
     }
   }
-  assert.equal(curvo.parts.filter((p) => /^(base|backrest|seat|pillow):/.test(p.id)).length, 0, "sin tramos rectos");
-  // el puff toca el frente del asiento: su lado de atrás coincide con el punto más adelantado del arco que tiene detrás
-  const base = curvo.parts.find((p) => p.id === "base")!;
-  const puff = curvo.parts.find((p) => p.id === "ott:base")!;
-  const { cx, cz, rIn } = base.arc!;
-  let front = 0;
-  for (const x of [puff.position[0], puff.position[0] + puff.size[0] / 2, puff.position[0] + puff.size[0]]) front = Math.max(front, cz - Math.sqrt(rIn * rIn - (x - cx) ** 2));
-  assert.ok(Math.abs(puff.position[2] - front) < 5, `el puff está a ${Math.round(puff.position[2] - front)} mm del sillón`);
+  // el respaldo es más alto en la punta de la mesita
+  const back = curvo.parts.find((p) => p.id === "backrest")!.sweep!.heights;
+  assert.ok(back[0] > back[back.length - 1]);
+  // la curvatura se nota: el medio del recorrido queda más atrás que las puntas
+  const path = curvo.parts.find((p) => p.id === "seat")!.sweep!.path;
+  assert.ok(path[Math.floor(path.length / 2)][1] < path[0][1] - 300);
+  // la mesita: madera doblada (MDF flexible en el despiece) y tapa de piedra
+  assert.ok(curvo.parts.some((p) => p.id === "table:stone" && p.material.startsWith("stone:")));
+  assert.ok(curvo.parts.filter((p) => p.geometry === "bend").every((p) => /MDF flexible/.test(p.cut?.note ?? "")));
+  // sin apoyabrazos ni puff: el respaldo da la vuelta y va la mesita
+  const locked = normalizeFurniture({ family: "sillones", values: { style: "curvo", arms: true, ottoman: true } });
+  assert.equal(locked.values.arms, false);
+  assert.equal(locked.values.ottoman, false);
 });
 
 test("el puff del sillón recto va pegado al frente", () => {

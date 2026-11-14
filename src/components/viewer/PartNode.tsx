@@ -224,6 +224,185 @@ function planGeometry(part: Part): THREE.BufferGeometry {
   return g.index ? g.toNonIndexed() : g;
 }
 
+/**
+ * Una pieza barrida a lo largo de una curva cualquiera (el sillón orgánico):
+ * la sección redondeada se inflá (relleno), cambia de alto a lo largo del
+ * recorrido, lleva arrugas que se apagan en las puntas y cada punta se
+ * redondea con el radio de los cantos, como un almohadón.
+ */
+function sweepGeometry(part: Part): THREE.BufferGeometry {
+  const sw = part.sweep!;
+  const [x0, y0, z0] = part.position;
+  const [sx, sy, sz] = part.size;
+  const path = sw.path;
+  const cumPath = [0];
+  for (let i = 1; i < path.length; i++) cumPath.push(cumPath[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+  const total = cumPath[cumPath.length - 1];
+  // dónde está, hacia dónde va y qué alto tiene la sección a una distancia d del arranque
+  const at = (d: number) => {
+    let i = 0;
+    while (i < path.length - 2 && cumPath[i + 1] < d) i++;
+    const span = Math.max(1e-6, cumPath[i + 1] - cumPath[i]);
+    const t = Math.min(1, Math.max(0, (d - cumPath[i]) / span));
+    const p = [path[i][0] + (path[i + 1][0] - path[i][0]) * t, path[i][1] + (path[i + 1][1] - path[i][1]) * t];
+    // la dirección, promediada con los tramos vecinos para que la curva no quiebre
+    const dir = (k: number) => {
+      const a = path[Math.max(0, k)];
+      const b = path[Math.min(path.length - 1, k + 1)];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      return [(b[0] - a[0]) / l, (b[1] - a[1]) / l];
+    };
+    const d0 = dir(i - 1);
+    const d1 = dir(i);
+    const d2 = dir(i + 1);
+    const tx = d1[0] * 2 + d0[0] * (1 - t) + d2[0] * t;
+    const tz = d1[1] * 2 + d0[1] * (1 - t) + d2[1] * t;
+    const tl = Math.hypot(tx, tz) || 1;
+    const h = sw.heights[i] + (sw.heights[i + 1] - sw.heights[i]) * t;
+    return { p, t: [tx / tl, tz / tl], h };
+  };
+  const width = sw.to - sw.from;
+  const hMin = Math.min(...sw.heights);
+  const hMax = Math.max(...sw.heights);
+  const rc = Math.max(1, Math.min(sw.round, hMin / 2 - 1, width / 2 - 1));
+  const puff = part.puff ?? 0;
+  const swell = (span: number) => puff * Math.min(1, span / 450);
+  const nW = Math.max(2, Math.ceil((width - 2 * rc) / 25));
+  const nH = Math.max(2, Math.ceil((hMax - 2 * rc) / 25));
+  // la sección a un alto dado: siempre la misma cantidad de puntos, para unir una estación con la otra
+  const profile = (h: number): [number, number][] => {
+    const pts: [number, number][] = [];
+    const corner = (cr: number, cy: number, from: number) => {
+      for (let k = 0; k <= 6; k++) {
+        const a = from + (k / 6) * (Math.PI / 2);
+        pts.push([cr + rc * Math.cos(a), cy + rc * Math.sin(a)]);
+      }
+    };
+    const flat = (to: [number, number], n: number, bulge: number, out: [number, number]) => {
+      const from = pts[pts.length - 1];
+      for (let k = 1; k < n; k++) {
+        const t = k / n;
+        const b = bulge * Math.sin(Math.PI * t);
+        pts.push([from[0] + (to[0] - from[0]) * t + out[0] * b, from[1] + (to[1] - from[1]) * t + out[1] * b]);
+      }
+    };
+    corner(sw.to - rc, rc, -Math.PI / 2);
+    flat([sw.to, h - rc], nH, swell(h - 2 * rc) * 0.5, [1, 0]);
+    corner(sw.to - rc, h - rc, 0);
+    flat([sw.from + rc, h], nW, swell(width - 2 * rc), [0, 1]);
+    corner(sw.from + rc, h - rc, Math.PI / 2);
+    flat([sw.from, rc], nH, swell(h - 2 * rc) * 0.5, [-1, 0]);
+    corner(sw.from + rc, rc, Math.PI);
+    flat([sw.to - rc, 0], nW, 0, [0, -1]);
+    pts.push([...pts[0]]);
+    return pts;
+  };
+  const endR = Math.min(rc, total / 4);
+  const ds: number[] = [];
+  for (let k = 0; k < 8; k++) ds.push(endR * (1 - Math.cos((k / 8) * (Math.PI / 2))));
+  const mid = Math.max(1, Math.round((total - 2 * endR) / 40));
+  for (let k = 0; k <= mid; k++) ds.push(endR + ((total - 2 * endR) * k) / mid);
+  for (let k = 7; k >= 0; k--) ds.push(total - endR * (1 - Math.cos((k / 8) * (Math.PI / 2))));
+  const shrink = (d: number) => {
+    const e = Math.min(d, total - d);
+    if (e >= endR) return 0;
+    const t = 1 - e / endR;
+    return endR * (1 - Math.sqrt(Math.max(0, 1 - t * t)));
+  };
+  const rMid = (sw.from + sw.to) / 2;
+  const section = (h: number, o: number) => {
+    const fr = Math.max(0.05, 1 - o / (width / 2));
+    const fy = Math.max(0.05, 1 - o / (h / 2));
+    return profile(h).map(([r, y]) => [rMid + (r - rMid) * fr, h / 2 + (y - h / 2) * fy] as [number, number]);
+  };
+  const center = [x0 + sx / 2, y0 + sy / 2, z0 + sz / 2];
+  // de la sección (r, y) al mundo, en metros y respecto del centro de la pieza
+  const world = (st: ReturnType<typeof at>, r: number, y: number) => {
+    const n = [-st.t[1], st.t[0]];
+    return [(st.p[0] + n[0] * r - center[0]) * MM, (y0 + y - center[1]) * MM, (st.p[1] + n[1] * r - center[2]) * MM];
+  };
+  const m = profile(hMax).length;
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  for (const d of ds) {
+    const st = at(d);
+    const sec = section(st.h, shrink(d));
+    let v = 0;
+    sec.forEach(([r, y], j) => {
+      if (j > 0) v += Math.hypot(r - sec[j - 1][0], y - sec[j - 1][1]) * MM;
+      positions.push(...world(st, r, y));
+      uvs.push(d * MM, v);
+    });
+  }
+  const index: number[] = [];
+  for (let i = 0; i < ds.length - 1; i++)
+    for (let j = 0; j < m - 1; j++) {
+      const p0 = i * m + j;
+      const p1 = (i + 1) * m + j;
+      const p2 = (i + 1) * m + j + 1;
+      const p3 = i * m + j + 1;
+      index.push(p0, p1, p3, p2, p3, p1);
+    }
+  const body = new THREE.BufferGeometry();
+  body.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  body.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  body.setIndex(index);
+  body.computeVertexNormals();
+  if (part.wrinkle) {
+    const before = Float32Array.from(body.getAttribute("position").array as Float32Array);
+    let seed = 0;
+    for (const ch of part.id) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
+    wrinkleGeometry(body, part.wrinkle, seed / 997);
+    const pos = body.getAttribute("position") as THREE.BufferAttribute;
+    ds.forEach((d, i) => {
+      const w = Math.min(1, Math.min(d, total - d) / Math.max(endR, 1));
+      for (let j = 0; j < m; j++) {
+        const k = (i * m + j) * 3;
+        for (let c = 0; c < 3; c++) pos.array[k + c] = before[k + c] + (pos.array[k + c] - before[k + c]) * w;
+      }
+    });
+    pos.needsUpdate = true;
+    body.computeVertexNormals();
+  }
+  // las tapas de las puntas: la sección achicada, triangulada y vuelta hacia afuera
+  const caps: THREE.BufferGeometry[] = [];
+  for (const [d, sign] of [
+    [0, -1],
+    [total, 1],
+  ] as const) {
+    const st = at(d);
+    const contour = section(st.h, endR).slice(0, -1);
+    const faces = THREE.ShapeUtils.triangulateShape(contour.map(([r, y]) => new THREE.Vector2(r, y)), []);
+    const normal = [st.t[0] * sign, 0, st.t[1] * sign];
+    const cp: number[] = [];
+    const cn: number[] = [];
+    const cu: number[] = [];
+    for (const f of faces) {
+      const v = f.map((k) => world(st, contour[k][0], contour[k][1]));
+      const e1 = [0, 1, 2].map((c) => v[1][c] - v[0][c]);
+      const e2 = [0, 1, 2].map((c) => v[2][c] - v[0][c]);
+      const cx = e1[1] * e2[2] - e1[2] * e2[1];
+      const cz = e1[0] * e2[1] - e1[1] * e2[0];
+      const cyy = e1[2] * e2[0] - e1[0] * e2[2];
+      const order = cx * normal[0] + cyy * normal[1] + cz * normal[2] < 0 ? [0, 2, 1] : [0, 1, 2];
+      for (const o of order) {
+        cp.push(...v[o]);
+        cn.push(...normal);
+        cu.push(contour[f[o]][0] * MM, contour[f[o]][1] * MM);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(cp, 3));
+    g.setAttribute("normal", new THREE.Float32BufferAttribute(cn, 3));
+    g.setAttribute("uv", new THREE.Float32BufferAttribute(cu, 2));
+    caps.push(g);
+  }
+  const merged = mergeGeometries([body.toNonIndexed(), ...caps]);
+  body.dispose();
+  caps.forEach((g) => g.dispose());
+  return merged;
+}
+
 function arcGeometry(part: Part): THREE.BufferGeometry {
   const a = part.arc!;
   const [x0, , z0] = part.position;
@@ -680,6 +859,13 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
       tints.set(spec, m);
       return m;
     }
+    // "stone:": piedra pulida (mármol), con su veta de verdad y un brillo de lustre
+    if (spec.startsWith("stone:")) {
+      const color = spec.slice(6);
+      m = dressWith(new THREE.MeshPhysicalMaterial({ color, roughness: 0.22, envMapIntensity: 0.9, clearcoat: 0.6, clearcoatRoughness: 0.15 }), "piedra", { tint: tintFor("piedra", color), roughness: 0.22, normalScale: 0.3 });
+      tints.set(spec, m);
+      return m;
+    }
     // "veneer:": muebles de la ambientación, en chapa de nogal teñida al color pedido
     if (spec.startsWith("veneer:")) {
       const color = spec.slice(7);
@@ -694,7 +880,7 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
 }
 
 function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
-  if (/^(tint|gloss|rug|veneer|linen):/.test(p.material)) return tinted(p.material);
+  if (/^(tint|gloss|rug|veneer|linen|stone):/.test(p.material)) return tinted(p.material);
   const along = isVertical(p) ? "v" : "u";
   switch (p.material) {
     case "none":
@@ -890,6 +1076,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
   const edged = part.geometry === "box" && part.kind !== "led" && part.kind !== "glow" && Math.min(...part.size) >= 2;
   const cushion = useMemo(() => {
     if (part.geometry === "arc" && part.arc) return arcGeometry(part);
+    if (part.geometry === "sweep" && part.sweep) return sweepGeometry(part);
     if (part.geometry === "bend" && part.bend) return bendGeometry(part);
     if (part.plan) {
       const g = planGeometry(part);
@@ -935,7 +1122,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     }
     return flat;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.plan && JSON.stringify(part.plan), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.welt, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.sweep && JSON.stringify(part.sweep), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.plan && JSON.stringify(part.plan), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.welt, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {

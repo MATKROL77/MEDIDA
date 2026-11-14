@@ -51,6 +51,7 @@ const SETS = [
   { id: "tela-boucle", slug: "wool_boucle", use: "shade" },
   { id: "tela-lana", slug: "poly_wool_herringbone", use: "detail" },
   { id: "tela-cuero", slug: "brown_leather", use: "detail" },
+  { id: "piedra", slug: "marble_01", use: "color" },
 ];
 
 async function exists(file) {
