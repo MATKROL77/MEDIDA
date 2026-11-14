@@ -247,9 +247,19 @@ de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
   oscura de una foto. Al abrir, despiezar o mirar con rayos X vuelven al
   material de siempre. Es una malla aparte y no un grupo de materiales porque
   el trazado de rayos no respeta los grupos dentro de una malla.
+- **Madera doblada**: las esquinas curvas (mesas de luz y ratonas, mueble de
+  TV) son un cuarto de caño (`geometry: "bend"`) con la veta dando la vuelta a
+  la curva; en el despiece salen como MDF flexible curvado, cortado plano al
+  largo del arco. Los frentes que siguen la curva son placas con las esquinas
+  redondeadas (`corners`), con sus radios anotados para el taller.
+- **Lo que se ve por una ranura**: la caja de un cajón cerrado va con la
+  variante oscura de su material (por la ranura entre frentes se ve en
+  sombra, no la melamina clara); al abrirlo vuelve a su color.
 - **Cantos**: las placas tienen cantos redondeados de 2 mm con facetas planas;
   con normales suaves, en menos de un píxel el suavizado de bordes los hacía
-  brillar a puntitos. La textura se proyecta por triángulo.
+  brillar a puntitos. La textura se proyecta por triángulo, y las normales se
+  interpolan en el centroide del píxel (`materials.ts`), así un triángulo más
+  fino que un píxel no se sombrea con una normal extrapolada.
 - **Veta continua**: los frentes vecinos (cajones, puertas) toman la foto de
   la madera desde su posición en el mueble, así la veta sigue de uno a otro
   como si salieran de la misma placa enchapada.

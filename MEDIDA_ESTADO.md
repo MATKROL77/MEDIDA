@@ -50,9 +50,12 @@ oscuras; los cantos ya no brillan a puntitos. Sillones con almohadones
 rellenos y arrugas, almohadón de adorno con forma de almohadón, capitoné con
 celdas infladas, sillón curvo con las puntas redondeadas. Cama con acolchado
 que cae por los costados, almohadas de pluma y manta a los pies. La mesa de
-comedor lleva jarrón y cuenco, no velador. Verificado con capturas en
-Chromium (3D rápido y trazado de rayos); `npm test` (77 pruebas, una nueva
-sobre las juntas), `typecheck`, `lint` y `build` sin errores.
+comedor lleva jarrón y cuenco, no velador; el velador es un pie de cerámica
+escaneado con pantalla de lino. Esquinas curvas de madera doblada (MDF
+flexible en el despiece) en mesas de luz y ratonas, con el cajón colgado bajo
+la tapa como en la referencia, y como opción en el mueble de TV. Verificado con capturas en
+Chromium (3D rápido y trazado de rayos); `npm test` (78 pruebas: una
+nueva sobre las juntas y otra sobre el despiece de las curvas), `typecheck`, `lint` y `build` sin errores.
 
 **Realismo y rediseño (13/11/2026).** Modo foto con trazado de rayos en el
 navegador (`three-gpu-pathtracer`): con la escena quieta, el 3D se recalcula
