@@ -300,6 +300,11 @@ body {
     opacity: 0.35;
   }
 
+  /* con muchas opciones, en filas: en una sola no entran en un teléfono */
+  .segment-sm {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(6.25rem, 1fr));
+  }
   .segment-sm > button {
     padding: 0.4rem 0.4rem;
     font-size: 0.8rem;
