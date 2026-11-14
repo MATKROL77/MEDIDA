@@ -726,10 +726,23 @@ function twoSided(material: THREE.Material): THREE.Material {
 }
 
 /**
- * El vivo de un almohadón: dos cordones (arriba y abajo) que siguen el canto
- * redondeado a 45°, con la trama corriendo a lo largo del cordón.
+ * El vivo de un almohadón: dos cordones que rodean sus dos caras grandes (las
+ * que miran a lo largo del eje más fino) siguiendo el canto redondeado a 45°,
+ * con la trama corriendo a lo largo del cordón.
  */
 function weltGeometry(size: number[], radius: number, welt: number): THREE.BufferGeometry[] {
+  // se arma con el eje fino en y y después se gira (girar no da vuelta las caras)
+  const thin = size.indexOf(Math.min(...size));
+  const canonical = thin === 1 ? size : thin === 2 ? [size[0], size[2], size[1]] : [size[1], size[0], size[2]];
+  const loops = weltLoops(canonical, radius, welt);
+  for (const g of loops) {
+    if (thin === 2) g.rotateX(Math.PI / 2);
+    if (thin === 0) g.rotateZ(-Math.PI / 2);
+  }
+  return loops;
+}
+
+function weltLoops(size: number[], radius: number, welt: number): THREE.BufferGeometry[] {
   const [hx, hy, hz] = size.map((v) => v / 2);
   const rc = Math.min(radius, hx, hy, hz);
   const k = Math.SQRT1_2;

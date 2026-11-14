@@ -964,6 +964,10 @@ const BUILDERS: Record<string, Builder> = {
     if (v.head === "tapizado") {
       const p = piece(parts, "head", "Respaldo tapizado", "back", "fabric", [-40, 0, 0], [w + 80, h + 780, head], cush());
       p.radius = 48;
+      // relleno, la funda apenas arrugada y un vivo alrededor del frente
+      p.puff = 14;
+      p.wrinkle = 1.5;
+      p.welt = 6;
     } else if (v.head === "madera") {
       piece(parts, "head", "Respaldo", "back", c.body, [-60, 0, 0], [w + 120, h + 700, 36], { band: { long: 2, short: 2 } });
     }
