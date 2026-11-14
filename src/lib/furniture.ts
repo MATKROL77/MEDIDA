@@ -557,8 +557,15 @@ const BUILDERS: Record<string, Builder> = {
       for (const [id, x] of [["l", inset + s / 2 - 9], ["r", w - inset - s / 2 - 9]] as const) piece(parts, `apron:${id}`, "Faldón", "divider", c.body, [x, under - 90, a], [T, 80, d - 2 * a]);
     }
     if (v.led) led(parts, "led", 120, under - 8, d - 150, w - 240, { y: 14, depth: d * 0.9 });
-    tabletop(parts, "deco:top", w * 0.22, h, d * 0.36);
-    lamp(parts, "deco:lamp", w - 330, h, d * 0.25);
+    if (d >= 800 && v.legs !== "pedestal") {
+      // una mesa de comedor: al centro, un jarrón y un cuenco; un velador no va
+      prop(parts, "deco:top:jarron", "Jarrón", "jarron-antiguo", w / 2 - 280, h, d / 2 - 128);
+      prop(parts, "deco:top:cuenco", "Cuenco", "cuenco", w / 2 + 10, h, d / 2 - 155);
+    } else {
+      // un escritorio: la lámpara en una punta y algo apoyado en la otra
+      tabletop(parts, "deco:top", w * 0.22, h, d * 0.36);
+      lamp(parts, "deco:lamp", w - 330, h, d * 0.25);
+    }
     return { parts, drawers, doors: 0, center: true };
   },
 
@@ -1023,10 +1030,11 @@ const BUILDERS: Record<string, Builder> = {
     }
     if (curved && !bubbles) {
       // todo de una pieza: base, respaldo, un solo almohadón de asiento y uno de respaldo a lo largo de la curva
-      arcPart("base", "Base", "bottom", lift, 210, R - d / 2, R + d / 2, 55);
-      arcPart("backrest", "Respaldo", "back", lift + 60, 640, R + d / 2 - 220, R + d / 2, 90);
-      arcPart("seat", "Almohadón de asiento", "shelf", lift + 190, 190, R - d / 2 + 15, R + d / 2 - 205, 85);
-      arcPart("pillow", "Almohadón de respaldo", "fixed-shelf", lift + 350, 430, R + d / 2 - 400, R + d / 2 - 195, 100);
+      // como en el recto: la estructura tirante, los almohadones rellenos y con alguna arruga
+      soft(arcPart("base", "Base", "bottom", lift, 210, R - d / 2, R + d / 2, 55), 3, 1);
+      soft(arcPart("backrest", "Respaldo", "back", lift + 60, 640, R + d / 2 - 220, R + d / 2, 90), 6, 1.5);
+      soft(arcPart("seat", "Almohadón de asiento", "shelf", lift + 190, 190, R - d / 2 + 15, R + d / 2 - 205, 85), 20, 3);
+      soft(arcPart("pillow", "Almohadón de respaldo", "fixed-shelf", lift + 350, 430, R + d / 2 - 400, R + d / 2 - 195, 100), 26, 4);
     }
     for (let i = 0; i < seats; i++) {
       const f = frame(i);

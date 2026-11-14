@@ -93,30 +93,114 @@ function arcGeometry(part: Part): THREE.BufferGeometry {
   const [x0, , z0] = part.position;
   const [sx, h, sz] = part.size;
   const rc = Math.max(1, Math.min(a.round, h / 2 - 1, (a.rOut - a.rIn) / 2 - 1));
-  // la sección, en sentido antihorario (radio hacia la derecha, alto hacia arriba): las normales quedan hacia afuera
-  const profile: THREE.Vector2[] = [];
+  // el relleno: la cara de arriba y los costados se inflan en el medio (como en puffGeometry)
+  const puff = part.puff ?? 0;
+  const swell = (span: number) => puff * Math.min(1, span / 450);
+  // la sección, en mm (radio, alto), en sentido antihorario: las normales quedan hacia afuera
+  const pts: [number, number][] = [];
   const corner = (cr: number, cy: number, from: number) => {
     for (let k = 0; k <= 6; k++) {
       const t = from + (k / 6) * (Math.PI / 2);
-      profile.push(new THREE.Vector2((cr + rc * Math.cos(t)) * MM, (cy + rc * Math.sin(t) - h / 2) * MM));
+      pts.push([cr + rc * Math.cos(t), cy + rc * Math.sin(t)]);
     }
   };
+  // entre dos puntas, puntos cada 25 mm; `out` (radio, alto) es hacia dónde se infla
+  const flat = (to: [number, number], bulge: number, out: [number, number]) => {
+    const from = pts[pts.length - 1];
+    const n = Math.floor(Math.hypot(to[0] - from[0], to[1] - from[1]) / 25);
+    for (let k = 1; k < n; k++) {
+      const t = k / n;
+      const b = bulge * Math.sin(Math.PI * t);
+      pts.push([from[0] + (to[0] - from[0]) * t + out[0] * b, from[1] + (to[1] - from[1]) * t + out[1] * b]);
+    }
+  };
+  const width = a.rOut - a.rIn - 2 * rc;
+  const tall = h - 2 * rc;
   corner(a.rOut - rc, rc, -Math.PI / 2);
+  flat([a.rOut, h - rc], swell(Math.min(tall, sx)) * 0.5, [1, 0]);
   corner(a.rOut - rc, h - rc, 0);
+  flat([a.rIn + rc, h], swell(width), [0, 1]);
   corner(a.rIn + rc, h - rc, Math.PI / 2);
+  flat([a.rIn, rc], swell(Math.min(tall, sx)) * 0.5, [-1, 0]);
   corner(a.rIn + rc, rc, Math.PI);
-  profile.push(profile[0].clone());
-  const body = new THREE.LatheGeometry(profile, Math.max(16, Math.round(a.length * 56)), a.start, a.length);
-  // la tela corre a lo largo de la curva: U es el largo del arco y V el contorno de la sección, en metros,
-  // así la trama no se corta donde cambia la cara
-  let perimeter = 0;
-  for (let i = 1; i < profile.length; i++) perimeter += profile[i].distanceTo(profile[i - 1]);
-  const along = a.length * ((a.rIn + a.rOut) / 2) * MM;
-  const uv = body.getAttribute("uv") as THREE.BufferAttribute;
-  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * along, uv.getY(i) * perimeter);
-  // las tapas de las puntas: la misma sección, girada al ángulo de cada punta
+  flat([a.rOut - rc, 0], 0, [0, -1]);
+  pts.push([...pts[0]]);
+  const m = pts.length;
+  // las puntas se redondean como un almohadón: en el último tramo (el mismo
+  // radio que los cantos de la sección) la sección se achica en un cuarto de círculo
+  const rMean = (a.rIn + a.rOut) / 2;
+  const total = a.length * rMean;
+  const endR = Math.min(rc, total / 4);
+  const ds: number[] = [];
+  for (let k = 0; k < 8; k++) ds.push(endR * (1 - Math.cos((k / 8) * (Math.PI / 2))));
+  const mid = Math.max(1, Math.round((total - 2 * endR) / 40));
+  for (let k = 0; k <= mid; k++) ds.push(endR + ((total - 2 * endR) * k) / mid);
+  for (let k = 7; k >= 0; k--) ds.push(total - endR * (1 - Math.cos((k / 8) * (Math.PI / 2))));
+  const cr = rMean;
+  const cy = h / 2;
+  const halfW = (a.rOut - a.rIn) / 2;
+  const shrink = (d: number) => {
+    const e = Math.min(d, total - d);
+    if (e >= endR) return 0;
+    const t = 1 - e / endR;
+    return endR * (1 - Math.sqrt(Math.max(0, 1 - t * t)));
+  };
+  const section = (o: number) => {
+    const fr = Math.max(0.05, 1 - o / halfW);
+    const fy = Math.max(0.05, 1 - o / cy);
+    return pts.map(([r, y]) => [cr + (r - cr) * fr, cy + (y - cy) * fy] as [number, number]);
+  };
+  // la tela corre a lo largo de la curva: U es el largo del arco y V el contorno
+  // de la sección, en metros medidos de verdad (los puntos no están parejos),
+  // así la trama no se corta ni se estira donde cambia la cara
+  const cum = [0];
+  for (let j = 1; j < m; j++) cum.push(cum[j - 1] + Math.hypot(pts[j][0] - pts[j - 1][0], pts[j][1] - pts[j - 1][1]) * MM);
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  for (const d of ds) {
+    const theta = a.start + (d / total) * a.length;
+    for (const [j, [r, y]] of section(shrink(d)).entries()) {
+      positions.push(r * Math.sin(theta) * MM, (y - h / 2) * MM, r * Math.cos(theta) * MM);
+      uvs.push(d * MM, cum[j]);
+    }
+  }
+  const index: number[] = [];
+  for (let i = 0; i < ds.length - 1; i++)
+    for (let j = 0; j < m - 1; j++) {
+      const p0 = i * m + j;
+      const p1 = (i + 1) * m + j;
+      const p2 = (i + 1) * m + j + 1;
+      const p3 = i * m + j + 1;
+      index.push(p0, p1, p3, p2, p3, p1);
+    }
+  const body = new THREE.BufferGeometry();
+  body.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  body.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  body.setIndex(index);
+  body.computeVertexNormals();
+  // las arrugas de la funda, que se apagan al llegar a las puntas (las tapas son lisas)
+  if (part.wrinkle) {
+    const before = Float32Array.from(body.getAttribute("position").array as Float32Array);
+    let seed = 0;
+    for (const ch of part.id) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
+    wrinkleGeometry(body, part.wrinkle, seed / 997);
+    const pos = body.getAttribute("position") as THREE.BufferAttribute;
+    ds.forEach((d, i) => {
+      const w = Math.min(1, Math.min(d, total - d) / Math.max(endR, 1));
+      for (let j = 0; j < m; j++) {
+        const k = (i * m + j) * 3;
+        for (let c = 0; c < 3; c++) pos.array[k + c] = before[k + c] + (pos.array[k + c] - before[k + c]) * w;
+      }
+    });
+    pos.needsUpdate = true;
+    body.computeVertexNormals();
+  }
+  const capProfile = section(endR)
+    .slice(0, -1)
+    .map(([r, y]) => new THREE.Vector2(r * MM, (y - h / 2) * MM));
+  // las tapas de las puntas: la sección achicada, girada al ángulo de cada punta
   const cap = (theta: number, flip: boolean) => {
-    const g = new THREE.ShapeGeometry(new THREE.Shape(profile.slice(0, -1)));
+    const g = new THREE.ShapeGeometry(new THREE.Shape(capProfile));
     if (flip) {
       const index = g.getIndex()!;
       for (let i = 0; i < index.count; i += 3) {

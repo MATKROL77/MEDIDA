@@ -35,7 +35,9 @@ const sharp = load("sharp");
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const out = path.join(root, "public/img");
 const base = (process.argv[2] ?? "http://localhost:4100").replace(/\/+$/, "");
-const only = process.argv[3];
+// una o más fotos por nombre: node scripts/capture.mjs <url> familia-tv familia-camas
+const names = process.argv.slice(3);
+const only = names.length ? names : null;
 
 const cfg = (patch) => encodeConfig(normalize({ ...DEFAULT_CONFIG, ...patch }));
 const mod = (layout, extra = {}) => ({ layout, shelves: 0, drawers: 0, width: 0, ledShelves: true, ledSides: false, ...extra });
@@ -139,7 +141,7 @@ async function despeckle(png) {
 }
 
 for (const shot of SHOTS) {
-  if (only && shot.name !== only) continue;
+  if (only && !only.includes(shot.name)) continue;
   const size = shot.size ?? [1400, 1050];
   const started = Date.now();
   const raw = await grab(`${base}/render/?${shot.query}`, size, shot.settle ?? 12_000, shot.photo);
@@ -149,7 +151,7 @@ for (const shot of SHOTS) {
 }
 
 // la orden de ejemplo: la vista del taller tal cual, recortada arriba
-if (!only || only === "orden") {
+if (!only || only.includes("orden")) {
   const page = await browser.newPage({ viewport: { width: 1400, height: 1050 }, deviceScaleFactor: 1 });
   await page.goto(`${base}/demo/taller/`, { waitUntil: "networkidle" });
   await page.addStyleTag({ content: "[aria-label='Aviso de cookies']{display:none!important}" });
@@ -161,7 +163,7 @@ if (!only || only === "orden") {
 }
 
 // imagen para compartir en redes (1200 × 630) e íconos, armados sobre la captura del hero
-if (!only || only === "og") {
+if (!only || only.includes("og")) {
   // el mueble va a la derecha y el texto a la izquierda, sobre el beige del sitio
   const hero = await sharp(path.join(out, "hero.webp")).resize({ width: 1260, height: 630, fit: "cover", position: "centre" }).toBuffer();
   const canvas = await sharp({ create: { width: 1200, height: 630, channels: 3, background: "#ece5d8" } })
