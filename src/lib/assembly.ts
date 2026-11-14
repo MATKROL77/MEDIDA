@@ -137,6 +137,16 @@ export type Part = {
    * sobra del ancho `w` y del largo `d` (mm, desde atrás) dobla y cuelga, hasta `drop`.
    */
   drape?: { w: number; d: number; drop: number };
+  /**
+   * Relleno: cuánto se infla (mm) el medio de la cara más grande de un
+   * almohadón; las caras chicas, en proporción. Un almohadón de verdad no es una caja.
+   */
+  puff?: number;
+  /**
+   * Almohadón de adorno: el espesor (en el eje más fino) baja hacia los bordes
+   * hasta esta fracción en las puntas, que quedan pellizcadas como en uno de verdad.
+   */
+  pinch?: number;
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */

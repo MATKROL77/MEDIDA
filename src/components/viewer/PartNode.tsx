@@ -245,6 +245,55 @@ function tuftGeometry(g: THREE.BufferGeometry, size: number[], tuft: NonNullable
 }
 
 /**
+ * El relleno de un almohadón: cada cara se infla hacia afuera, más en el medio
+ * y nada en los cantos, como la funda tirante sobre la goma. Cuánto, según el
+ * tamaño de la cara: la de arriba de un asiento mucho, el costado poco.
+ */
+function puffGeometry(g: THREE.BufferGeometry, size: number[], puff: number) {
+  const pos = g.getAttribute("position") as THREE.BufferAttribute;
+  const nor = g.getAttribute("normal") as THREE.BufferAttribute;
+  const half = size.map((v) => v / 2);
+  const amount = [0, 1, 2].map((k) => {
+    const [u, v] = [0, 1, 2].filter((x) => x !== k);
+    return puff * MM * Math.min(1, Math.min(size[u], size[v]) / 0.45);
+  });
+  for (let i = 0; i < pos.count; i++) {
+    const p = [pos.getX(i), pos.getY(i), pos.getZ(i)];
+    const n = [nor.getX(i), nor.getY(i), nor.getZ(i)];
+    const t = p.map((v, k) => Math.min(1, Math.abs(v) / half[k]));
+    let d = 0;
+    for (let k = 0; k < 3; k++) {
+      const [u, v] = [0, 1, 2].filter((x) => x !== k);
+      d += n[k] * n[k] * amount[k] * (1 - t[u] * t[u]) * (1 - t[v] * t[v]);
+    }
+    pos.setXYZ(i, p[0] + n[0] * d, p[1] + n[1] * d, p[2] + n[2] * d);
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+}
+
+/**
+ * Un almohadón de adorno: grueso en el medio y fino en el borde, con las cuatro
+ * puntas pellizcadas. El espesor (el eje más fino) se escala con una cúpula.
+ */
+function pinchGeometry(g: THREE.BufferGeometry, size: number[], pinch: number) {
+  const pos = g.getAttribute("position") as THREE.BufferAttribute;
+  const k = size.indexOf(Math.min(...size));
+  const [u, v] = [0, 1, 2].filter((x) => x !== k);
+  for (let i = 0; i < pos.count; i++) {
+    const tu = Math.min(1, Math.abs(pos.getComponent(i, u)) / (size[u] / 2));
+    const tv = Math.min(1, Math.abs(pos.getComponent(i, v)) / (size[v] / 2));
+    const dome = Math.sqrt(Math.max(0, (1 - tu * tu) * (1 - tv * tv)));
+    pos.setComponent(i, k, pos.getComponent(i, k) * (pinch + (1 - pinch) * dome));
+    // el relleno tira de la tela: el medio de cada borde se mete y las puntas quedan afuera
+    pos.setComponent(i, u, pos.getComponent(i, u) * (1 - 0.08 * (1 - tv * tv) * tu * tu));
+    pos.setComponent(i, v, pos.getComponent(i, v) * (1 - 0.08 * (1 - tu * tu) * tv * tv));
+  }
+  pos.needsUpdate = true;
+  g.computeVertexNormals();
+}
+
+/**
  * Tela arrugada: la superficie se ondula con unos pliegues suaves, largos en
  * una dirección y cortos en la otra, como un acolchado o una funda; arriba más
  * que en los costados. Determinístico: el mismo mueble se ve siempre igual.
@@ -554,14 +603,16 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     const [sx, sy, sz] = part.size.map((v) => Math.max(v, 1) * MM);
     const radius = part.geometry === "cushion" ? Math.min(part.radius ?? 60, Math.min(...part.size) / 2 - 0.5) : Math.min(2.2, Math.min(...part.size) * 0.22);
     // lo que se deforma necesita una malla pareja; lo demás, la caja redondeada liviana
-    const cell = part.tuft ? 0.018 : part.drape ? 0.025 : 0.04;
+    const cell = part.tuft ? 0.018 : part.drape ? 0.025 : part.puff ? 0.03 : 0.04;
     const g: THREE.BufferGeometry =
-      part.tuft || part.wrinkle ? gridRoundedBox([sx, sy, sz], radius * MM, cell) : new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
+      part.tuft || part.wrinkle || part.puff || part.pinch ? gridRoundedBox([sx, sy, sz], radius * MM, cell) : new RoundedBoxGeometry(sx, sy, sz, part.geometry === "cushion" ? 7 : 2, radius * MM);
     // en una placa el redondeo mide menos de un píxel: con normales suaves, el
     // suavizado de bordes las lee fuera del triángulo y el canto brilla a
     // puntitos. Con facetas planas (sin índice, cada triángulo con su normal)
     // el brillo del canto sale parejo, una línea fina como en la madera real
     if (edged) g.computeVertexNormals();
+    if (part.puff) puffGeometry(g, [sx, sy, sz], part.puff);
+    if (part.pinch) pinchGeometry(g, [sx, sy, sz], part.pinch);
     if (part.tuft) tuftGeometry(g, [sx, sy, sz], part.tuft);
     if (part.wrinkle) {
       if (part.drape) drapeGeometry(g, [sx, sy, sz], part.drape);
@@ -577,7 +628,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     if (edged && hidden) groupHidden(flat, hidden);
     return flat;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.drape && JSON.stringify(part.drape), edged && hidden, (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.drape && JSON.stringify(part.drape), edged && hidden, (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
   useEffect(() => () => cushion?.dispose(), [cushion]);
 
   const geometry = useMemo(() => {

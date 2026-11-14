@@ -403,6 +403,13 @@ function door(list: Part[], id: string, x: number, y: number, z: number, w: numb
  * Capitoné: la cara se hunde en una grilla de botones forrados, como en los
  * sillones de módulos acolchados. Cada botón es una pieza más del almohadón.
  */
+/** un almohadón relleno: se infla `puff` mm en el medio de la cara grande y lleva arrugas de `wrinkle` mm */
+function soft(p: Part, puff: number, wrinkle: number): Part {
+  p.puff = puff;
+  p.wrinkle = wrinkle;
+  return p;
+}
+
 function tufted(p: Part, face: "top" | "front", nx: number, ny: number, depth: number): Part {
   p.tuft = { face, nx, ny, depth };
   const [sx, sy, sz] = p.size;
@@ -1036,10 +1043,11 @@ const BUILDERS: Record<string, Builder> = {
         tufted(put(f, `back:${i}`, "Almohadón de respaldo", "back", "fabric", 0, lift + 230, -d / 2 + 160, [sw - 8, 420, 320], 120), "front", across, 1, 64);
       } else {
         if (!curved) {
-          put(f, `base:${i}`, "Base del módulo", "bottom", "fabric", 0, lift, fz, [sw, 210, depth], 55);
-          put(f, `backrest:${i}`, "Respaldo", "back", "fabric", 0, lift + 60, -d / 2 + 110, [sw, 640, 220], 90);
-          put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift + 190, fz + 100, [sw - 10, 190, depth - 215], 85);
-          put(f, `pillow:${i}`, "Almohadón de respaldo", "fixed-shelf", "fabric", 0, lift + 350, -d / 2 + 300, [sw - 26, 430, 210], 100);
+          // la estructura tapizada, tirante; los almohadones, rellenos y con alguna arruga
+          soft(put(f, `base:${i}`, "Base del módulo", "bottom", "fabric", 0, lift, fz, [sw, 210, depth], 55), 4, 1.2);
+          soft(put(f, `backrest:${i}`, "Respaldo", "back", "fabric", 0, lift + 60, -d / 2 + 110, [sw, 640, 220], 90), 8, 1.5);
+          soft(put(f, `seat:${i}`, "Almohadón de asiento", "shelf", "fabric", 0, lift + 190, fz + 100, [sw - 10, 190, depth - 215], 85), 22, 3.5);
+          soft(put(f, `pillow:${i}`, "Almohadón de respaldo", "fixed-shelf", "fabric", 0, lift + 350, -d / 2 + 300, [sw - 26, 430, 210], 100), 30, 5);
         }
       }
       supports(f, `sup:${i}`, sw, depth, fz);
@@ -1053,7 +1061,7 @@ const BUILDERS: Record<string, Builder> = {
         const chaise = !curved && ((v.chaise === "izquierda" && i === 0) || (v.chaise === "derecha" && i === seats - 1));
         const depth = chaise ? d + 640 : d;
         if (bubbles) put(f, `arm:${id}`, "Almohadón apoyabrazos", "side", "fabric", side * (sw / 2 - 150), lift + 340, 120, [290, 300, d - 420], 140);
-        else put(f, `arm:${id}`, "Apoyabrazos", "side", "fabric", side * ((curved ? 0 : sw / 2) + arm / 2), lift, (depth - d) / 2, [arm, 560, depth], 80);
+        else soft(put(f, `arm:${id}`, "Apoyabrazos", "side", "fabric", side * ((curved ? 0 : sw / 2) + arm / 2), lift, (depth - d) / 2, [arm, 560, depth], 80), 8, 1.5);
       }
     }
 
@@ -1074,8 +1082,8 @@ const BUILDERS: Record<string, Builder> = {
       const f = { cx, cz: front + 320 + 2, ry: 0 };
       if (bubbles) for (const [k, lx] of [-ow / 4, ow / 4].entries()) put(f, `ott:${k}`, "Puff", "shelf", "fabric", lx, lift, 0, [ow / 2 - 6, 400, 620], 150);
       else {
-        put(f, "ott:base", "Base del puff", "bottom", "fabric", 0, lift, 0, [ow, 210, 640], 55);
-        put(f, "ott:seat", "Almohadón del puff", "shelf", "fabric", 0, lift + 190, 0, [ow - 10, 180, 630], 85);
+        soft(put(f, "ott:base", "Base del puff", "bottom", "fabric", 0, lift, 0, [ow, 210, 640], 55), 4, 1.2);
+        soft(put(f, "ott:seat", "Almohadón del puff", "shelf", "fabric", 0, lift + 190, 0, [ow - 10, 180, 630], 85), 20, 3.5);
       }
       supports(f, "sup:ott", ow, 640);
     }
@@ -1083,7 +1091,10 @@ const BUILDERS: Record<string, Builder> = {
     // un almohadón de otro color, apoyado en el respaldo
     if (!bubbles) {
       const f = frame(0);
-      put(f, "deco:throw", "Almohadón", "shelf", `tint:${fabricById(c.fabric).id === "grafito" ? "#c9bba4" : "#4a4f55"}`, -sw / 2 + 250, lift + 400, -d / 2 + 420, [420, 380, 150], 70, { decor: true });
+      // de lino, relleno de pluma: fino en el borde, con las puntas pellizcadas y arrugado
+      const pillow = put(f, "deco:throw", "Almohadón", "shelf", `linen:${fabricById(c.fabric).id === "grafito" ? "#c9bba4" : "#4a4f55"}`, -sw / 2 + 250, lift + 400, -d / 2 + 420, [440, 420, 170], 45, { decor: true });
+      pillow.pinch = 0.16;
+      pillow.wrinkle = 5;
     }
     return { parts, drawers: 0, doors: 0, gap: 160 };
   },
