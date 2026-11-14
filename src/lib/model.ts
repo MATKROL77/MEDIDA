@@ -106,7 +106,7 @@ export const DOOR_STYLE_LABELS: Record<DoorStyle, string> = {
 };
 
 export const LED_COLORS: Record<Exclude<LedColor, "rgb">, { label: string; hex: string }> = {
-  warm: { label: "Cálida", hex: "#ffb36b" },
+  warm: { label: "Cálida", hex: "#ffc88c" },
   neutral: { label: "Neutra", hex: "#fff0dc" },
   cool: { label: "Fría", hex: "#dce8ff" },
 };

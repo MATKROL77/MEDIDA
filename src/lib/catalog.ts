@@ -52,7 +52,7 @@ export const catalog = {
     { id: "salvia", name: "Verde salvia", color: "#9aa58e", grain: false, boardPrice: 118000 },
     { id: "arena", name: "Arena", color: "#d8cbb6", grain: false, boardPrice: 114000 },
     { id: "roble", name: "Roble natural", color: "#c49a6c", grain: true, boardPrice: 124000 },
-    { id: "nogal", name: "Nogal", color: "#6e4b33", grain: true, boardPrice: 129000 },
+    { id: "nogal", name: "Nogal", color: "#74563f", grain: true, boardPrice: 129000 },
   ] satisfies readonly Material[],
 
   /** tapacanto de PVC, por metro lineal */

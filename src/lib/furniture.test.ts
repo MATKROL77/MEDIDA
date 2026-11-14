@@ -92,7 +92,7 @@ test("un enlace editado a mano no rompe nada", () => {
   }
   const tv = normalizeFurniture({ family: "tv", values: { width: 99999, fronts: "toString" } });
   assert.equal(tv.values.width, 2500);
-  assert.equal(tv.values.fronts, "mixto");
+  assert.equal(tv.values.fronts, "nicho-cajon", "una opción que no existe vuelve a la de partida");
 });
 
 test("cajones y puertas se cuentan como lo que se ve", () => {

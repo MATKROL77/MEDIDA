@@ -146,8 +146,9 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
     }
     kit.glass.opacity = GLASS_OPACITY * (1 - 0.7 * x);
     // de noche el ambiente baja para que se luzcan los LED
-    scene.environmentIntensity = (props.confine ? 0.55 : 1) * (1 - 0.62 * l);
-    bg.cur.copy(bg.studio).lerp(bg.room, anim.room.v).multiplyScalar(1 - 0.35 * l);
+    // con los LED prendidos el ambiente baja un poco, como al atardecer: no a oscuras
+    scene.environmentIntensity = (props.confine ? 0.55 : 1) * (1 - 0.35 * l);
+    bg.cur.copy(bg.studio).lerp(bg.room, anim.room.v).multiplyScalar(1 - 0.2 * l);
     scene.background = bg.cur;
   });
   return null;
@@ -229,7 +230,7 @@ function KeyLight({ span, shape, rich }: { span: number; shape: WardrobeConfig["
   const keyPos = useMemo(() => new THREE.Vector3(side * 4.5, 4.2, 3.6), [side]);
   useEffect(() => softbox.current?.lookAt(0, 0.6, 0), [keyPos]);
   useFrame(() => {
-    const night = 1 - 0.7 * anim.lights.v;
+    const night = 1 - 0.4 * anim.lights.v;
     if (key.current) key.current.intensity = keyPower * night;
     if (hemi.current) hemi.current.intensity = fill * night;
     if (softbox.current) softbox.current.intensity = keyPower * SOFTBOX_GAIN * night;

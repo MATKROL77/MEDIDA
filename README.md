@@ -222,6 +222,17 @@ de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
   piezas curvas (una sección redondeada barrida a lo largo del arco, con la
   tela corriendo a lo largo de la curva), sin tramos rectos ni líneas entre
   cuerpos. El puff va pegado al frente del asiento.
+- **Decoración escaneada**: los jarrones, libros, cuencos, plantas,
+  portarretratos y almohadones son modelos de Poly Haven (CC0), escaneados o
+  hechos por artistas, optimizados para la web (`npm run models`,
+  `scripts/models.mjs`: texturas WebP de 512 px y geometría con meshopt) y
+  bajados solo cuando la escena los usa. Se apoyan a su medida real
+  (`src/lib/decor-models.ts`); un estante chico los achica enteros, nunca los
+  deforma. Son ambientación: no entran en el despiece ni en el precio.
+  Créditos en `public/models/CREDITOS.md`.
+- **Veta continua**: los frentes vecinos (cajones, puertas) toman la foto de
+  la madera desde su posición en el mueble, así la veta sigue de uno a otro
+  como si salieran de la misma placa enchapada.
 - **Estudio**: el mueble se muestra en un ciclorama liso, el fondo curvo sin
   esquinas de un estudio de fotografía, del beige de la página. Lo que se
   apoya o se cuelga de una pared tiene un tabique detrás. Se puede elegir un

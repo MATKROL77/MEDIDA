@@ -150,6 +150,14 @@ function loadModel(id: string): Promise<THREE.Object3D> {
         if (m.isMesh) {
           m.castShadow = true;
           m.receiveShadow = true;
+          // la geometría viene comprimida en enteros (meshopt): el modo foto solo lee números comunes
+          for (const [name, attr] of Object.entries(m.geometry.attributes)) {
+            const a = attr as THREE.BufferAttribute;
+            if (a.array instanceof Float32Array && !a.normalized) continue;
+            const out = new Float32Array(a.count * a.itemSize);
+            for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+            m.geometry.setAttribute(name, new THREE.BufferAttribute(out, a.itemSize));
+          }
         }
       });
       return g.scene;
@@ -446,7 +454,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
 }
 
 /** brillo de una tira LED encendida en el modo foto (luminancia, como en una lámpara real) */
-const LED_NITS = 34;
+const LED_NITS = 85;
 
 /**
  * La luz de una tira LED en el modo foto: un rectángulo que emite del lado

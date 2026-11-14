@@ -122,11 +122,13 @@ export const SPECS: FurnitureSpec[] = [
       { key: "width", type: "size", label: "Largo", min: 1000, max: 2500 },
       { key: "height", type: "size", label: "Alto", min: 350, max: 650 },
       { key: "depth", type: "size", label: "Profundidad", min: 320, max: 550 },
-      { key: "fronts", type: "choice", label: "Frentes", options: choice(["mixto", "Combinado"], ["puertas", "Puertas"], ["cajones", "Cajones"], ["vidrio", "Vidrio"], ["abierto", "Nichos"]) },
-      { key: "base", type: "choice", label: "Apoyo", options: choice(["patas", "Patas cónicas"], ["hierro", "Marco de hierro"], ["flotante", "Flotante"]) },
+      { key: "fronts", type: "choice", label: "Frentes", options: choice(["nicho-cajon", "Cajones y nicho"], ["mixto", "Combinado"], ["puertas", "Puertas"], ["cajones", "Cajones"], ["vidrio", "Vidrio"], ["abierto", "Nichos"]) },
+      { key: "base", type: "choice", label: "Apoyo", options: choice(["patas", "Patas cónicas"], ["metal", "Patas de metal"], ["hierro", "Marco de hierro"], ["flotante", "Flotante"]) },
+      { key: "grip", type: "choice", label: "Apertura", options: choice(["push", "Sin tirador"], ["unero", "Uñero"], ["barra", "Tirador"]) },
+      { key: "thick", type: "toggle", label: "Tapa gruesa", hint: "Una tapa de 40 mm que sobresale apenas" },
       LED,
     ],
-    defaults: { width: 2000, height: 450, depth: 420, fronts: "mixto", base: "flotante", led: true },
+    defaults: { width: 2000, height: 450, depth: 420, fronts: "nicho-cajon", base: "metal", grip: "push", thick: true, led: true },
     body: "nogal",
     front: "nogal",
     bodyLabel: "Cuerpo",
@@ -327,14 +329,28 @@ const handle = (id: string, x: number, y: number, w: number, vertical = false): 
  * caja de melamina blanca con dos laterales, contrafrente (la pared de atrás)
  * y fondo de MDF.
  */
-function drawer(list: Part[], id: string, module: number, x: number, y: number, z: number, w: number, h: number, depth: number, material: string) {
+/**
+ * Cómo se abre un frente: con un tirador de barra, con un uñero (la ranura
+ * fresada en el canto de arriba, donde entran los dedos) o sin nada, con un
+ * expulsor que lo abre al empujar.
+ */
+export type Grip = "barra" | "unero" | "push";
+
+/** lo que lleva un frente para abrirlo, en coordenadas del frente */
+function gripFor(id: string, grip: Grip, w: number, h: number, bar: Part): Part[] {
+  if (grip === "push") return [];
+  if (grip === "unero") return [{ ...bar, id: `${id}:u`, label: "Uñero", kind: "groove", material: "groove", position: [10, h - 26, T - 1.2], size: [w - 20, 12, 1.6] }];
+  return [bar];
+}
+
+function drawer(list: Part[], id: string, module: number, x: number, y: number, z: number, w: number, h: number, depth: number, material: string, grip: Grip = "barra") {
   const out: Vec3 = [0, 0, Math.min(depth - 60, 420)];
   piece(list, `${id}:f`, "Frente de cajón", "drawer-front", material, [x, y, z], [w, h, T], {
     front: true,
     module,
     openShift: out,
     band: { long: 2, short: 2 },
-    details: [handle(`${id}:h`, w / 2 - Math.min(70, w / 4), h - 30, Math.min(140, w / 2))],
+    details: gripFor(id, grip, w, h, handle(`${id}:h`, w / 2 - Math.min(70, w / 4), h - 30, Math.min(140, w / 2))),
   });
   drawerBox(list, id, module, out, [x + 13, y + 14, z - depth + 40], [w - 26, h - 46, depth - 40], "z");
 }
@@ -361,9 +377,9 @@ function drawerBox(list: Part[], id: string, module: number, out: Vec3, [x, y, z
 }
 
 /** puerta batiente; con bisagra abajo ("bottom") es rebatible: se abre hacia adelante, como una tapa */
-function door(list: Part[], id: string, x: number, y: number, z: number, w: number, h: number, material: string, hinge: "left" | "right" | "bottom") {
+function door(list: Part[], id: string, x: number, y: number, z: number, w: number, h: number, material: string, hinge: "left" | "right" | "bottom", grip: Grip = "barra") {
   const glass = material === "glass";
-  const grip =
+  const bar =
     hinge === "bottom"
       ? handle(`${id}:h`, w / 2 - Math.min(70, w / 4), h - 30, Math.min(140, w / 2))
       : handle(`${id}:h`, hinge === "left" ? w - 40 : 30, Math.max(20, h / 2 - 60), Math.min(120, h - 40), true);
@@ -373,20 +389,21 @@ function door(list: Part[], id: string, x: number, y: number, z: number, w: numb
     // una rebatible baja casi hasta quedar horizontal, frenada por su compás
     openAngle: hinge === "bottom" ? (78 * Math.PI) / 180 : undefined,
     band: { long: 2, short: 2 },
-    details: [grip],
+    // el vidrio siempre lleva tirador: no se puede fresar ni empujar sin marcarlo
+    details: glass ? [bar] : gripFor(id, grip, w, h, bar),
   });
 }
 
 /** cuatro patas en las esquinas de un rectángulo, metidas `inset` desde cada borde */
-function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d: number, h: number, kind: "recta" | "conica" | "hierro", material: string, inset: number) {
-  const s = kind === "hierro" ? 28 : kind === "conica" ? 58 : 64;
+function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d: number, h: number, kind: "recta" | "conica" | "hierro" | "metal", material: string, inset: number) {
+  const s = kind === "hierro" ? 28 : kind === "metal" ? 30 : kind === "conica" ? 58 : 64;
   for (const [i, [x, z]] of [
     [x0 + inset, z0 + inset],
     [x0 + w - inset - s, z0 + inset],
     [x0 + inset, z0 + d - inset - s],
     [x0 + w - inset - s, z0 + d - inset - s],
   ].entries()) {
-    piece(list, `${prefix}:${i}`, "Pata", "plinth", kind === "hierro" ? "iron" : material, [x, 0, z], [s, h, s], { geometry: kind === "conica" ? "cone" : "box", noCut: true });
+    piece(list, `${prefix}:${i}`, "Pata", "plinth", kind === "hierro" || kind === "metal" ? "iron" : material, [x, 0, z], [s, h, s], { geometry: kind === "conica" ? "cone" : kind === "metal" ? "cyl" : "box", noCut: true });
   }
 }
 
@@ -586,10 +603,13 @@ const BUILDERS: Record<string, Builder> = {
     const d = v.depth as number;
     const parts: Part[] = [];
     const floating = v.base === "flotante";
-    const base = floating ? 260 : v.base === "hierro" ? 200 : 150;
+    const base = floating ? 260 : v.base === "hierro" ? 200 : v.base === "metal" ? 120 : 150;
     const modules = Math.max(2, Math.round(w / 600));
     const mw = (w - T) / modules;
-    piece(parts, "top", "Tapa", "top", c.front, [0, base + h - T, 0], [w, T, d], { band: { long: 2, short: 2 } });
+    const grip = v.grip as Grip;
+    // tapa gruesa: 40 mm (dos placas encoladas) y 15 mm de vuelo adelante y a los costados
+    if (v.thick) piece(parts, "top", "Tapa", "top", c.front, [-15, base + h - T, 0], [w + 30, 40, d + 15], { band: { long: 2, short: 2 } });
+    else piece(parts, "top", "Tapa", "top", c.front, [0, base + h - T, 0], [w, T, d], { band: { long: 2, short: 2 } });
     piece(parts, "bottom", "Piso", "bottom", c.body, [0, base, 0], [w, T, d], { band: { long: 1, short: 2 } });
     for (let i = 0; i <= modules; i++) {
       const end = i === 0 || i === modules;
@@ -597,6 +617,7 @@ const BUILDERS: Record<string, Builder> = {
     }
     piece(parts, "back", "Fondo", "back", "back", [T, base + T, 0], [w - 2 * T, h - 2 * T, 3]);
     if (v.base === "patas") legs(parts, "leg", 0, 0, w, d, base, "conica", c.body, 90);
+    if (v.base === "metal") legs(parts, "leg", 0, 0, w, d, base, "metal", "iron", 60);
     if (v.base === "hierro") {
       legs(parts, "leg", 0, 0, w, d, base, "hierro", "iron", 70);
       for (const [id, z] of [["f", d - 98], ["b", 70]] as const) piece(parts, `bar:${id}`, "Larguero de hierro", "divider", "iron", [98, base - 28, z], [w - 196, 28, 28], { noCut: true });
@@ -610,24 +631,41 @@ const BUILDERS: Record<string, Builder> = {
       const kind = v.fronts === "mixto" ? ["puertas", "abierto", "cajones", "vidrio"][i % 4] : (v.fronts as string);
       if (kind === "puertas" || kind === "vidrio") {
         if (kind === "vidrio") piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 50]);
-        door(parts, `door:${i}`, x, base + T + 3, d - (kind === "vidrio" ? 8 : T), fw, inner - 6, kind === "vidrio" ? "glass" : c.front, i % 2 ? "right" : "left");
+        door(parts, `door:${i}`, x, base + T + 3, d - (kind === "vidrio" ? 8 : T), fw, inner - 6, kind === "vidrio" ? "glass" : c.front, i % 2 ? "right" : "left", grip);
         doors++;
+      } else if (kind === "nicho-cajon") {
+        // abajo un cajón; arriba un nicho abierto, con la luz escondida bajo la tapa
+        const fh = Math.round(inner * 0.56);
+        drawer(parts, `dr${i}:0`, i, x, base + T + 4, d - T, fw, fh - 8, d - T, c.front, grip);
+        drawers++;
+        piece(parts, `shelf:${i}`, "Estante", "fixed-shelf", c.body, [i * mw + T, base + T + fh, 0], [mw - T, T, d], { band: { long: 1, short: 0 } });
+        if (v.led) led(parts, `led:n${i}`, i * mw + T + 20, base + h - T - 8, d - 50, mw - T - 40);
+        if (i % 2 === 1) prop(parts, `deco:n${i}`, "Cuenco", "cuenco", i * mw + T + mw * 0.3, base + T + fh + T, d * 0.25);
       } else if (kind === "cajones") {
         const n = inner > 380 ? 2 : 1;
         const fh = (inner - 4 * (n + 1)) / n;
-        for (let k = 0; k < n; k++) drawer(parts, `dr${i}:${k}`, i, x, base + T + 4 + k * (fh + 4), d - T, fw, fh, d - T, c.front);
+        for (let k = 0; k < n; k++) drawer(parts, `dr${i}:${k}`, i, x, base + T + 4 + k * (fh + 4), d - T, fw, fh, d - T, c.front, grip);
         drawers += n;
       } else {
         piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 30]);
         // en un nicho abierto la luz va arriba, escondida detrás del canto
         if (v.led) led(parts, `led:n${i}`, i * mw + T + 20, base + h - T - 8, d - 50, mw - T - 40);
+        // y adentro, unos libros acostados o una suculenta
+        if (i % 2 === 0) prop(parts, `deco:n${i}`, "Suculenta", "suculenta", i * mw + T + mw * 0.35, base + T + inner / 2 + T, d * 0.3);
       }
     }
-    if (v.led) led(parts, "led:under", 60, base - 8, d * 0.45, w - 120, { y: 4, depth: d * 1.5 });
+    // la luz de abajo es para el mueble colgado: con patas no tiene dónde rebotar
+    if (v.led && floating) led(parts, "led:under", 60, base - 8, d * 0.45, w - 120, { y: 4, depth: d * 1.5 });
     // la tele en la pared, y algo apoyado arriba
     const tw = Math.min(w * 0.72, 1650);
     piece(parts, "deco:tv", "Televisor", "back", "gloss:#0b0b0c", [(w - tw) / 2, base + h + 330, 20], [tw, tw * 0.57, 45], deco);
-    tabletop(parts, "deco:top", w * 0.08, base + h, d * 0.25);
+    // la barra de sonido, colgada justo debajo de la tele
+    const bw = Math.min(tw * 0.62, 950);
+    piece(parts, "deco:sound", "Barra de sonido", "back", "tint:#1a1a1b", [(w - bw) / 2, base + h + 330 - 75, 30], [bw, 62, 90], { ...deco, geometry: "cushion" }).radius = 18;
+    const topY = base + h - T + (v.thick ? 40 : T);
+    // arriba, como en las fotos de catálogo: un jarrón y un cuenco en una punta, una suculenta en la otra
+    tabletop(parts, "deco:top", w * 0.04, topY, d * 0.25);
+    prop(parts, "deco:top:planta", "Suculenta", "suculenta", w * 0.9 - 168, topY, d * 0.3);
     return { parts, drawers, doors, wall: true };
   },
 
