@@ -494,12 +494,37 @@ body {
       padding: 0.25rem;
     }
   }
-  /* el botón de la decoración, abajo a la izquierda: a la altura del aviso de la foto */
+  /* el botón de la decoración: en el teléfono arriba a la izquierda; en la
+     computadora abajo a la izquierda, a la altura del aviso de la foto */
   .deco-toggle {
     position: absolute;
-    left: 0.85rem;
-    bottom: 4.6rem;
+    left: 0.75rem;
+    top: 0.75rem;
     z-index: 10;
+  }
+  @media (min-width: 1024px) {
+    .deco-toggle {
+      left: 0.85rem;
+      top: auto;
+      bottom: 4.6rem;
+    }
+  }
+  /* las tarjetas de las medidas, en el teléfono: la elegida, marcada en azul */
+  .dim-card {
+    border-radius: 1rem;
+    border: 1px solid var(--color-line);
+    background: var(--color-paper);
+    padding: 0.6rem 0.5rem 0.65rem;
+    text-align: center;
+    transition:
+      border-color 180ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+  .dim-card[aria-pressed="true"] {
+    border-color: var(--color-navy);
+    background: rgb(20 33 61 / 0.07);
+    box-shadow: 0 0 0 1px var(--color-navy);
   }
   .photo-badge-bar {
     position: absolute;

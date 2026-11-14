@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { IconBulb, IconDoor, IconExplode, IconFront, IconThree } from "@/components/icons";
 import { OtherConfigurators } from "@/components/OtherConfigurators";
 import { SendSheet } from "@/components/SendSheet";
-import { Dimension, ExpandToggle, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber, usePortraitPhone } from "@/components/controls";
+import { Dimension, DimensionCards, ExpandToggle, Section, Segmented, Stepper, Swatches, Toggle, useAnimatedNumber, usePortraitPhone } from "@/components/controls";
 import { SaveSheet, type SaveChoice } from "@/components/designs/SaveSheet";
 import { IconCheck, IconClose, IconDecor, IconHeart } from "@/components/site/icons";
 import { FLOORS, WALL_COLORS, type FloorType } from "@/components/viewer/constants";
@@ -60,6 +60,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   // en el teléfono: el 3D agrandado y la cámara más cerca
   const [big, setBig] = useState(false);
   const portrait = usePortraitPhone();
+  // en el teléfono el panel de controles se pliega: queda el título y el precio, y el 3D crece
+  const [panelOpen, setPanelOpen] = useState(true);
   const [designId, setDesignId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -150,7 +152,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
 
   return (
     <div className="lg:grid lg:h-dvh lg:grid-cols-[minmax(0,1fr)_440px]">
-      <section className={`sticky top-0 z-20 overflow-hidden bg-[#f0efed] transition-[height] duration-500 lg:relative lg:z-auto lg:h-full ${big ? "h-[80dvh]" : "h-[max(58dvh,320px)]"}`}>
+      <section className={`sticky top-0 z-20 overflow-hidden bg-[#f0efed] transition-[height] duration-500 max-lg:rounded-b-[1.75rem] lg:relative lg:z-auto lg:h-full ${big || !panelOpen ? "h-[78dvh]" : "h-[max(46dvh,300px)]"}`}>
         <div className={`absolute inset-0 transition-opacity duration-700 ${ready ? "opacity-100" : "opacity-0"}`}>
           <Viewer3D
             config={look}
@@ -188,8 +190,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           {deco ? "Con decoración" : "Sin decoración"}
         </button>
 
-        <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-3 sm:p-4">
-          <ExpandToggle big={big} onToggle={() => setBig((b) => !b)} />
+        <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-end gap-3 p-3 sm:p-4">
           <Link href="/mis-disenos/" className="glass pointer-events-auto flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium">
             <IconHeart width={17} height={17} />
             <span className="hidden sm:inline">Mis diseños</span>
@@ -223,16 +224,28 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
               </button>
             )}
             <PhotoToggle on={photo.on} toggle={photo.toggle} />
-            <button type="button" className="tool" aria-pressed={explode} onClick={() => setExplode((x) => !x)} title="Separar las piezas">
+            <button type="button" className="tool max-lg:hidden" aria-pressed={explode} onClick={() => setExplode((x) => !x)} title="Separar las piezas">
               <IconExplode />
               <span className="hidden sm:inline">Explotar</span>
             </button>
+            <ExpandToggle big={big} onToggle={() => setBig((b) => !b)} />
           </div>
         </div>
       </section>
 
       <aside className="flex flex-col border-line bg-surface lg:min-h-0 lg:border-l">
-        <div className="flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 lg:pb-8">
+        {/* en el teléfono, el panel se pliega para dejarle la pantalla al 3D */}
+        <button type="button" onClick={() => setPanelOpen((o) => !o)} aria-expanded={panelOpen} className="flex w-full items-center justify-between gap-3 px-5 pt-5 text-left lg:hidden">
+          <span>
+            <span className="eyebrow block text-ink">Personalizar tu mueble</span>
+            <span className="mt-1 block text-sm text-ink-2">Medidas · Materiales · Accesorios</span>
+          </span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`shrink-0 transition-transform duration-300 ${panelOpen ? "" : "rotate-180"}`}>
+            <path d="M6 15l6-6 6 6" />
+          </svg>
+          <span className="sr-only">{panelOpen ? "Plegar el panel" : "Desplegar el panel"}</span>
+        </button>
+        <div className={`flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 max-lg:space-y-6 max-lg:pt-3 lg:pb-8 ${panelOpen ? "" : "max-lg:hidden"}`}>
           {spec.modules && (
             <ModulePanel
               label={spec.modules.label}
@@ -245,11 +258,28 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
               onDone={() => setPicked(null)}
             />
           )}
-          <Section title={spec.title} hint={summary.dimensions}>
+          {/* en el teléfono el título ya está arriba (en la ventana y en "Personalizar tu mueble") */}
+          <Section title={spec.title} hint={summary.dimensions} phoneTitle={false}>
             {spec.controls.map((c) => {
               const v = config.values[c.key];
               const why = locked[c.key];
-              if (c.type === "size") return why ? null : <Dimension key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(mm) => set(c.key, mm)} />;
+              if (c.type === "size") {
+                if (why) return null;
+                // en el teléfono las medidas van juntas, en tarjetas, donde aparece la primera
+                const sizes = spec.controls.filter((x): x is Extract<typeof x, { type: "size" }> => x.type === "size" && !locked[x.key]);
+                return (
+                  <div key={c.key} className="contents">
+                    {sizes[0]?.key === c.key && (
+                      <div className="lg:hidden">
+                        <DimensionCards items={sizes.map((x) => ({ key: x.key, label: x.label, value: config.values[x.key] as number, min: x.min, max: x.max }))} onChange={(key, mm) => set(key, mm)} />
+                      </div>
+                    )}
+                    <div className="max-lg:hidden">
+                      <Dimension label={c.label} value={v as number} min={c.min} max={c.max} onChange={(mm) => set(c.key, mm)} />
+                    </div>
+                  </div>
+                );
+              }
               // un número que no aplica con lo elegido (los cajones de una losa) no se muestra
               if (c.type === "count") return why ? null : <Stepper key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(n) => set(c.key, n)} />;
               if (c.type === "toggle") return <Toggle key={c.key} label={c.label} hint={why ?? c.hint} disabled={!!why} checked={v as boolean} onChange={(on) => set(c.key, on)} />;
@@ -364,7 +394,7 @@ function ModulePanel({ label, picked, controls, values, changed, onChange, onRes
   onReset: () => void;
   onDone: () => void;
 }) {
-  if (picked === null) return <p className="rounded-2xl border border-line px-4 py-3 text-xs text-ink-2">Tocá un {label.toLowerCase()} en el 3D para cambiarlo solo.</p>;
+  if (picked === null) return <p className="text-xs text-ink-2 lg:rounded-2xl lg:border lg:border-line lg:px-4 lg:py-3">Tocá un {label.toLowerCase()} en el 3D para cambiarlo solo.</p>;
   return (
     <section className="space-y-4 rounded-2xl border border-navy/30 bg-paper/60 p-4" aria-label={`${label} ${picked + 1}`}>
       <div className="flex items-center justify-between gap-3">

@@ -20,9 +20,9 @@ export function usePhotoMode() {
 
 export function PhotoToggle({ on, toggle }: { on: boolean; toggle: () => void }) {
   return (
-    <button type="button" className="tool" aria-pressed={on} onClick={toggle} title={on ? "Volver al 3D rápido" : "Realismo: la luz calculada con trazado de rayos"}>
+    <button type="button" className="tool" aria-pressed={on} onClick={toggle} aria-label="Realismo" title={on ? "Volver al 3D rápido" : "Realismo: la luz calculada con trazado de rayos"}>
       <IconCamera />
-      <span>Realismo</span>
+      <span className="hidden sm:inline">Realismo</span>
     </button>
   );
 }

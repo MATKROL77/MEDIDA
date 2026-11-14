@@ -4,10 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { catalog } from "@/lib/catalog";
 
-export function Section({ title, hint, children }: { title: string; hint?: ReactNode; children: ReactNode }) {
+export function Section({ title, hint, children, phoneTitle = true }: { title: string; hint?: ReactNode; children: ReactNode; phoneTitle?: boolean }) {
   return (
     <section className="space-y-3">
-      <div className="flex items-baseline justify-between gap-3">
+      <div className={`flex items-baseline justify-between gap-3 ${phoneTitle ? "" : "max-lg:hidden"}`}>
         <h2 className="eyebrow">{title}</h2>
         {hint && <span className="text-right text-xs text-ink-2">{hint}</span>}
       </div>
@@ -69,7 +69,7 @@ export function Toggle({ label, checked, onChange, disabled, hint }: {
 }
 
 /** medida con barra y campo numérico, en centímetros */
-export function Dimension({ label, value, min, max, onChange, disabled, unit = "cm" }: {
+export function Dimension({ label, value, min, max, onChange, disabled, unit = "cm", hint }: {
   label: string;
   value: number;
   min: number;
@@ -77,6 +77,8 @@ export function Dimension({ label, value, min, max, onChange, disabled, unit = "
   onChange: (mm: number) => void;
   disabled?: boolean;
   unit?: string;
+  /** una línea chica debajo del nombre (el mínimo y el máximo) */
+  hint?: string;
 }) {
   const cm = Math.round(value / 10);
   const [draft, setDraft] = useState(String(cm));
@@ -99,7 +101,16 @@ export function Dimension({ label, value, min, max, onChange, disabled, unit = "
   return (
     <div className={`space-y-2 ${disabled ? "pointer-events-none opacity-45" : ""}`}>
       <div className="flex items-center justify-between text-sm">
-        <label htmlFor={id}>{label}</label>
+        {hint ? (
+          <span>
+            <label htmlFor={id} className="block text-base">
+              {label}
+            </label>
+            <span className="text-xs text-ink-2">{hint}</span>
+          </span>
+        ) : (
+          <label htmlFor={id}>{label}</label>
+        )}
         <span className="flex items-center gap-1.5">
           <input
             id={id}
@@ -246,7 +257,7 @@ export function ExpandToggle({ big, onToggle }: { big: boolean; onToggle: () => 
       aria-pressed={big}
       aria-label={big ? "Achicar el 3D" : "Agrandar el 3D"}
       title={big ? "Achicar el 3D" : "Agrandar el 3D"}
-      className="glass pointer-events-auto grid size-9 place-items-center rounded-full lg:hidden"
+      className="tool px-2.5 lg:hidden"
     >
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         {big ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /> : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
@@ -266,4 +277,36 @@ export function usePortraitPhone(): boolean {
     return () => q.removeEventListener("change", update);
   }, []);
   return portrait;
+}
+
+/** "Ajustar altura", "Ajustar largo": el nombre de una medida como la que se ajusta */
+function adjustLabel(label: string): string {
+  const named: Record<string, string> = { Alto: "altura" };
+  return `Ajustar ${named[label] ?? label.charAt(0).toLowerCase() + label.slice(1)}`;
+}
+
+/**
+ * Las medidas en el teléfono: una tarjeta por medida (Largo, Alto,
+ * Profundidad) con su valor; la que se toca queda marcada y abajo aparece su
+ * regla, con el mínimo y el máximo. Ocupa la mitad que tres reglas juntas.
+ */
+export function DimensionCards({ items, onChange }: { items: { key: string; label: string; value: number; min: number; max: number }[]; onChange: (key: string, mm: number) => void }) {
+  const [active, setActive] = useState<string | null>(null);
+  const current = items.find((i) => i.key === active) ?? items[0];
+  if (!current) return null;
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 3)}, minmax(0, 1fr))` }}>
+        {items.map((i) => (
+          <button key={i.key} type="button" aria-pressed={i.key === current.key} onClick={() => setActive(i.key)} className="dim-card">
+            <span className="block truncate text-xs text-ink-2">{i.label}</span>
+            <span className="block font-display text-xl leading-tight tabular-nums">{Math.round(i.value / 10)} cm</span>
+          </button>
+        ))}
+      </div>
+      <div className="rounded-2xl bg-paper p-4">
+        <Dimension key={current.key} label={adjustLabel(current.label)} hint={`Mín: ${current.min / 10} cm · Máx: ${current.max / 10} cm`} value={current.value} min={current.min} max={current.max} onChange={(mm) => onChange(current.key, mm)} />
+      </div>
+    </div>
+  );
 }

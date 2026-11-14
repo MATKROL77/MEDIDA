@@ -345,14 +345,12 @@ for (const [width, height] of [
     await page.getByRole("button", { name: /decoración/ }).click();
   });
 
-  await check("configurador: el botón Foto prende y apaga el trazado de rayos, y se recuerda", async () => {
-    const foto = page.getByRole("button", { name: "Foto" });
-    const was = await foto.getAttribute("aria-pressed");
-    await foto.click();
-    assert((await foto.getAttribute("aria-pressed")) !== was, "el botón no cambió");
-    const stored = await page.evaluate(() => localStorage.getItem("medida:foto"));
-    assert(stored === (was === "true" ? "0" : "1"), `guardado: ${stored}`);
-    await foto.click();
+  await check("configurador: el botón Realismo arranca apagado y se prende solo al apretarlo", async () => {
+    const realismo = page.getByRole("button", { name: "Realismo" });
+    assert((await realismo.getAttribute("aria-pressed")) === "false", "arrancó prendido");
+    await realismo.click();
+    assert((await realismo.getAttribute("aria-pressed")) === "true", "el botón no cambió");
+    await realismo.click();
   });
 
   await check("configurador: sin errores de página en todo el recorrido", async () => assert(errors.length === 0, errors[0]));
