@@ -9,11 +9,12 @@ import type { Assembly, Part, RunAssembly } from "./assembly.ts";
 const CLOTHES = ["#e9e4da", "#31445c", "#7c8a78", "#b9a58a", "#2c2c2e", "#a5503f", "#d7d2c8", "#566b7d", "#8a6f57", "#c9c3b6"];
 const SHOES = ["#f1efea", "#2b2b2d", "#8a5a3c", "#c8c2b5"];
 
-const extra = (id: string, label: string, color: string, run: number, position: Part["position"], size: Part["size"], radius: number): Part => ({
+/** `cloth`: es tela (lino, con su trama), no un color liso */
+const extra = (id: string, label: string, color: string, run: number, position: Part["position"], size: Part["size"], radius: number, cloth = false): Part => ({
   id,
   label,
   kind: "shelf",
-  material: `tint:${color}`,
+  material: `${cloth ? "linen" : "tint"}:${color}`,
   run,
   module: null,
   position,
@@ -46,7 +47,14 @@ function dress(run: RunAssembly): Part[] {
         if ((i * 7 + p.id.length) % 5 === 0) continue;
         const long = (i * 3 + p.id.length) % 4 === 0 ? 1 : 0.84;
         const h = drop * long;
-        out.push(extra(`deco:${p.id}:${i}`, "Ropa colgada", CLOTHES[(i * 3 + p.id.length) % CLOTHES.length], p.run, [p.position[0] + 34 + i * 68, p.position[1] - h - 14, zc - 200], [40, h, 400], 14));
+        const x = p.position[0] + 34 + i * 68;
+        // la prenda: fina en los bordes y con pliegues que caen
+        const cloth = extra(`deco:${p.id}:${i}`, "Ropa colgada", CLOTHES[(i * 3 + p.id.length) % CLOTHES.length], p.run, [x, p.position[1] - h - 14, zc - 200], [40, h, 400], 14, true);
+        cloth.pinch = 0.35;
+        cloth.wrinkle = 4;
+        out.push(cloth);
+        // el gancho de la percha, colgado del barral
+        out.push({ ...extra(`deco:${p.id}:${i}:gancho`, "Percha", "#9aa0a6", p.run, [x + 17, p.position[1] - 14, zc - 3], [6, 30, 6], 2), geometry: "cyl", material: "metal" });
       }
     } else if (p.kind === "shelf" || p.kind === "fixed-shelf") {
       // pilas de ropa doblada
@@ -58,7 +66,10 @@ function dress(run: RunAssembly): Part[] {
         if ((i + p.id.length) % 3 === 2) continue;
         const layers = Math.min(4, Math.floor((room - 60) / 42));
         for (let k = 0; k < layers; k++) {
-          out.push(extra(`deco:${p.id}:${i}:${k}`, "Ropa doblada", CLOTHES[(i * 2 + k + p.id.length) % CLOTHES.length], p.run, [p.position[0] + 40 + i * 300, top + k * 42, p.position[2] + p.size[2] - 330], [240, 40, 290], 12));
+          const folded = extra(`deco:${p.id}:${i}:${k}`, "Ropa doblada", CLOTHES[(i * 2 + k + p.id.length) % CLOTHES.length], p.run, [p.position[0] + 40 + i * 300 + ((k * 7) % 3) * 4, top + k * 42, p.position[2] + p.size[2] - 330], [240, 40, 290], 12, true);
+          folded.puff = 6;
+          folded.wrinkle = 2;
+          out.push(folded);
         }
       }
     } else if (p.kind === "bottom") {

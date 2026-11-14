@@ -22,7 +22,7 @@ import { DEFAULT_CONFIG, type WardrobeConfig } from "@/lib/model";
 import { drawerGroupsOf, leavesOf, openOffsets } from "@/lib/motion";
 import { quote } from "@/lib/quote";
 import { decodeConfig } from "@/lib/share";
-import { undressed } from "@/lib/decor";
+import { dressed, undressed } from "@/lib/decor";
 
 const Viewer3D = dynamic(() => import("@/components/viewer/Scene"), { ssr: false, loading: () => null });
 const VIEWS: ViewName[] = ["front", "three", "side", "top", "back"];
@@ -99,7 +99,11 @@ export default function RenderStage() {
 
   const result = useMemo(() => {
     if (!state) return null;
-    if (!state.furniture) return { assembly: quote(state.config).assembly, look: state.config, fabric: undefined as string | undefined, weave: undefined as string | undefined };
+    // el placard, como en el configurador: con la ropa puesta salvo que se pida sin ambientación
+    if (!state.furniture) {
+      const plain = quote(state.config).assembly;
+      return { assembly: state.deco ? dressed(plain) : plain, look: state.config, fabric: undefined as string | undefined, weave: undefined as string | undefined };
+    }
     const made = buildFurniture(state.furniture);
     const built = state.deco ? made : { ...made, assembly: undressed(made.assembly) };
     const look: WardrobeConfig = { ...DEFAULT_CONFIG, doors: built.doors ? "hinged" : "none", bodyMaterial: state.furniture.body, doorMaterial: state.furniture.front, led: { ...DEFAULT_CONFIG.led, sensor: false } };
