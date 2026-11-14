@@ -61,7 +61,7 @@ export type PartKind =
   | "glow";
 
 /** "soft": caja de cantos redondeados, para almohadones y tapizados */
-export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "none";
+export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "none";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
@@ -126,6 +126,8 @@ export type Part = {
    * redondeo de los cantos (mm). La posición y la medida son su caja.
    */
   arc?: { cx: number; cz: number; rIn: number; rOut: number; start: number; length: number; round: number };
+  /** un objeto de ambientación escaneado (public/models/<model>.glb); la medida es la suya */
+  model?: string;
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */

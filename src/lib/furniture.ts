@@ -12,6 +12,7 @@
 
 import type { Assembly, Cut, Part, PartKind, Vec3 } from "./assembly.ts";
 import { catalog, materialById } from "./catalog.ts";
+import { DECOR_MODELS, type DecorModel } from "./decor-models.ts";
 import type { DesignSummary } from "./designs.ts";
 
 export type Value = number | string | boolean;
@@ -411,11 +412,38 @@ function books(list: Part[], id: string, x: number, y: number, z: number, n: num
     cx += t + 1;
   }
 }
-/** dos libros acostados y un jarrón encima o al lado */
+/**
+ * Un objeto escaneado de verdad (public/models, de Poly Haven), apoyado con su
+ * esquina mínima en (x, y, z) y a su medida real: no se estira.
+ */
+function prop(list: Part[], id: string, label: string, model: DecorModel, x: number, y: number, z: number, scale = 1): Part {
+  const [w, h, d] = DECOR_MODELS[model].map((v) => v * scale);
+  const p = piece(list, id, label, "shelf", "none", [x, y, z], [w, h, d], { ...deco, geometry: "model" });
+  p.model = model;
+  return p;
+}
+
+/** lo que se apoya sobre una tapa: un jarrón de cerámica en la punta y un cuenco de madera al lado */
 function tabletop(list: Part[], id: string, x: number, y: number, z: number) {
-  piece(list, `${id}:b1`, "Libro", "shelf", "tint:#e8e1d2", [x, y, z], [250, 26, 180], deco);
-  piece(list, `${id}:b2`, "Libro", "shelf", "tint:#2f3b4a", [x + 14, y + 26, z + 10], [220, 22, 160], deco);
-  piece(list, `${id}:v`, "Jarrón", "shelf", "tint:#22201e", [x + 330, y, z + 30], [120, 190, 120], { ...deco, geometry: "puff" });
+  prop(list, `${id}:jarron`, "Jarrón", "jarron-alto", x, y, z + 60);
+  prop(list, `${id}:cuenco`, "Cuenco", "cuenco", x + 160, y, z);
+}
+
+/**
+ * Lo que va en un estante: si entra, una hilera de libros de verdad; si no,
+ * un jarroncito o un portarretrato; en un hueco muy chico, libros simples.
+ */
+function shelfDecor(list: Part[], id: string, x: number, y: number, z: number, width: number, space: number, seed: number) {
+  const [lw, lh] = DECOR_MODELS.libros;
+  const [bw, bh] = DECOR_MODELS["jarron-bronce"];
+  const [fw, fh] = DECOR_MODELS.portarretrato;
+  // los libros se achican enteros hasta entrar (hay libros de todos los tamaños), nunca menos del 75 %
+  const k = Math.min(1, (width - 10) / lw, (space - 15) / lh);
+  const kind = seed % 4;
+  if (kind !== 3 && k >= 0.75) prop(list, `${id}:libros`, "Libros", "libros", x + 5, y, z, k);
+  else if (kind === 3 && seed % 8 === 3 && width >= fw + 40 && space >= fh + 30) prop(list, `${id}:foto`, "Portarretrato", "portarretrato", x + width * 0.3, y, z);
+  else if (width >= bw + 40 && space >= bh + 30) prop(list, `${id}:jarron`, "Jarrón", "jarron-bronce", x + width / 2 - bw / 2, y, z + 20);
+  else books(list, id, x, y, z, 4 + (seed % 3), 150);
 }
 function lamp(list: Part[], id: string, x: number, y: number, z: number) {
   piece(list, `${id}:base`, "Lámpara", "shelf", "gloss:#b9a27c", [x, y, z], [110, 14, 110], { ...deco, geometry: "cyl" });
@@ -627,7 +655,7 @@ const BUILDERS: Record<string, Builder> = {
         for (let i = 0; i < columns; i++) {
           piece(parts, `shelf:${i}:${k}`, "Estante", "shelf", c.body, [i * cw + s, y, 0], [cw - s, T + 10, d], { band: { long: 2, short: 0 } });
           if (v.led && k > 0) led(parts, `led:${i}:${k}`, i * cw + s + 20, y - 8, d - 40, cw - s - 40);
-          if (k < levels - 1 && (i + k) % 2 === 0) books(parts, `deco:b${i}:${k}`, i * cw + s + 30, y + T + 10, 40, 5 + ((i + k) % 3), Math.min(170, d - 60));
+          if (k < levels - 1 && (i + k) % 2 === 0) shelfDecor(parts, `deco:b${i}:${k}`, i * cw + s + 20, y + T + 10, 30, cw - s - 40, (h - 120 - T) / (levels - 1) - T - 10, i + k);
         }
       }
       if (v.back) piece(parts, "back", "Fondo", "back", "back", [s, 120, 0], [w - 2 * s, h - 120, 3]);
@@ -658,7 +686,7 @@ const BUILDERS: Record<string, Builder> = {
         if (doorH && k > 1 && y < from + doorH + 120) continue;
         piece(parts, `shelf:${i}:${k}`, "Estante", "shelf", c.body, [x, y, 0], [sw, T, d - inset]);
         if (v.led) led(parts, `led:${i}:${k}`, x + 20, y - 8, d - inset - 30, sw - 40);
-        if ((i + k) % 2 === 1 && y + 280 < h) books(parts, `deco:b${i}:${k}`, x + 30, y + T, 40, 4 + ((i + k) % 4), Math.min(170, d - 70));
+        if ((i + k) % 2 === 1 && y + 280 < h) shelfDecor(parts, `deco:b${i}:${k}`, x + 20, y + T, 30, sw - 40, free / (n + 1) - T, i + k);
       }
       const half = sw > 520 ? 2 : 1;
       const dw = (sw - 3 * (half + 1)) / half;
@@ -783,7 +811,7 @@ const BUILDERS: Record<string, Builder> = {
       const cells = Math.max(2, Math.round(hw / 620));
       for (let k = 0; k <= cells; k++) piece(parts, `head:div${k}`, k === 0 || k === cells ? "Lateral del respaldo" : "Divisor del respaldo", "divider", c.body, [-60 + ((hw - T) * k) / cells, h + 300 + T, T], [T, top - h - 300 - 2 * T, head - T - 20]);
       if (v.led) led(parts, "led:head", -60 + 40, top - T - 8, head - 50, hw - 80);
-      books(parts, "deco:hb", -60 + 60, h + 300 + T, 60, 6, 140);
+      shelfDecor(parts, "deco:hb", -60 + T + 20, h + 300 + T, 40, (hw - T) / cells - T - 40, top - h - 300 - 2 * T, 0);
     }
 
     if (v.base === "patas") {

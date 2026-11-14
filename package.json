@@ -12,7 +12,8 @@
     "test": "node --experimental-strip-types --test src/lib/*.test.ts worker/test/*.test.ts",
     "capture": "node --experimental-strip-types scripts/capture.mjs",
     "preview": "next build && wrangler dev --port 8787 --var DEV_OUTBOX:1",
-    "textures": "NODE_USE_ENV_PROXY=1 node scripts/textures.mjs"
+    "textures": "NODE_USE_ENV_PROXY=1 node scripts/textures.mjs",
+    "models": "NODE_USE_ENV_PROXY=1 node scripts/models.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

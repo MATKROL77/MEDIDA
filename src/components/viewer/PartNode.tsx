@@ -1,10 +1,12 @@
 "use client";
 
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
-import { useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 
 import type { Part } from "@/lib/assembly";
 
@@ -133,6 +135,61 @@ function arcGeometry(part: Part): THREE.BufferGeometry {
   // del centro del arco al centro de la caja de la pieza
   merged.translate((a.cx - (x0 + sx / 2)) * MM, 0, (a.cz - (z0 + sz / 2)) * MM);
   return merged;
+}
+
+const gltf = typeof window === "undefined" ? null : new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+const models = new Map<string, Promise<THREE.Object3D>>();
+
+/** un objeto de ambientación (public/models): se baja una vez y cada uso es una copia que comparte geometría y texturas */
+function loadModel(id: string): Promise<THREE.Object3D> {
+  let p = models.get(id);
+  if (!p) {
+    p = gltf!.loadAsync(`/models/${id}.glb`).then((g) => {
+      g.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) {
+          m.castShadow = true;
+          m.receiveShadow = true;
+        }
+      });
+      return g.scene;
+    });
+    p.catch(() => models.delete(id));
+    models.set(id, p);
+  }
+  return p;
+}
+
+/**
+ * Un objeto escaneado, apoyado en la base de su caja y centrado en ella, a su
+ * medida real (si la caja es más chica, se achica entero, sin deformarse).
+ */
+function DecorModel({ id, size }: { id: string; size: number[] }) {
+  const [object, setObject] = useState<THREE.Object3D | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadModel(id)
+      .then((scene) => {
+        if (!alive) return;
+        const copy = scene.clone(true);
+        const box = new THREE.Box3().setFromObject(copy);
+        const dims = box.getSize(new THREE.Vector3());
+        const k = Math.min((size[0] * MM) / dims.x, (size[1] * MM) / dims.y, (size[2] * MM) / dims.z, 1.0001);
+        copy.scale.setScalar(k);
+        const fitted = new THREE.Box3().setFromObject(copy);
+        const center = fitted.getCenter(new THREE.Vector3());
+        copy.position.set(-center.x, -fitted.min.y - (size[1] * MM) / 2, -center.z);
+        setObject(copy);
+      })
+      .catch(() => {
+        // sin el modelo no se dibuja nada: es ambientación
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, size[0], size[1], size[2]]);
+  return object ? <primitive object={object} /> : null;
 }
 
 function isVertical(p: Part) {
@@ -375,6 +432,7 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf }: NodePr
           />
         )}
         {part.kind === "led" && <LedLight part={part} kit={kit} />}
+        {part.geometry === "model" && part.model && <DecorModel id={part.model} size={part.size} />}
         {part.details && part.details.length > 0 && (
           <group ref={details}>
             <Presence parts={part.details}>
