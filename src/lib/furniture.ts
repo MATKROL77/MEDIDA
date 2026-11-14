@@ -31,6 +31,12 @@ export type FurnitureConfig = {
   front: string;
   /** color del tapizado, en los sillones */
   fabric: string;
+  /**
+   * Lo que se cambió en un módulo solo (un cuerpo del mueble de TV, una
+   * columna de la biblioteca): por número de módulo, los valores que pisan a
+   * los de todo el mueble. Lo que no está acá sale de `values`.
+   */
+  modules?: Record<string, Record<string, Value>>;
 };
 
 export type FurnitureSpec = {
@@ -53,6 +59,12 @@ export type FurnitureSpec = {
    * muestra deshabilitado con su motivo.
    */
   locks?: (v: Record<string, Value>) => Record<string, string>;
+  /**
+   * Lo que se puede cambiar módulo por módulo, tocándolo en el 3D: cómo se
+   * llama cada uno, qué se le cambia y qué control de todo el mueble pisa
+   * (al cambiar ese control para todo el mueble, lo cambiado en cada módulo se olvida).
+   */
+  modules?: { label: string; controls: Control[]; globals: Record<string, string> };
 };
 
 export const FABRICS = [
@@ -157,6 +169,14 @@ export const SPECS: FurnitureSpec[] = [
       LED,
     ],
     defaults: { width: 2000, height: 450, depth: 420, fronts: "nicho-cajon", base: "metal", grip: "push", thick: true, curved: false, led: true },
+    modules: {
+      label: "Módulo",
+      controls: [
+        { key: "kind", type: "choice", label: "Qué lleva", options: choice(["nicho-cajon", "Cajón y nicho"], ["puertas", "Puerta"], ["vidrio", "Vidrio"], ["cajones", "Cajones"], ["abierto", "Nicho"]) },
+        { key: "drawers", type: "count", label: "Cajones", min: 1, max: 3 },
+      ],
+      globals: { fronts: "kind" },
+    },
     body: "nogal",
     front: "nogal",
     bodyLabel: "Cuerpo",
@@ -177,6 +197,14 @@ export const SPECS: FurnitureSpec[] = [
       LED,
     ],
     defaults: { width: 1800, height: 2100, depth: 320, shelves: 4, structure: "madera", doors: "madera", back: true, led: false },
+    modules: {
+      label: "Columna",
+      controls: [
+        { key: "shelves", type: "count", label: "Estantes", min: 2, max: 7 },
+        { key: "doors", type: "choice", label: "Puertas", options: choice(["no", "Sin puertas"], ["madera", "Abajo, de madera"], ["vidrio", "Enteras, de vidrio"]) },
+      ],
+      globals: { doors: "doors", shelves: "shelves" },
+    },
     body: "nogal",
     front: "nogal",
     bodyLabel: "Cuerpo",
@@ -283,6 +311,50 @@ export function defaultFurniture(family: string): FurnitureConfig {
 }
 
 /** deja cualquier configuración dentro de lo que la familia admite: un enlace viejo o editado a mano no rompe nada */
+/**
+ * Lo que vale cada control de un módulo: lo cambiado en ese módulo o, si no,
+ * lo que sale de todo el mueble (para mostrarlo en el panel del módulo).
+ */
+export function moduleValues(config: FurnitureConfig, index: number): Record<string, Value> {
+  const v = config.values;
+  const own = config.modules?.[String(index)] ?? {};
+  if (config.family === "tv") {
+    const kind = v.fronts === "mixto" ? ["puertas", "abierto", "cajones", "vidrio"][index % 4] : (v.fronts as string);
+    return { kind, drawers: (v.height as number) - 36 > 380 ? 2 : 1, ...own };
+  }
+  if (config.family === "bibliotecas") return { shelves: v.shelves, doors: v.doors, ...own };
+  return { ...own };
+}
+
+/** un control de todo el mueble cambiado: lo que cada módulo tenía propio en ese control se olvida */
+export function withGlobal(config: FurnitureConfig, key: string, value: Value): FurnitureConfig {
+  const spec = specById(config.family);
+  const local = spec?.modules?.globals[key];
+  let modules = config.modules;
+  if (local && modules) {
+    modules = Object.fromEntries(
+      Object.entries(modules)
+        .map(([i, over]) => [i, Object.fromEntries(Object.entries(over).filter(([k]) => k !== local))] as const)
+        .filter(([, over]) => Object.keys(over).length > 0),
+    );
+    if (!Object.keys(modules).length) modules = undefined;
+  }
+  const next: FurnitureConfig = { ...config, values: { ...config.values, [key]: value } };
+  if (modules) next.modules = modules;
+  else delete next.modules;
+  return normalizeFurniture(next);
+}
+
+/** cambia un control de un módulo solo; `null` lo vuelve a lo de todo el mueble */
+export function withModule(config: FurnitureConfig, index: number, key: string | null, value?: Value): FurnitureConfig {
+  const modules = { ...(config.modules ?? {}) };
+  if (key === null) delete modules[String(index)];
+  else modules[String(index)] = { ...(modules[String(index)] ?? {}), [key]: value as Value };
+  const next: FurnitureConfig = { ...config, modules };
+  if (!Object.keys(modules).length) delete next.modules;
+  return normalizeFurniture(next);
+}
+
 export function normalizeFurniture(input: unknown): FurnitureConfig {
   const raw = (typeof input === "object" && input !== null ? input : {}) as Partial<FurnitureConfig>;
   const spec = specById(String(raw.family)) ?? SPECS[0];
@@ -307,7 +379,29 @@ export function normalizeFurniture(input: unknown): FurnitureConfig {
     }
   }
   const material = (id: unknown, fallback: string) => (catalog.materials.some((m) => m.id === id) ? (id as string) : fallback);
+  // lo cambiado módulo por módulo: solo los controles que la familia permite, con valores válidos
+  let modules: Record<string, Record<string, Value>> | undefined;
+  const rawModules = (raw as { modules?: unknown }).modules;
+  if (spec.modules && typeof rawModules === "object" && rawModules !== null) {
+    for (const [k, over] of Object.entries(rawModules as Record<string, unknown>)) {
+      const index = Number(k);
+      if (!Number.isInteger(index) || index < 0 || index > 12 || typeof over !== "object" || over === null) continue;
+      const clean: Record<string, Value> = {};
+      for (const c of spec.modules.controls) {
+        const v = (over as Record<string, unknown>)[c.key];
+        if (v === undefined) continue;
+        if (c.type === "count" || c.type === "size") {
+          const n = Number(v);
+          if (Number.isFinite(n)) clean[c.key] = Math.round(clamp(n, c.min, c.max));
+        } else if (c.type === "choice") {
+          if (c.options.some((o) => o.id === v)) clean[c.key] = v as string;
+        } else clean[c.key] = v === true;
+      }
+      if (Object.keys(clean).length) (modules ??= {})[String(index)] = clean;
+    }
+  }
   return {
+    ...(modules ? { modules } : {}),
     family: spec.id,
     values,
     body: material(raw.body, catalog.materials.some((m) => m.id === spec.body) ? spec.body : catalog.materials[0].id),
@@ -446,7 +540,7 @@ function drawerBox(list: Part[], id: string, module: number, out: Vec3, [x, y, z
 }
 
 /** puerta batiente; con bisagra abajo ("bottom") es rebatible: se abre hacia adelante, como una tapa */
-function door(list: Part[], id: string, x: number, y: number, z: number, w: number, h: number, material: string, hinge: "left" | "right" | "bottom", grip: Grip = "barra") {
+function door(list: Part[], id: string, x: number, y: number, z: number, w: number, h: number, material: string, hinge: "left" | "right" | "bottom", grip: Grip = "barra", module: number | null = null) {
   const glass = material === "glass";
   const bar =
     hinge === "bottom"
@@ -460,6 +554,7 @@ function door(list: Part[], id: string, x: number, y: number, z: number, w: numb
     band: { long: 2, short: 2 },
     // el vidrio siempre lleva tirador: no se puede fresar ni empujar sin marcarlo
     details: glass ? [bar] : gripFor(id, grip, w, h, bar),
+    ...(module !== null ? { module } : {}),
   });
 }
 
@@ -968,12 +1063,14 @@ const BUILDERS: Record<string, Builder> = {
     } else if (v.thick) piece(parts, "top", "Tapa", "top", c.front, [-15, base + h - T, 0], [w + 30, 40, d + 15], { band: { long: 2, short: 2 } });
     else piece(parts, "top", "Tapa", "top", c.front, [0, base + h - T, 0], [w, T, d], { band: { long: 2, short: 2 } });
     piece(parts, "bottom", "Piso", "bottom", c.body, [0, base, 0], [w, T, d], { band: { long: 1, short: 2 } });
-    const kinds = Array.from({ length: modules }, (_, i) => (v.fronts === "mixto" ? ["puertas", "abierto", "cajones", "vidrio"][i % 4] : (v.fronts as string)));
+    // lo de cada módulo: lo elegido para todo el mueble, salvo lo que se cambió en ese módulo
+    const own = (i: number, key: string) => c.modules?.[String(i)]?.[key];
+    const kinds = Array.from({ length: modules }, (_, i) => (own(i, "kind") as string | undefined) ?? (v.fronts === "mixto" ? ["puertas", "abierto", "cajones", "vidrio"][i % 4] : (v.fronts as string)));
     const fronted = (k: string | undefined) => k === "puertas" || k === "vidrio" || k === "cajones" || k === "nicho-cajon";
     const inner = h - 2 * T;
     // nicho y cajón: los cajones abajo, y arriba un solo nicho corrido de punta
     // a punta, como en los muebles de catálogo; los divisores quedan abajo
-    const niche = v.fronts === "nicho-cajon";
+    const niche = kinds.every((k) => k === "nicho-cajon");
     const fh = Math.round(inner * 0.56);
     // un divisor entre dos módulos con frente queda 18 mm atrás y los frentes
     // lo tapan a medias, con 3 mm de luz entre uno y otro (como en un mueble
@@ -1016,8 +1113,8 @@ const BUILDERS: Record<string, Builder> = {
       // la luz va en cada hueco: arriba de cada módulo, abajo de cada estante y adentro de cada cajón
       const [lx, ll] = span(i * mw + T + 20, mw - T - 40);
       if (kind === "puertas" || kind === "vidrio") {
-        if (kind === "vidrio") piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 50]);
-        door(parts, `door:${i}`, x, base + T + 3, d - (kind === "vidrio" ? 8 : T), fw, inner - 6, kind === "vidrio" ? "glass" : c.front, i % 2 ? "right" : "left", grip);
+        if (kind === "vidrio") piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 50], { module: i });
+        door(parts, `door:${i}`, x, base + T + 3, d - (kind === "vidrio" ? 8 : T), fw, inner - 6, kind === "vidrio" ? "glass" : c.front, i % 2 ? "right" : "left", grip, i);
         doors++;
         if (v.led) {
           led(parts, `led:n${i}`, lx, base + h - T - 8, d - 70, ll);
@@ -1031,14 +1128,22 @@ const BUILDERS: Record<string, Builder> = {
       } else if (kind === "nicho-cajon") {
         drawer(parts, `dr${i}:0`, i, x, base + T + 4, d - T, fw, fh - 8, d - T, c.front, grip, opening, v.led === true);
         drawers++;
+        // entre módulos distintos, el nicho de este va con su estante y su luz
+        if (!niche) {
+          piece(parts, `shelf:${i}`, "Estante", "fixed-shelf", c.body, [i * mw + T, base + T + fh, 0], [mw - T, T, d], { band: { long: 1, short: 0 }, module: i });
+          if (v.led) {
+            led(parts, `led:n${i}`, lx, base + h - T - 8, d - 50, ll);
+            wash(parts, `led:n${i}`, lx, ll, base + h - T, base + T + fh + T, 3, d - 30);
+          }
+        }
         if (i % 2 === 1) prop(parts, `deco:n${i}`, "Cuenco", "cuenco", i * mw + T + mw * 0.3, base + T + fh + T, d * 0.25);
       } else if (kind === "cajones") {
-        const n = inner > 380 ? 2 : 1;
+        const n = Math.min((own(i, "drawers") as number | undefined) ?? (inner > 380 ? 2 : 1), Math.max(1, Math.floor(inner / 110)));
         const dh = (inner - 4 * (n + 1)) / n;
         for (let k = 0; k < n; k++) drawer(parts, `dr${i}:${k}`, i, x, base + T + 4 + k * (dh + 4), d - T, fw, dh, d - T, c.front, grip, opening, v.led === true);
         drawers += n;
       } else {
-        piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 30]);
+        piece(parts, `shelf:${i}`, "Estante", "shelf", c.body, [i * mw + T, base + T + inner / 2, 0], [mw - T, T, d - 30], { module: i });
         // en un nicho abierto la luz va arriba, escondida detrás del canto, y abajo del estante
         if (v.led) {
           const mid = base + T + inner / 2;
@@ -1112,36 +1217,44 @@ const BUILDERS: Record<string, Builder> = {
 
     const plinth = 80;
     const cw = (w - T) / columns;
-    const glassDoors = v.doors === "vidrio";
+    // cada columna con lo suyo: lo de todo el mueble, salvo lo que se cambió en esa columna
+    const own = (i: number, key: string) => c.modules?.[String(i)]?.[key];
+    const colDoors = Array.from({ length: columns }, (_, i) => (own(i, "doors") as string | undefined) ?? (v.doors as string));
+    const colShelves = Array.from({ length: columns }, (_, i) => (own(i, "shelves") as number | undefined) ?? n);
+    const glassAt = (i: number) => colDoors[i] === "vidrio";
     for (let i = 0; i <= columns; i++) {
       const end = i === 0 || i === columns;
-      piece(parts, `side:${i}`, end ? "Lateral" : "Divisor", end ? "side" : "divider", c.body, [i * cw, 0, 0], [T, h, d - (glassDoors && !end ? 10 : 0)], { band: { long: 1, short: 0 } });
+      // con vidrio, los divisores quedan 10 mm atrás para que la hoja pase por delante
+      const setBack = !end && (glassAt(i - 1) || glassAt(i)) ? 10 : 0;
+      piece(parts, `side:${i}`, end ? "Lateral" : "Divisor", end ? "side" : "divider", c.body, [i * cw, 0, 0], [T, h, d - setBack], { band: { long: 1, short: 0 } });
     }
     if (v.back) piece(parts, "back", "Fondo", "back", "back", [T, plinth, 0], [w - 2 * T, h - plinth, 3]);
-    const doorH = v.doors === "madera" ? Math.min(760, Math.round(h * 0.36)) : 0;
     for (let i = 0; i < columns; i++) {
       const x = i * cw + T;
       const sw = cw - T;
+      const glassDoors = glassAt(i);
+      const doorH = colDoors[i] === "madera" ? Math.min(760, Math.round(h * 0.36)) : 0;
+      const nI = colShelves[i];
       const inset = glassDoors ? 30 : 20;
-      piece(parts, `plinth:${i}`, "Zócalo", "plinth", c.body, [x, 0, d - 60], [sw, plinth, T]);
-      piece(parts, `bottom:${i}`, "Piso", "bottom", c.body, [x, plinth, 0], [sw, T, d - (glassDoors ? 10 : 0)]);
-      piece(parts, `top:${i}`, "Techo", "top", c.body, [x, h - T, 0], [sw, T, d - (glassDoors ? 10 : 0)]);
+      piece(parts, `plinth:${i}`, "Zócalo", "plinth", c.body, [x, 0, d - 60], [sw, plinth, T], { module: i });
+      piece(parts, `bottom:${i}`, "Piso", "bottom", c.body, [x, plinth, 0], [sw, T, d - (glassDoors ? 10 : 0)], { module: i });
+      piece(parts, `top:${i}`, "Techo", "top", c.body, [x, h - T, 0], [sw, T, d - (glassDoors ? 10 : 0)], { module: i });
       const from = plinth + T;
       const free = h - T - from;
-      for (let k = 1; k <= n; k++) {
+      for (let k = 1; k <= nI; k++) {
         // con puertas abajo, un estante queda justo a la altura donde terminan
-        const y = doorH && k === 1 ? from + doorH : from + (free * k) / (n + 1);
+        const y = doorH && k === 1 ? from + doorH : from + (free * k) / (nI + 1);
         if (doorH && k > 1 && y < from + doorH + 120) continue;
-        piece(parts, `shelf:${i}:${k}`, "Estante", "shelf", c.body, [x, y, 0], [sw, T, d - inset]);
+        piece(parts, `shelf:${i}:${k}`, "Estante", "shelf", c.body, [x, y, 0], [sw, T, d - inset], { module: i });
         if (v.led) led(parts, `led:${i}:${k}`, x + 20, y - 8, d - inset - 30, sw - 40);
-        if ((i + k) % 2 === 1 && y + 280 < h) shelfDecor(parts, `deco:b${i}:${k}`, x + 20, y + T, 30, sw - 40, free / (n + 1) - T, i + k);
+        if ((i + k) % 2 === 1 && y + 280 < h) shelfDecor(parts, `deco:b${i}:${k}`, x + 20, y + T, 30, sw - 40, free / (nI + 1) - T, i + k);
       }
       const half = sw > 520 ? 2 : 1;
       const dw = (sw - 3 * (half + 1)) / half;
       if (doorH || glassDoors) {
         const dh = glassDoors ? h - from - T - 4 : doorH - 4;
         for (let k = 0; k < half; k++) {
-          door(parts, `door:${i}:${k}`, x + 3 + k * (dw + 3), from + 2, d - (glassDoors ? 8 : T), dw, dh, glassDoors ? "glass" : c.front, half === 1 ? "left" : k === 0 ? "left" : "right");
+          door(parts, `door:${i}:${k}`, x + 3 + k * (dw + 3), from + 2, d - (glassDoors ? 8 : T), dw, dh, glassDoors ? "glass" : c.front, half === 1 ? "left" : k === 0 ? "left" : "right", "barra", i);
           doors++;
         }
       }

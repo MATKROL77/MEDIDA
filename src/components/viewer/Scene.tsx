@@ -283,7 +283,9 @@ function RunGroup({ run, children }: { run: RunAssembly; children: React.ReactNo
 
 /** recuadro del módulo elegido mientras se edita el interior */
 function SelectionBox({ run, module }: { run: RunAssembly; module: number }) {
-  const parts = run.parts.filter((p) => p.module === module && p.kind !== "glow" && p.kind !== "led" && !p.front && p.kind !== "door");
+  const inner = run.parts.filter((p) => p.module === module && p.kind !== "glow" && p.kind !== "led" && !p.front && p.kind !== "door");
+  // un módulo que es solo una puerta (un cuerpo del mueble de TV): se marca la puerta
+  const parts = inner.length ? inner : run.parts.filter((p) => p.module === module && p.kind !== "glow" && p.kind !== "led");
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   for (const p of parts) {

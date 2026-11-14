@@ -17,7 +17,7 @@ import { fromBase64Url, toBase64Url } from "@/lib/base64url";
 import { undressed } from "@/lib/decor";
 import { addDesign, clearDraft, getDesign, nextName, readDraft, updateDesign, useDesigns, writeDraft } from "@/lib/designStore";
 import { fabricStyle } from "@/lib/swatch";
-import { FABRICS, buildFurniture, defaultFurniture, fabricById, furniturePrice, hasLed, furnitureSummary, normalizeFurniture, specById, type FurnitureConfig, type Value } from "@/lib/furniture";
+import { FABRICS, buildFurniture, defaultFurniture, fabricById, furniturePrice, hasLed, furnitureSummary, moduleValues, normalizeFurniture, specById, withGlobal, withModule, type FurnitureConfig, type Value } from "@/lib/furniture";
 import { DEFAULT_CONFIG, type WardrobeConfig } from "@/lib/model";
 import { shrinkImage } from "@/lib/preview";
 import { currentQuery, rememberQuery } from "@/lib/query";
@@ -55,6 +55,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
   const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "estudio" });
   const [ready, setReady] = useState(false);
+  // el módulo tocado en el 3D, para cambiarlo solo (en las familias que lo permiten)
+  const [picked, setPicked] = useState<number | null>(null);
   const [designId, setDesignId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -124,7 +126,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   }, [toast]);
 
   const set = (key: string, value: Value) => {
-    setConfig((c) => normalizeFurniture({ ...c, values: { ...c.values, [key]: value } }));
+    // cambiar algo para todo el mueble pisa lo que cada módulo tenía propio en eso
+    setConfig((c) => withGlobal(c, key, value));
     // al sumar la luz, se prende: así se ve lo que se acaba de agregar
     if (key === "led") setLights(value === true);
   };
@@ -149,8 +152,8 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           <Viewer3D
             config={look}
             assembly={shown}
-            selection={null}
-            onSelect={() => {}}
+            selection={spec.modules && picked !== null ? { run: 0, module: picked } : null}
+            onSelect={spec.modules ? (_run: number, m: number) => setPicked((p) => (p === m ? null : m)) : () => {}}
             open={open}
             leafOffsets={{}}
             xray={false}
@@ -225,6 +228,18 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
 
       <aside className="flex flex-col border-line bg-surface lg:min-h-0 lg:border-l">
         <div className="flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 lg:pb-8">
+          {spec.modules && (
+            <ModulePanel
+              label={spec.modules.label}
+              picked={picked}
+              controls={spec.modules.controls}
+              values={picked === null ? {} : moduleValues(config, picked)}
+              changed={picked !== null && !!config.modules?.[String(picked)]}
+              onChange={(key, value) => picked !== null && setConfig((c) => withModule(c, picked, key, value))}
+              onReset={() => picked !== null && setConfig((c) => withModule(c, picked, null))}
+              onDone={() => setPicked(null)}
+            />
+          )}
           <Section title={spec.title} hint={summary.dimensions}>
             {spec.controls.map((c) => {
               const v = config.values[c.key];
@@ -326,5 +341,52 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Lo de un módulo solo: aparece al tocar un módulo en el 3D (queda marcado),
+ * con sus controles; lo demás del mueble no cambia. Sin módulo elegido, una
+ * línea que explica que se puede.
+ */
+function ModulePanel({ label, picked, controls, values, changed, onChange, onReset, onDone }: {
+  label: string;
+  picked: number | null;
+  controls: NonNullable<ReturnType<typeof specById>>["controls"];
+  values: Record<string, Value>;
+  changed: boolean;
+  onChange: (key: string, value: Value) => void;
+  onReset: () => void;
+  onDone: () => void;
+}) {
+  if (picked === null) return <p className="rounded-2xl border border-line px-4 py-3 text-xs text-ink-2">Tocá un {label.toLowerCase()} en el 3D para cambiarlo solo.</p>;
+  return (
+    <section className="space-y-4 rounded-2xl border border-navy/30 bg-paper/60 p-4" aria-label={`${label} ${picked + 1}`}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="eyebrow">
+          {label} {picked + 1}
+        </h2>
+        <button type="button" className="text-xs font-medium underline-offset-2 hover:underline" onClick={onDone}>
+          Listo
+        </button>
+      </div>
+      {controls.map((c) => {
+        const v = values[c.key];
+        if (c.type === "count") return <Stepper key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(n) => onChange(c.key, n)} />;
+        if (c.type === "choice")
+          return (
+            <div key={c.key} className="space-y-2">
+              <p className="text-sm">{c.label}</p>
+              <Segmented value={v as string} options={c.options} onChange={(id) => onChange(c.key, id)} size={c.options.length > 3 ? "sm" : "md"} />
+            </div>
+          );
+        return null;
+      })}
+      {changed && (
+        <button type="button" className="text-xs text-ink-2 underline underline-offset-2" onClick={onReset}>
+          Igual que el resto
+        </button>
+      )}
+    </section>
   );
 }

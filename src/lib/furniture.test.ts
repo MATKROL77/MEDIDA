@@ -292,3 +292,25 @@ test("en el sillón recto la estructura es una sola y solo se separan los almoha
   assert.equal(burbujas.filter((p) => p.id === "seat" || p.id === "back").length, 2);
   assert.ok(!burbujas.some((p) => /^(seat|back):\d/.test(p.id)), "las burbujas no van por cuerpo");
 });
+
+test("cada módulo se cambia solo, y cambiar todo el mueble olvida lo de cada módulo", async () => {
+  const { moduleValues, withGlobal, withModule } = await import("./furniture.ts");
+  const tv = defaultFurniture("tv");
+  const uno = withModule(tv, 1, "kind", "vidrio");
+  const kinds = (c: FurnitureConfig) => buildFurniture(c).parts.filter((p) => p.material === "glass").length;
+  assert.equal(kinds(tv), 0);
+  assert.ok(kinds(uno) > 0, "el módulo 2 pasa a vidrio");
+  assert.equal(moduleValues(uno, 1).kind, "vidrio");
+  assert.equal(moduleValues(uno, 0).kind, "nicho-cajon");
+  // un enlace editado a mano no mete cualquier cosa
+  const raro = normalizeFurniture({ ...tv, modules: { "1": { kind: "toString", drawers: 99 }, x: { kind: "vidrio" } } });
+  assert.deepEqual(raro.modules, { "1": { drawers: 3 } });
+  // cambiar los frentes de todo el mueble olvida el vidrio del módulo 2
+  const todos = withGlobal(uno, "fronts", "puertas");
+  assert.equal(todos.modules, undefined);
+  // la biblioteca: una columna con vidrio y más estantes
+  const bib = withModule(withModule(defaultFurniture("bibliotecas"), 0, "doors", "vidrio"), 0, "shelves", 6);
+  const parts = buildFurniture(bib).parts;
+  assert.ok(parts.some((p) => p.id.startsWith("door:0") && p.material === "glass"));
+  assert.ok(!parts.some((p) => p.id.startsWith("door:1") && p.material === "glass"));
+});
