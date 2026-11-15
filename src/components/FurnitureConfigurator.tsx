@@ -64,8 +64,6 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const spacerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const shrink = useScrollShrink(portrait, sectionRef, spacerRef, canvasRef);
-  // en el teléfono el panel de controles se pliega: queda el título y el precio, y el 3D crece
-  const [panelOpen, setPanelOpen] = useState(true);
   const [designId, setDesignId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -242,18 +240,12 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
       {portrait && <div ref={spacerRef} aria-hidden="true" className="lg:hidden" />}
 
       <aside className="flex flex-col border-line bg-surface lg:min-h-0 lg:border-l">
-        {/* en el teléfono, el panel se pliega para dejarle la pantalla al 3D */}
-        <button type="button" onClick={() => setPanelOpen((o) => !o)} aria-expanded={panelOpen} className="flex w-full items-center justify-between gap-3 px-5 pt-5 text-left lg:hidden">
-          <span>
-            <span className="eyebrow block text-ink">Personalizar tu mueble</span>
-            <span className="mt-1 block text-sm text-ink-2">Medidas · Materiales · Accesorios</span>
-          </span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={`shrink-0 transition-transform duration-300 ${panelOpen ? "" : "rotate-180"}`}>
-            <path d="M6 15l6-6 6 6" />
-          </svg>
-          <span className="sr-only">{panelOpen ? "Plegar el panel" : "Desplegar el panel"}</span>
-        </button>
-        <div className={`flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 max-lg:space-y-6 max-lg:pt-3 lg:pb-8 ${panelOpen ? "" : "max-lg:hidden"}`}>
+        {/* en el teléfono, el panel arranca con su título; siempre desplegado */}
+        <div className="px-5 pt-5 lg:hidden">
+          <p className="eyebrow text-ink">Personalizar tu mueble</p>
+          <p className="mt-1 text-sm text-ink-2">Medidas · Materiales · Accesorios</p>
+        </div>
+        <div className="flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 max-lg:space-y-6 max-lg:pt-3 lg:pb-8">
           {spec.modules && (
             <ModulePanel
               label={spec.modules.label}

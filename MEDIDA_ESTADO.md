@@ -1,6 +1,6 @@
 # MEDIDA — estado operativo compartido
 
-Actualizado: 2026-11-14 (Argentina).
+Actualizado: 2026-11-15 (Argentina).
 
 ## Verificado
 
@@ -72,10 +72,14 @@ desplaza lo de adentro del panel. Al volver arriba se agranda de a poco. El
 mueble se ve entero en todo el recorrido: el lienzo no cambia de tamaño y la
 cámara se aleja en la misma medida. Verificado en Chromium emulando un iPhone
 13: a 100 px de deslizamiento el 3D mide 418 px y el panel empieza en 418 px;
-desde 213 px queda en 305 px y el panel pasa por debajo; con el panel
-plegado igual se puede achicar. Sin scroll horizontal a 390 y 1440 px;
+desde 213 px queda en 305 px y el panel pasa por debajo. Sin scroll
+horizontal a 390 y 1440 px;
 `npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
 y `build` sin errores. Falta probarlo en un teléfono real.
+
+**El panel ya no se pliega (15/11/2026).** A pedido de Matías, en el
+teléfono "Personalizar tu mueble" queda siempre desplegado: se sacó la
+flecha que lo plegaba.
 
 **Link principal con la edición nueva (14/11/2026, más tarde).** A pedido
 de Matías, el link principal publica la edición nueva (beige y azul marino,
