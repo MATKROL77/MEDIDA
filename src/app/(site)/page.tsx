@@ -47,10 +47,11 @@ export default function Home() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       {/* Hero: qué es y cómo hablar; debajo, directamente, los configuradores */}
-      <section className="wrap pb-10 pt-12 sm:pb-14 sm:pt-20">
+      <section className="wrap pb-10 pt-12 sm:pb-12 sm:pt-14">
         <div className="mx-auto max-w-[70rem] text-center">
           <p className="eyebrow">{site.tagline}</p>
-          <h1 className="display-xl mt-5">
+          {/* compacto como en el teléfono: en la compu los configuradores se ven sin bajar */}
+          <h1 className="display-xl mt-5 sm:text-[clamp(1.8rem,5.2vw,3.6rem)]">
             Tus productos.
             <br />
             Infinitas configuraciones.
@@ -81,10 +82,8 @@ export default function Home() {
           Configuradores
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
-          {FAMILIES.map((family, i) => (
-            <div key={family.id} className={i === 0 ? "sm:col-span-2 lg:row-span-2" : undefined}>
-              <FamilyCard family={family} featured={i === 0} placement="landing-familias" />
-            </div>
+          {FAMILIES.map((family) => (
+            <FamilyCard key={family.id} family={family} placement="landing-familias" />
           ))}
         </div>
       </section>

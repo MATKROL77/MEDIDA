@@ -82,7 +82,9 @@ portada arranca con "Tus productos. Infinitas configuraciones." y, justo
 debajo, los siete configuradores; se sacaron el 3D del sillón con sus
 opciones, las cualidades, las muestras de telas y la sección de
 interacción. Siguen abajo Para empresas, Cómo funciona, Lo que recibe tu
-empresa y Contacto. La portada ya no tiene 3D. Para que los configuradores
+empresa y Contacto. En la compu queda igual que en el teléfono: el título
+en dos líneas y los siete configuradores del mismo tamaño, en tres columnas,
+visibles sin bajar (a 1440 × 900 empiezan a 517 px). La portada ya no tiene 3D. Para que los configuradores
 anden fluidos en una Mac con pantalla Retina, el 3D tiene un tope de unos
 2,4 millones de píxeles (antes podía dibujar al doble de densidad en toda la
 pantalla), la oclusión se calcula a media resolución y el suavizado y las
