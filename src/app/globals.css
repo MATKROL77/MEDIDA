@@ -431,32 +431,6 @@ body {
     opacity: 0.35;
     pointer-events: none;
   }
-  /* controles del mueble del hero: un bloque debajo en el teléfono, una barra flotante en pantalla grande */
-  .dock {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem 0.25rem;
-    max-width: 100%;
-    padding: 0.6rem 0.75rem;
-    border-radius: 1.6rem;
-    background: rgb(255 255 255 / 0.45);
-    border: 1px solid rgb(255 255 255 / 0.6);
-  }
-  @media (min-width: 640px) {
-    .dock {
-      flex-wrap: nowrap;
-      padding: 0.35rem 0.5rem;
-      border-radius: 999px;
-      background: rgb(255 255 255 / 0.55);
-      -webkit-backdrop-filter: blur(14px);
-      backdrop-filter: blur(14px);
-      box-shadow:
-        0 1px 2px rgb(0 0 0 / 0.06),
-        0 8px 28px rgb(17 18 20 / 0.12);
-    }
-  }
   .tool-sep {
     width: 1px;
     height: 1.4rem;
@@ -879,47 +853,3 @@ body {
   }
 }
 
-/* la portada: un marco de vidrio alrededor de la foto del mueble */
-.hero-stage {
-  border-radius: 2rem;
-  background: var(--color-beige);
-}
-.hero-chip {
-  border-radius: 1rem;
-  padding: 0.6rem 0.85rem;
-  background: rgb(255 255 255 / 0.4);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgb(255 255 255 / 0.6);
-}
-
-/* una línea fina con brillo: separa sin pesar */
-.hairline {
-  height: 1px;
-  background: var(--color-line);
-}
-
-/* una muestra de material: la foto de verdad, a escala, con su nombre */
-.material-tile {
-  position: relative;
-  overflow: hidden;
-  border-radius: 1.1rem;
-  aspect-ratio: 3 / 4;
-  border: 1px solid rgb(255 255 255 / 0.38);
-  box-shadow: 0 14px 34px rgb(14 22 44 / 0.18);
-  transition: transform 500ms var(--ease-out);
-}
-.material-tile:hover {
-  transform: translateY(-4px);
-}
-.material-tile > span {
-  position: absolute;
-  inset: auto 0 0 0;
-  padding: 2.2rem 0.85rem 0.75rem;
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--color-on-dark);
-  background: linear-gradient(transparent, rgb(12 16 30 / 0.62));
-}

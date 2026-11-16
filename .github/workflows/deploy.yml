@@ -145,7 +145,7 @@ jobs:
           # el link principal es esta versión: siete familias, sin el cartel de "en desarrollo" y se puede indexar
           home=$(curl -s "$url/")
           echo "$home" | grep -q "Infinitas configuraciones" || { echo "::error::La portada del link principal no es la de esta versión."; exit 1; }
-          echo "$home" | grep -q "Siete familias" || { echo "::error::El link principal no es la edición nueva."; exit 1; }
+          echo "$home" | grep -q 'href="/demo/sillones/"' || { echo "::error::El link principal no es la edición nueva."; exit 1; }
           if echo "$home" | grep -q "En desarrollo"; then echo "::error::El link principal dice que está en desarrollo."; exit 1; fi
           if curl -s "$url/robots.txt" | grep -q "Disallow: /$"; then echo "::error::El link principal no se puede indexar."; exit 1; fi
           # el servidor: contesta, y sin sesión no entrega nada de nadie

@@ -1,6 +1,6 @@
 # MEDIDA — estado operativo compartido
 
-Actualizado: 2026-11-15 (Argentina).
+Actualizado: 2026-11-16 (Argentina).
 
 ## Verificado
 
@@ -76,6 +76,20 @@ desde 213 px queda en 305 px y el panel pasa por debajo. Sin scroll
 horizontal a 390 y 1440 px;
 `npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
 y `build` sin errores. Falta probarlo en un teléfono real.
+
+**Portada directa y 3D más liviano (16/11/2026).** A pedido de Matías, la
+portada arranca con "Tus productos. Infinitas configuraciones." y, justo
+debajo, los siete configuradores; se sacaron el 3D del sillón con sus
+opciones, las cualidades, las muestras de telas y la sección de
+interacción. Siguen abajo Para empresas, Cómo funciona, Lo que recibe tu
+empresa y Contacto. La portada ya no tiene 3D. Para que los configuradores
+anden fluidos en una Mac con pantalla Retina, el 3D tiene un tope de unos
+2,4 millones de píxeles (antes podía dibujar al doble de densidad en toda la
+pantalla), la oclusión se calcula a media resolución y el suavizado y las
+sombras suaves usan menos muestras. Verificado en Chromium a 390 y 1440 px:
+sin scroll horizontal, sin errores y sin lienzo 3D en la portada; `npm
+test`, `typecheck`, `lint` y `build` sin errores. Falta medirlo en una Mac
+real y en Safari: el entorno de trabajo solo tiene Chromium.
 
 **El panel ya no se pliega (15/11/2026).** A pedido de Matías, en el
 teléfono "Personalizar tu mueble" queda siempre desplegado: se sacó la

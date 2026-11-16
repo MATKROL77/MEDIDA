@@ -157,22 +157,26 @@ for (const [width, height] of [
     await page.getByRole("dialog").waitFor({ state: "hidden" });
   });
 
-  await check("landing: lo primero es el configurador, y el contacto queda debajo", async () => {
-    const stage = await page.getByRole("group", { name: "Probá el configurador" }).boundingBox();
+  await check("landing: arriba el título y, enseguida, todos los configuradores", async () => {
     const title = await page.locator("h1").boundingBox();
     const contact = await page.getByRole("link", { name: "Quiero MEDIDA para mi empresa" }).boundingBox();
-    assert(stage.y < title.y && title.y < contact.y, "el orden no es configurador, título, contacto");
+    const cards = page.locator("#configuradores a[href^='/demo/']");
+    const first = await cards.first().boundingBox();
+    assert(title.y < contact.y && contact.y < first.y, "el orden no es título, contacto, configuradores");
+    // entre el título y los configuradores no hay otra sección
+    const between = await page.evaluate(() => {
+      const hero = document.querySelector("h1").closest("section");
+      return hero.nextElementSibling?.id;
+    });
+    assert(between === "configuradores", `después del título viene ${between}`);
+    const hrefs = new Set(await cards.evaluateAll((as) => as.map((a) => a.getAttribute("href"))));
+    assert(hrefs.size === 7, `configuradores en la portada: ${hrefs.size}`);
   });
 
-  await check("landing: las texturas que se muestran son fotos del motor", async () => {
-    const tiles = await page.locator(".material-tile").evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundImage));
-    assert(tiles.length === 8 && tiles.every((b) => b.includes("/tex/")), `muestras: ${tiles.length}`);
-  });
-
-  await check("hero: el motor 3D no se baja con la página", async () => {
-    // con movimiento reducido el 3D espera a que lo pidan: no tiene que haber lienzo
-    assert((await page.locator("canvas").count()) === 0, "hay un lienzo 3D sin haberlo pedido");
-    assert(await page.getByRole("button", { name: "Ver en 3D" }).isVisible(), "falta el botón para activarlo");
+  await check("landing: sin el 3D del sillón ni las muestras de telas", async () => {
+    assert((await page.locator("canvas").count()) === 0, "hay un lienzo 3D en la portada");
+    assert((await page.getByRole("group", { name: "Probá el configurador" }).count()) === 0, "sigue el configurador de la portada");
+    assert((await page.getByText("La textura hace al mueble.").count()) === 0, "siguen las muestras de materiales");
   });
   await context.close();
 }

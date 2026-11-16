@@ -513,8 +513,8 @@ function Effects({ hq, studio, rich, bus }: { hq: boolean; studio: boolean; rich
   // dos composiciones fijas: el compositor no admite hijos que aparecen y desaparecen
   if (hq)
     return (
-      <EffectComposer enabled={enabled} multisampling={4} enableNormalPass={false}>
-        <N8AO aoRadius={rich ? 0.6 : 0.45} intensity={rich ? 3.4 : 2.4} distanceFalloff={0.9} quality="medium" />
+      <EffectComposer enabled={enabled} multisampling={2} enableNormalPass={false}>
+        <N8AO aoRadius={rich ? 0.6 : 0.45} intensity={rich ? 3.4 : 2.4} distanceFalloff={0.9} quality="medium" halfRes />
         <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
         <Vignette offset={0.3} darkness={darkness} />
         <ToneMapping mode={tone} />
@@ -637,7 +637,7 @@ function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoO
       </Suspense>
       <KeyLight span={span} shape={props.config.shape} rich={!!props.confine} />
       {/* sombras de borde difuso, que se abren con la distancia, como bajo la luz de un showroom */}
-      <SoftShadows size={22} samples={10} focus={0.55} />
+      <SoftShadows size={22} samples={8} focus={0.55} />
       <Wardrobe props={props} kit={kit} />
       <ViewZoom zoom={props.zoom} />
       <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway && !props.photoOn} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
@@ -665,6 +665,18 @@ function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoO
   );
 }
 
+/**
+ * Tope de resolución por cantidad de píxeles: en una pantalla Retina grande,
+ * el doble de densidad son cuatro veces los píxeles y la oclusión y las
+ * sombras suaves se calculan en cada uno. Con ~2,4 millones de píxeles el
+ * mueble se ve nítido y el 3D anda fluido en una notebook.
+ */
+function pixelCap(maxDpr: number): number {
+  if (typeof window === "undefined") return 1;
+  const area = Math.max(1, window.innerWidth * window.innerHeight);
+  return Math.max(1, Math.min(maxDpr, Math.sqrt(2.4e6 / area)));
+}
+
 export default function Scene(props: ViewerProps) {
   // ?calidad=baja fuerza el modo liviano, para equipos muy viejos;
   // ?calidad=alta la deja fija arriba (para grabar videos cuadro a cuadro)
@@ -674,7 +686,7 @@ export default function Scene(props: ViewerProps) {
   const forcedHigh = wanted === "alta";
   const [hq, setHq] = useState(!forcedLow);
   const maxDpr = props.maxDpr ?? 2;
-  const [dpr, setDpr] = useState(forcedLow || forcedHigh ? 1 : Math.min(1.5, maxDpr));
+  const [dpr, setDpr] = useState(forcedLow || forcedHigh ? 1 : Math.min(1.5, maxDpr, pixelCap(maxDpr)));
   const intro = props.intro !== false;
   // la calidad fijada puede cambiar con la escena ya andando
   useEffect(() => {
@@ -729,7 +741,7 @@ export default function Scene(props: ViewerProps) {
           onIncline={() => {
             if (forcedLow || forcedHigh || bus.busy) return;
             setHq(true);
-            setDpr(Math.min(maxDpr, window.devicePixelRatio));
+            setDpr(Math.min(maxDpr, window.devicePixelRatio, pixelCap(maxDpr)));
           }}
           onDecline={() => {
             // el trazado usa la placa a propósito: esos cuadros lentos no cuentan

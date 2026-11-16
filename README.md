@@ -52,7 +52,7 @@ todavía no está activo y los diseños se siguen guardando en el dispositivo.
 
 | Ruta | Qué es |
 | --- | --- |
-| `/` | Landing: el hero con el configurador vivo, lo que se puede cambiar, las familias, los servicios y el contacto |
+| `/` | Landing: el título y, enseguida, los siete configuradores; después los servicios, cómo funciona, lo que recibe la empresa y el contacto |
 | `/configuradores/` | Catálogo: lo que se puede probar hoy y lo que está en desarrollo |
 | `/servicios/` y `/servicios/<servicio>/` | Los tres servicios para empresas |
 | `/demo/` | El configurador de placares |
@@ -202,7 +202,7 @@ la portada en mayúsculas) y texto en Inter.
 
 Los configuradores se abren en una ventana sobre la página
 (`src/components/site/ConfiguratorWindow.tsx`), que queda atrás apenas fuera
-de foco. Mientras la ventana está abierta, el 3D de la portada deja de dibujar.
+de foco.
 
 En el teléfono parado, el 3D de cada configurador arranca grande (78 % del
 alto) con una seña animada de "Deslizá". Al deslizar se achica de a poco,
@@ -420,10 +420,8 @@ requiere adaptación. Los precios de la demo son de muestra
 
 ## Rendimiento
 
-- La landing no baja el motor 3D con la página: muestra una imagen ya
-  optimizada y, cuando la página quedó quieta y el hero está en pantalla, baja
-  el 3D y lo funde encima. Con ahorro de datos o movimiento reducido espera a
-  que la persona lo pida. Fuera de pantalla deja de dibujar.
+- La landing no tiene 3D: el título y las fotos de cada familia. El motor 3D
+  se baja recién al abrir un configurador.
 - Las imágenes del sitio son capturas reales del configurador en WebP
   (`public/img/`). Las de la portada salen del modo foto (`foto=1` en
   `/render/`, ver `scripts/capture.mjs`): son la misma escena que después

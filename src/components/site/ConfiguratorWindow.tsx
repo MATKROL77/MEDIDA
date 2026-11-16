@@ -64,10 +64,6 @@ export function ConfiguratorWindow() {
   useEffect(() => {
     if (window.self !== window.top) window.parent.postMessage({ medida: "configurador", path: window.location.pathname }, window.location.origin);
   }, [pathname]);
-  // lo que quedó atrás (el 3D de la portada) deja de dibujar mientras la ventana está abierta
-  useEffect(() => {
-    window.dispatchEvent(new CustomEvent("medida:ventana", { detail: !!href }));
-  }, [href]);
   useEffect(() => {
     if (!href) setInside(null);
   }, [href]);
