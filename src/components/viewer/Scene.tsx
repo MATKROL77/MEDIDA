@@ -583,6 +583,33 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
     }
     return map;
   }, [props.assembly]);
+  // qué módulo hay en cada posición a lo ancho: tocar el fondo o un estante corrido elige el módulo de ese lugar
+  const moduleAt = useMemo(() => {
+    const map = new Map<number, (x: number) => number | null>();
+    for (const r of props.assembly.runs) {
+      const spans = new Map<number, [number, number]>();
+      for (const p of r.parts) {
+        if (p.module === null || p.decor || p.kind === "glow" || p.kind === "led") continue;
+        const s = spans.get(p.module);
+        spans.set(p.module, s ? [Math.min(s[0], p.position[0]), Math.max(s[1], p.position[0] + p.size[0])] : [p.position[0], p.position[0] + p.size[0]]);
+      }
+      map.set(r.index, (x: number) => {
+        let best: number | null = null;
+        let gap = 40;
+        for (const [m, [a, b]] of spans) {
+          const d = x < a ? a - x : x > b ? x - b : 0;
+          // adentro de dos a la vez (un divisor compartido): el de centro más cercano
+          const off = d + Math.abs(x - (a + b) / 2) * 1e-3;
+          if (off < gap) {
+            gap = off;
+            best = m;
+          }
+        }
+        return best;
+      });
+    }
+    return map;
+  }, [props.assembly]);
   // cómo entra cada pieza: se decide una vez, cuando aparece
   const entrances = useRef(new Map<string, { delay: number; from: [number, number, number] | null }>());
   return (
@@ -612,7 +639,7 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
                 entrance = { delay: first ? 0.25 + e.order * 1.45 + run.index * 0.15 : 0.02 + e.order * 0.4, from: props.intro === false ? null : e.from };
                 entrances.current.set(key, entrance);
               }
-              return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={entrance?.delay ?? 0} from={entrance?.from} onSelect={props.onSelect} onLeaf={props.onLeaf} hidden={hidden.get(run.index)?.get(p.id)} />;
+              return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={entrance?.delay ?? 0} from={entrance?.from} moduleAt={moduleAt.get(run.index)} onSelect={props.onSelect} onLeaf={props.onLeaf} hidden={hidden.get(run.index)?.get(p.id)} />;
             }}
           </Presence>
           {props.selection && props.selection.run === run.index && <SelectionBox run={run} module={props.selection.module} />}

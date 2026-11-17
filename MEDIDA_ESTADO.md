@@ -77,16 +77,26 @@ horizontal a 390 y 1440 px;
 `npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
 y `build` sin errores. Falta probarlo en un teléfono real.
 
-**En curso (17/11/2026, sin publicar todavía).** Armado animado: al abrir
+**Editar cada módulo, arreglado (17/11/2026).** Matías avisó que en las
+bibliotecas y los muebles de TV no se podía editar cada parte. La edición por
+módulo existía pero fallaba en el uso: tocar dentro de un hueco (el fondo, un
+estante corrido, un adorno) no elegía nada, y en el teléfono las opciones del
+módulo quedaban abajo, fuera de la vista. Ahora tocar cualquier parte de un
+módulo lo elige, hay un aviso sobre el 3D ("Tocá un módulo para editarlo") y
+al elegirlo sus opciones quedan a la vista (en el teléfono el 3D se achica;
+en la compu el panel vuelve arriba). Verificado en Chromium a 1280 px y
+emulando un iPhone 13, en el mueble de TV y la biblioteca.
+
+**Armado animado y fluidez (17/11/2026).** Armado animado: al abrir
 un configurador las piezas llegan volando desde fuera de la pantalla y arman
 el mueble en orden de taller (base, laterales, fondo y tapa, interior,
 frentes); lo que se agrega después llega igual. El mapa de sombras solo se
 redibuja cuando el mueble cambia, y al quedar quieto el 3D dibuja un cuadro
 final a toda nitidez antes de dormirse. Verificado en Chromium con una
 secuencia cuadro a cuadro (placard y mueble de TV) y con `npm test` (84
-pruebas), `typecheck`, `lint` y `build`. En paralelo se está rehaciendo la
+pruebas), `typecheck`, `lint` y `build`. Sigue en curso, sin publicar: la
 ropa del placard, la luz, las sombras y el ambiente, y la decoración de las
-demás familias; falta integrarlo, revisarlo y publicarlo.
+demás familias.
 
 **Motor más rápido (17/11/2026).** El 3D deja de dibujar cuando está
 quieto y se despierta con cualquier toque, cambio de opción o

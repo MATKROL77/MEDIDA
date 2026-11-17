@@ -57,6 +57,9 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   const [ready, setReady] = useState(false);
   // el módulo tocado en el 3D, para cambiarlo solo (en las familias que lo permiten)
   const [picked, setPicked] = useState<number | null>(null);
+  // la seña de "tocá un módulo" se va la primera vez que se toca uno
+  const [pickedOnce, setPickedOnce] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   // en el teléfono: el 3D agrandado y la cámara más cerca
   const portrait = usePortraitPhone();
   // en el teléfono el 3D arranca agrandado y se achica de a poco siguiendo el dedo
@@ -149,6 +152,18 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
     setToast({ text: cart ? "Agregado a tu carrito de consulta." : "Guardado en tus favoritos.", href: "/mis-disenos/", hrefLabel: "Ver mis diseños" });
   };
 
+  // al tocar un módulo, sus opciones quedan a la vista: en el teléfono el 3D se achica y el
+  // panel sube; en la compu el panel vuelve arriba, donde están
+  const collapse = shrink.collapse;
+  useEffect(() => {
+    if (picked === null) return;
+    setPickedOnce(true);
+    if (portrait) collapse();
+    else panelRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    // solo al cambiar de módulo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked]);
+
   const link = typeof window === "undefined" ? "" : `${window.location.origin}/demo/${family}/?c=${encode(config)}`;
   const message = [`Hola, armé este mueble a medida en la web:`, "", `${spec.label} · ${summary.dimensions}`, ...summary.lines, `Precio estimado: ${money(price)}`, "Valores orientativos de muestra; el fabricante debe validar medidas y costos.", "", `Mi diseño: ${link}`].join("\n");
 
@@ -181,6 +196,12 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
         </div>
         <PhotoBadge status={photo.status} />
         <SwipeHint show={portrait && shrink.atTop} />
+        {/* cada módulo se edita solo: se avisa sobre el 3D, que es donde se toca */}
+        {spec.modules && (
+          <p aria-hidden={picked !== null || pickedOnce} className={`glass pointer-events-none absolute bottom-[4.7rem] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium text-ink transition-opacity duration-500 ${ready && picked === null && !pickedOnce ? "opacity-100" : "opacity-0"}`}>
+            Tocá un {spec.modules.label.toLowerCase()} para editarlo
+          </p>
+        )}
 
         {/* abajo a la izquierda, a la altura del aviso de la foto realista */}
         <button
@@ -245,7 +266,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
           <p className="eyebrow text-ink">Personalizar tu mueble</p>
           <p className="mt-1 text-sm text-ink-2">Medidas · Materiales · Accesorios</p>
         </div>
-        <div className="flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 max-lg:space-y-6 max-lg:pt-3 lg:pb-8">
+        <div ref={panelRef} className="flex-1 space-y-8 overflow-y-auto px-5 pb-28 pt-6 max-lg:space-y-6 max-lg:pt-3 lg:pb-8">
           {spec.modules && (
             <ModulePanel
               label={spec.modules.label}

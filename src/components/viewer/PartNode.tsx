@@ -919,6 +919,8 @@ type NodeProps = {
   delay: number;
   /** desde dónde llega volando a su lugar, en mm; sin esto aparece creciendo */
   from?: [number, number, number] | null;
+  /** qué módulo hay en una posición a lo ancho del tramo (mm): para las piezas que no son de un solo módulo */
+  moduleAt?: (x: number) => number | null;
   onSelect?: (run: number, module: number) => void;
   /** tocar una hoja corrediza la corre para el otro lado */
   onLeaf?: (id: string) => void;
@@ -1049,7 +1051,7 @@ function splitHidden(g: THREE.BufferGeometry, hidden: number): { visible: THREE.
   return { visible: pick(false), shaded: pick(true) };
 }
 
-export function PartNode({ part, exiting, kit, delay, from = null, onSelect, onLeaf, hidden = 0 }: NodeProps) {
+export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onSelect, onLeaf, hidden = 0 }: NodeProps) {
   const anim = useSceneAnim();
   const outer = useRef<THREE.Group>(null);
   const rot = useRef<THREE.Group>(null);
@@ -1247,13 +1249,18 @@ export function PartNode({ part, exiting, kit, delay, from = null, onSelect, onL
     }
   });
 
-  const selectable = onSelect && part.module !== null && part.kind !== "glow" && part.kind !== "led";
+  // tocar cualquier parte de un módulo lo elige: su estante, su fondo, lo que tiene adentro.
+  // El fondo, la tapa o el zócalo son de todo el mueble: ahí cuenta dónde se tocó
+  const selectable = onSelect && (part.module !== null || moduleAt) && part.kind !== "glow" && part.kind !== "led";
   const handleClick = selectable
     ? (e: ThreeEvent<MouseEvent>) => {
         // un arrastre para girar no cuenta como clic
         if (e.delta > 6) return;
+        let m = part.module;
+        if (m === null && moduleAt && outer.current?.parent) m = moduleAt(outer.current.parent.worldToLocal(e.point.clone()).x / MM);
+        if (m === null) return;
         e.stopPropagation();
-        onSelect(part.run, part.module!);
+        onSelect(part.run, m);
       }
     : undefined;
 
