@@ -830,14 +830,16 @@ export default function Scene(props: ViewerProps) {
   const forcedHigh = wanted === "alta";
   const [hq, setHq] = useState(!forcedLow);
   const maxDpr = props.maxDpr ?? 2;
-  const [dpr, setDpr] = useState(forcedLow || forcedHigh ? 1 : Math.min(1.5, maxDpr, pixelCap(maxDpr)));
+  // la calidad fija alta es para grabar: usa la densidad de la pantalla que la pide
+  const fixedDpr = forcedHigh && typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1;
+  const [dpr, setDpr] = useState(forcedLow || forcedHigh ? fixedDpr : Math.min(1.5, maxDpr, pixelCap(maxDpr)));
   const intro = props.intro !== false;
   // la calidad fijada puede cambiar con la escena ya andando
   useEffect(() => {
     if (!forcedLow && !forcedHigh) return;
     setHq(forcedHigh);
-    setDpr(1);
-  }, [forcedLow, forcedHigh]);
+    setDpr(fixedDpr);
+  }, [forcedLow, forcedHigh, fixedDpr]);
   const anim = useMemo<SceneAnim>(
     () => ({
       open: spring(),
