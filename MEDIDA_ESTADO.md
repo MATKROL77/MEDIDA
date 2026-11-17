@@ -77,6 +77,17 @@ horizontal a 390 y 1440 px;
 `npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
 y `build` sin errores. Falta probarlo en un teléfono real.
 
+**En curso (17/11/2026, sin publicar todavía).** Armado animado: al abrir
+un configurador las piezas llegan volando desde fuera de la pantalla y arman
+el mueble en orden de taller (base, laterales, fondo y tapa, interior,
+frentes); lo que se agrega después llega igual. El mapa de sombras solo se
+redibuja cuando el mueble cambia, y al quedar quieto el 3D dibuja un cuadro
+final a toda nitidez antes de dormirse. Verificado en Chromium con una
+secuencia cuadro a cuadro (placard y mueble de TV) y con `npm test` (84
+pruebas), `typecheck`, `lint` y `build`. En paralelo se está rehaciendo la
+ropa del placard, la luz, las sombras y el ambiente, y la decoración de las
+demás familias; falta integrarlo, revisarlo y publicarlo.
+
 **Motor más rápido (17/11/2026).** El 3D deja de dibujar cuando está
 quieto y se despierta con cualquier toque, cambio de opción o
 deslizamiento; el trazado de rayos (unos 200 KB) se baja recién al prender
