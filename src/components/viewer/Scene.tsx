@@ -1,6 +1,6 @@
 "use client";
 
-import { ContactShadows, Edges, Environment, Lightformer, OrbitControls, PerformanceMonitor, SoftShadows } from "@react-three/drei";
+import { Edges, Environment, Lightformer, OrbitControls, PerformanceMonitor, SoftShadows } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer, N8AO, SMAA, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
@@ -11,6 +11,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { aspectReach } from "@/lib/framing";
 import type { Assembly, RunAssembly } from "@/lib/assembly";
 import { ledHex, type WardrobeConfig } from "@/lib/model";
+import { neutralInverse } from "@/lib/tone";
 
 import { clampDt, DRAWER, FIRM, HEAVY, type SceneAnim, SceneAnimContext, SOFT, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
 import { drawerGroupsOf, entranceOf, isCovered, leavesOf, overlaps, sweep } from "@/lib/motion";
@@ -18,6 +19,7 @@ import { createKit, disposeKit, frontMaterials, GLASS_OPACITY, type MaterialKit 
 import { hiddenFaces } from "@/lib/gaps";
 import { MM, PartNode, Presence } from "./PartNode";
 import type { FloorType } from "./constants";
+import { Grounding } from "./Grounding";
 import { createPhotoBus, photoCapable, type PhotoBus, PhotoMode, type PhotoStatus } from "./PhotoMode";
 import { Room, type Walls } from "./Room";
 
@@ -79,8 +81,29 @@ export type ViewerProps = {
 
 /** fondo liso de partida: un gris apenas cálido, para que la madera no se enfríe */
 export const STUDIO_BACKDROP = "#f0efed";
-/** cuánto más intenso entra el fondo liso para compensar el mapeo de tonos */
-const STUDIO_GAIN = 1.75;
+
+/** un color de fondo, con la luz que tiene que traer para salir de ese color después de la curva de tonos */
+function backdropColor(hex: string): THREE.Color {
+  const c = new THREE.Color(hex);
+  const [r, g, b] = neutralInverse([c.r, c.g, c.b]);
+  return c.setRGB(r, g, b);
+}
+
+/**
+ * La luz del 3D rápido, como la de un planificador de muebles: mucha luz
+ * pareja (la foto del estudio y un relleno de cielo y piso) para que los
+ * blancos se lean blancos y los interiores se vean, y una luz principal suave
+ * de costado, como de ventana, que da volumen y la sombra. `environment`, la
+ * intensidad de la foto del estudio; `sky`, el relleno parejo; `key`, la luz
+ * de ventana: la única luz directa y la única que hace sombra (cada luz
+ * directa más se paga en cada píxel del mueble). Es la misma con paredes y
+ * sobre fondo liso: el mueble no cambia de cara al cambiar de ambiente.
+ */
+const LIGHT = { environment: 0.72, sky: 1.15, key: 2.2 } as const;
+/** con los LED prendidos el ambiente baja, como al atardecer: no a oscuras */
+const DUSK = 0.3;
+/** cuánto más que su color alumbra la mancha de un LED lo que tiene debajo */
+const GLOW_GAIN = 2;
 
 const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
   front: [0, 0.14, 1],
@@ -103,12 +126,14 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   anim.room.target = props.environment.mode === "room" ? 1 : 0;
 
   const led = useMemo(() => new THREE.Color(ledHex(props.config)), [props.config]);
+  // la luz que cae sobre una placa es menos teñida que la tira que la da: sobre un blanco se ve blanca cálida, no naranja
+  const glow = useMemo(() => led.clone().lerp(new THREE.Color("#ffffff"), 0.4).multiplyScalar(GLOW_GAIN), [led]);
   const fronts = useMemo(() => frontMaterials(kit), [kit]);
   const backdrop = props.backdrop ?? STUDIO_BACKDROP;
-  // el mapeo de tonos oscurece los claros: el fondo liso entra con ganancia para salir del color pedido
+  // la curva de tonos aprieta los claros: el fondo liso entra con la luz justa para salir del color pedido
   const bg = useMemo(() => {
-    const studio = new THREE.Color(backdrop).multiplyScalar(STUDIO_GAIN);
-    return { studio, room: new THREE.Color("#ece5d8"), cur: studio.clone() };
+    const studio = backdropColor(backdrop);
+    return { studio, room: backdropColor("#ece5d8"), cur: studio.clone() };
   }, [backdrop]);
 
   const motion = useMemo(
@@ -136,23 +161,23 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
     const e = anim.explode.v;
     kit.led.emissive.copy(led);
     kit.led.emissiveIntensity = 0.02 + l * 5.5;
+    // la mancha de luz multiplica lo que tiene debajo: su color entra con ganancia
     const glowBase = l * (1 - 0.85 * e);
-    kit.glow.z.color.copy(led);
-    kit.glow.z.opacity = glowBase * 0.85;
-    kit.glow.y.color.copy(led);
-    kit.glow.y.opacity = glowBase * 0.6;
-    kit.glow["x+"].color.copy(led);
-    kit.glow["x+"].opacity = glowBase * 0.55;
-    kit.glow["x-"].color.copy(led);
-    kit.glow["x-"].opacity = glowBase * 0.55;
+    kit.glow.z.color.copy(glow);
+    kit.glow.z.opacity = glowBase * 0.9;
+    kit.glow.y.color.copy(glow);
+    kit.glow.y.opacity = glowBase * 0.7;
+    kit.glow["x+"].color.copy(glow);
+    kit.glow["x+"].opacity = glowBase * 0.6;
+    kit.glow["x-"].color.copy(glow);
+    kit.glow["x-"].opacity = glowBase * 0.6;
     for (const m of fronts) {
       m.opacity = 1 - 0.84 * x;
       m.depthWrite = m.opacity > 0.97;
     }
     kit.glass.opacity = GLASS_OPACITY * (1 - 0.7 * x);
-    // de noche el ambiente baja para que se luzcan los LED
     // con los LED prendidos el ambiente baja un poco, como al atardecer: no a oscuras
-    scene.environmentIntensity = (props.confine ? 0.55 : 1) * (1 - 0.35 * l);
+    scene.environmentIntensity = LIGHT.environment * (1 - DUSK * l);
     bg.cur.copy(bg.studio).lerp(bg.room, anim.room.v).multiplyScalar(1 - 0.2 * l);
     scene.background = bg.cur;
   });
@@ -220,42 +245,47 @@ function sequence(
   }
 }
 
-/** intensidad del softbox del modo foto: da en el mueble la misma luz que la direccional del 3D rápido */
-const SOFTBOX_GAIN = 7.5;
+/**
+ * El softbox del modo foto: la luz principal del trazado de rayos, con la
+ * intensidad con la que se calibró esa foto (no sigue a la luz del 3D rápido).
+ */
+const SOFTBOX = { room: 3.1 * 7.5, studio: 2.1 * 7.5 };
 
 function KeyLight({ span, shape, rich }: { span: number; shape: WardrobeConfig["shape"]; rich: boolean }) {
-  // en un ambiente armado la luz viene de un lado y el relleno baja: hay sombra y volumen
-  const keyPower = rich ? 3.1 : 2.1;
-  const fill = rich ? 0.26 : 0.55;
   const anim = useSceneAnim();
   const key = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
   const softbox = useRef<THREE.RectAreaLight>(null);
   const side = shape === "l-right" ? -1 : 1;
-  const keyPos = useMemo(() => new THREE.Vector3(side * 4.5, 4.2, 3.6), [side]);
-  useEffect(() => softbox.current?.lookAt(0, 0.6, 0), [keyPos]);
+  // la ventana: de costado y de frente, a media altura; la luz entra hasta el fondo de un placard abierto
+  const keyPos = useMemo(() => new THREE.Vector3(side * 3.9, 4.4, 4.6), [side]);
+  const softPos = useMemo(() => new THREE.Vector3(side * 4.5, 4.2, 3.6), [side]);
+  useEffect(() => softbox.current?.lookAt(0, 0.6, 0), [softPos]);
   useFrame(() => {
-    const night = 1 - 0.4 * anim.lights.v;
-    if (key.current) key.current.intensity = keyPower * night;
-    if (hemi.current) hemi.current.intensity = fill * night;
-    if (softbox.current) softbox.current.intensity = keyPower * SOFTBOX_GAIN * night;
+    const night = 1 - DUSK * anim.lights.v;
+    if (key.current) key.current.intensity = LIGHT.key * night;
+    if (hemi.current) hemi.current.intensity = LIGHT.sky * night;
+    if (softbox.current) softbox.current.intensity = (rich ? SOFTBOX.room : SOFTBOX.studio) * night;
   });
   const reach = Math.max(3, span * MM);
   return (
     <>
-      <hemisphereLight ref={hemi} args={["#ffffff", "#d8ccbb", 0.55]} />
+      {/* relleno: cielo blanco arriba y, más bajo, el rebote cálido del piso; así lo que mira para abajo
+          queda más oscuro y las formas se leen. Va inclinado hacia el frente y hacia el lado contrario
+          a la ventana: el costado que no mira a la luz no se apaga */}
+      <hemisphereLight ref={hemi} args={["#ffffff", "#b4ada3", LIGHT.sky]} position={[-side * 0.45, 1, 0.55]} />
       {/* en la foto la luz principal es un softbox de verdad: sombras que se abren con la distancia */}
-      <rectAreaLight ref={softbox} position={keyPos} width={2.4} height={2.4} color="#fff3e2" visible={false} userData={{ photoOnly: true }} />
+      <rectAreaLight ref={softbox} position={softPos} width={2.4} height={2.4} color="#fff3e2" visible={false} userData={{ photoOnly: true }} />
       <directionalLight
         ref={key}
         userData={{ fake: true }}
         position={keyPos}
-        intensity={2.1}
-        color="#fff3e2"
+        intensity={LIGHT.key}
+        color="#fff9f1"
         castShadow
         shadow-mapSize={[2048, 2048]}
-        shadow-bias={-0.0003}
-        shadow-normalBias={0.02}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.025}
         shadow-camera-left={-reach}
         shadow-camera-right={reach}
         shadow-camera-top={reach}
@@ -504,22 +534,23 @@ function useShown(bus: PhotoBus) {
   );
 }
 
-function Effects({ hq, studio, rich, bus }: { hq: boolean; studio: boolean; rich: boolean; bus: PhotoBus }) {
+function Effects({ hq, rich, bus }: { hq: boolean; rich: boolean; bus: PhotoBus }) {
   // mientras la foto tapa todo, el compositor no dibuja: la placa de video queda para el trazado
   const enabled = !useShown(bus);
-  // en un ambiente armado, una curva de película: negros más profundos y color más lleno
-  const tone = rich ? ToneMappingMode.ACES_FILMIC : ToneMappingMode.AGX;
-  // sobre fondo liso el fondo es más brillante que cualquier superficie: el
-  // umbral del brillo sube para que solo brillen los LED, y la viñeta se afloja
-  const threshold = studio ? 2.4 : 0.92;
-  const darkness = studio ? 0.24 : 0.45;
+  // curva de tonos neutra (la de Khronos para mostrar productos): los colores salen como son
+  // y solo se aprietan los brillos; una melamina blanca se lee blanca, sin quemarse
+  const tone = ToneMappingMode.NEUTRAL;
+  // el resplandor es solo de los LED y de algún brillo del metal: ni el fondo liso ni un blanco a plena luz llegan
+  const threshold = 1.45;
+  // la oclusión marca los rincones y el apoyo, sin tapar los huecos: corta y suave, en un marrón oscuro
+  const ao = { aoRadius: 0.3, distanceFalloff: 1, color: "#22160d", halfRes: true } as const;
   // dos composiciones fijas: el compositor no admite hijos que aparecen y desaparecen
   if (hq)
     return (
       <EffectComposer enabled={enabled} multisampling={2} enableNormalPass={false}>
-        <N8AO aoRadius={rich ? 0.6 : 0.45} intensity={rich ? 3.4 : 2.4} distanceFalloff={0.9} quality="medium" halfRes />
-        <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
-        <Vignette offset={0.3} darkness={darkness} />
+        <N8AO {...ao} intensity={rich ? 2.2 : 1.8} quality="medium" />
+        <Bloom mipmapBlur intensity={0.7} luminanceThreshold={threshold} luminanceSmoothing={0.3} radius={0.7} />
+        <Vignette offset={0.3} darkness={0.2} />
         <ToneMapping mode={tone} />
       </EffectComposer>
     );
@@ -527,32 +558,12 @@ function Effects({ hq, studio, rich, bus }: { hq: boolean; studio: boolean; rich
   return (
     <EffectComposer enabled={enabled} multisampling={0} enableNormalPass={false}>
       {/* sin oclusión un tapizado parece plástico: en los ambientes armados queda, a media resolución */}
-      {rich ? <N8AO aoRadius={0.6} intensity={3} distanceFalloff={0.9} quality="performance" halfRes /> : <></>}
-      <Bloom mipmapBlur intensity={0.85} luminanceThreshold={threshold} luminanceSmoothing={0.25} radius={0.7} />
-      <Vignette offset={0.3} darkness={darkness} />
+      {rich ? <N8AO {...ao} intensity={2} quality="performance" /> : <></>}
+      <Bloom mipmapBlur intensity={0.7} luminanceThreshold={threshold} luminanceSmoothing={0.3} radius={0.7} />
+      <Vignette offset={0.3} darkness={0.2} />
       <ToneMapping mode={tone} />
       <SMAA />
     </EffectComposer>
-  );
-}
-
-function Grounding({ assembly }: { assembly: Assembly }) {
-  const { min, max } = assembly.room ?? assembly.bounds;
-  const w = (max[0] - min[0]) * MM;
-  const d = (max[2] - min[2]) * MM + 1.2;
-  return (
-    <group userData={{ fake: true }}>
-    <ContactShadows
-      position={[((min[0] + max[0]) / 2) * MM, 0.016, (min[2] * MM + d / 2)]}
-      scale={[w, d]}
-      resolution={512}
-      far={0.9}
-      blur={2.2}
-      opacity={0.62}
-      color="#1a120c"
-      frames={Infinity}
-    />
-    </group>
   );
 }
 
@@ -561,7 +572,7 @@ export function wallsOf(props: Pick<ViewerProps, "assembly" | "config">): Walls 
   return props.assembly.walls ?? (props.config.shape === "straight" ? "back" : props.config.shape);
 }
 
-function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
+function Wardrobe({ props, kit, hq }: { props: ViewerProps; kit: MaterialKit; hq: boolean }) {
   const anim = useSceneAnim();
   const walls = wallsOf(props);
   // las caras metidas en ranuras (entre frentes, detrás de ellos): van en sombra
@@ -622,7 +633,7 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
         floor={props.environment.floor}
       />
       {/* sombra de apoyo: lo que hace que el mueble pise el piso en vez de flotar */}
-      {props.confine && <Grounding assembly={props.assembly} />}
+      <Grounding assembly={props.assembly} hq={hq} strength={props.environment.mode === "room" ? 0.62 : 0.5} />
       {props.assembly.runs.map((run) => (
         <RunGroup key={run.index} run={run}>
           <Presence parts={run.parts}>
@@ -831,7 +842,7 @@ function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoO
       <KeyLight span={span} shape={props.config.shape} rich={!!props.confine} />
       {/* sombras de borde difuso, que se abren con la distancia, como bajo la luz de un showroom */}
       <SoftShadows size={22} samples={8} focus={0.55} />
-      <Wardrobe props={props} kit={kit} />
+      <Wardrobe props={props} kit={kit} hq={props.hq} />
       <ViewZoom zoom={props.zoom} />
       <ShadowGate />
       {/* el trazado de rayos, las capturas y la calidad fija necesitan cuadros sin parar */}
@@ -854,7 +865,7 @@ function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoO
         minAzimuthAngle={props.confine && wallsOf(props) !== "none" ? -1.05 : -Infinity}
         maxAzimuthAngle={props.confine && wallsOf(props) !== "none" ? 1.05 : Infinity}
       />
-      <Effects hq={props.hq} studio={props.environment.mode === "studio"} rich={!!props.confine} bus={props.bus} />
+      <Effects hq={props.hq} rich={!!props.confine} bus={props.bus} />
       <PhotoMode enabled={props.photoOn} bus={props.bus} onStatus={props.onPhoto} maxPixels={props.photoPixels ?? (props.mobile ? 5e5 : 1.4e6)} samples={props.photoSamples ?? (props.mobile ? 160 : 420)} />
       <Capturer captureRef={props.captureRef} countFrames={props.countFrames} bus={props.bus} />
     </>

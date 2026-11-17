@@ -253,12 +253,12 @@ export function glowTexture(kind: "down" | "pool" | "fromLeft" | "fromRight"): T
       };
       for (let y = 0; y < size; y++) {
         const v = (y + 0.5) / size;
-        // a lo ancho del charco, una campana: la luz se abre desde la tira
-        const across = Math.exp(-Math.pow((v - 0.5) / 0.2, 2)) * soft(v, 0.18);
+        // a lo ancho del charco, una campana amplia: la luz se abre desde la tira y se apaga sin borde
+        const across = Math.exp(-Math.pow((v - 0.5) / 0.34, 2)) * soft(v, 0.34);
         for (let x = 0; x < size; x++) {
           const u = (x + 0.5) / size;
           // a lo largo, parejo en el medio y difuminado en las puntas
-          const a = across * soft(u, 0.3);
+          const a = across * soft(u, 0.22);
           const i = (y * size + x) * 4;
           img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
           img.data[i + 3] = Math.round(255 * a);
@@ -271,10 +271,12 @@ export function glowTexture(kind: "down" | "pool" | "fromLeft" | "fromRight"): T
     if (kind === "down") g = ctx.createLinearGradient(0, 0, 0, size);
     else if (kind === "fromLeft") g = ctx.createLinearGradient(0, 0, size, 0);
     else g = ctx.createLinearGradient(size, 0, 0, 0);
-    g.addColorStop(0, "rgba(255,255,255,1)");
-    g.addColorStop(0.25, "rgba(255,255,255,0.55)");
-    g.addColorStop(0.6, "rgba(255,255,255,0.15)");
-    g.addColorStop(1, "rgba(255,255,255,0)");
+    // cae rápido cerca de la tira y después se estira, como la luz rasante sobre una placa
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16;
+      const a = Math.pow(1 - t, 2) / (1 + 5 * t);
+      g.addColorStop(t, `rgba(255,255,255,${a.toFixed(4)})`);
+    }
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
     // los bordes laterales se apagan: la luz no corta en seco contra el lateral
@@ -327,18 +329,17 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     door: { v: surface(doorId, "v", true), u: surface(doorId, "u", true) },
     /** frentes de cajón con el color del cuerpo (van detrás de las puertas) */
     bodyFront: { v: surface(bodyId, "v", true), u: surface(bodyId, "u", true) },
-    back: new THREE.MeshStandardMaterial({
-      color: new THREE.Color(body.color).multiplyScalar(body.grain ? 0.92 : 0.96),
-      map: body.grain ? woodTexture(body.color, "v") : null,
-      roughness: 0.75,
-    }),
+    back: backing(bodyId),
     metal: new THREE.MeshStandardMaterial({ color: "#c9ccd0", metalness: 1, roughness: 0.32 }),
     handle: new THREE.MeshStandardMaterial({ color: "#2a2a2a", metalness: 0.75, roughness: 0.28, transparent: true }),
     groove: new THREE.MeshStandardMaterial({ color: "#191714", roughness: 0.9, transparent: true }),
     mirror: new THREE.MeshStandardMaterial({ color: "#f2f5f6", metalness: 1, roughness: 0.035, envMapIntensity: 1.4, transparent: true }),
     // el vidrio no escribe profundidad: si no, según desde dónde se mire tapa lo que está
     // detrás y es transparente (las patas de una mesa, que toman el material de los frentes)
-    glass: new THREE.MeshStandardMaterial({ color: "#3a4246", metalness: 0.2, roughness: 0.05, transparent: true, opacity: GLASS_OPACITY, envMapIntensity: 1.2, depthWrite: false }),
+    glass: Object.assign(new THREE.MeshStandardMaterial({ color: "#3a4246", metalness: 0.2, roughness: 0.05, transparent: true, opacity: GLASS_OPACITY, envMapIntensity: 1.2, depthWrite: false }), {
+      // el vidrio no oscurece el piso que tiene debajo
+      userData: { noContact: true },
+    }),
     frame: new THREE.MeshStandardMaterial({ color: "#b8bcc1", metalness: 1, roughness: 0.3, transparent: true }),
     led: new THREE.MeshStandardMaterial({ color: "#e6e6e6", roughness: 0.4, emissive: "#000000", emissiveIntensity: 0 }),
     glow: {
@@ -350,6 +351,25 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     },
   };
   return kit;
+}
+
+/**
+ * El fondo del mueble: la misma terminación del cuerpo, apenas más apagada
+ * (es una placa fina, sin laqueado). Con chapa lleva su foto; el color no se
+ * multiplica dos veces, que es lo que dejaba los nichos de nogal en negro.
+ */
+function backing(bodyId: string) {
+  const body = materialById(bodyId);
+  const photo = VENEERS[bodyId];
+  const shade = body.grain ? 0.94 : 0.97;
+  const drawn = !photo && body.grain;
+  const material = new THREE.MeshStandardMaterial({
+    color: drawn ? new THREE.Color(shade, shade, shade) : new THREE.Color(body.color).multiplyScalar(shade),
+    map: drawn ? woodTexture(body.color, "v") : null,
+    roughness: 0.78,
+    envMapIntensity: 0.7,
+  });
+  return photo ? dressWith(material, photo, { tint: tintFor(photo, body.color).multiplyScalar(shade), roughness: 0.78, normalScale: 0.4 }) : material;
 }
 
 /**
@@ -391,12 +411,21 @@ function leather(color: string) {
 }
 
 function glowMaterial(kind: "down" | "pool" | "fromLeft" | "fromRight") {
-  // una mancha de luz pintada: en el modo foto la luz de verdad la dan los LED
+  // una mancha de luz pintada: en el modo foto la luz de verdad la dan los LED.
+  // No se suma encima como una niebla clara: multiplica lo que tiene debajo, como
+  // hace la luz de verdad. Un nogal alumbrado es un nogal más claro y más cálido,
+  // no una franja beige; una melamina blanca llega a brillar
   const m = new THREE.MeshBasicMaterial({
     map: glowTexture(kind),
     transparent: true,
     opacity: 0,
-    blending: THREE.AdditiveBlending,
+    premultipliedAlpha: true,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.DstColorFactor,
+    blendDst: THREE.OneFactor,
+    blendSrcAlpha: THREE.ZeroFactor,
+    blendDstAlpha: THREE.OneFactor,
     depthWrite: false,
     toneMapped: false,
     side: THREE.DoubleSide,
