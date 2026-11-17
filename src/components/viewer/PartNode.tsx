@@ -11,8 +11,9 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import type { Part } from "@/lib/assembly";
 
 import { BOUNCY, clampDt, doorProgress, FIRM, FLY, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
+import { garmentGeometry } from "./garments";
 import type { MaterialKit } from "./materials";
-import { dressWith, meterUvs, tintFor } from "./photo";
+import { dressWith, meterUvs, photoSet, tintFor, type PhotoId } from "./photo";
 
 export const MM = 0.001;
 
@@ -836,6 +837,22 @@ function isVertical(p: Part) {
   return p.cut ? Math.abs(p.cut.length - p.size[1]) < 1 : true;
 }
 
+/** las telas de la ropa: qué foto de trama usan, cuánto relieve y cuánto brillo rasante */
+const CLOTH: Record<string, { photo: PhotoId; normal: number; roughness: number; sheen: number; sheenRoughness: number; grain: boolean }> = {
+  // camisas: popelín liso, casi sin relieve
+  algodon: { photo: "tela-lino", normal: 0.45, roughness: 0.9, sheen: 0.3, sheenRoughness: 0.5, grain: false },
+  // remeras y vestidos: tejido de punto fino
+  jersey: { photo: "tela-lino", normal: 0.3, roughness: 0.95, sheen: 0.25, sheenRoughness: 0.6, grain: false },
+  // las cajas de tela
+  lino: { photo: "tela-lino", normal: 1.2, roughness: 0.95, sheen: 0.4, sheenRoughness: 0.6, grain: true },
+  // buzos y mantas: lana, con su pelo
+  lana: { photo: "tela-lana", normal: 1.9, roughness: 1, sheen: 0.7, sheenRoughness: 0.7, grain: false },
+  // sacos y tapados: paño
+  pano: { photo: "tela-lana", normal: 0.7, roughness: 0.95, sheen: 0.45, sheenRoughness: 0.6, grain: false },
+  // jeans y pantalones: sarga gruesa
+  jean: { photo: "tela-lino", normal: 1.6, roughness: 0.98, sheen: 0.15, sheenRoughness: 0.7, grain: true },
+};
+
 const tints = new Map<string, THREE.MeshStandardMaterial>();
 /** color liso para la ambientación ("tint:#rrggbb" o "gloss:#rrggbb"); se comparte entre piezas */
 function tinted(spec: string): THREE.MeshStandardMaterial {
@@ -849,6 +866,41 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
       return m;
     }
     // "linen:": ropa de cama y fundas, con la trama del lino y el brillo rasante de la tela
+    // "cloth:<tela>:<color>": la ropa del placard. Cada tela con su trama, su relieve y su
+    // brillo rasante; el color por vértice de la prenda le sombrea los pliegues
+    if (spec.startsWith("cloth:")) {
+      const [, weave, color] = spec.split(":");
+      const look = CLOTH[weave] ?? CLOTH.lino;
+      // sobre blanco el color lo trae la geometría entera (una caja con su etiqueta): casi sin brillo de fibra
+      const plain = color.toLowerCase() === "#ffffff";
+      const cloth = new THREE.MeshPhysicalMaterial({
+        color,
+        roughness: look.roughness,
+        envMapIntensity: 0.35,
+        sheen: plain ? 0.12 : look.sheen,
+        sheenRoughness: look.sheenRoughness,
+        sheenColor: new THREE.Color(color).lerp(new THREE.Color("#ffffff"), 0.25),
+        vertexColors: true,
+      });
+      m = dressWith(cloth, look.photo, { normalScale: look.normal, roughness: look.roughness, tint: look.grain ? new THREE.Color(color).multiplyScalar(1 / Math.pow(205 / 255, 2.2)) : undefined });
+      // las telas lisas (una camisa, una remera) no llevan la trama pintada, solo su relieve:
+      // de lejos el grano de la foto se ve como motas
+      if (!look.grain)
+        photoSet(look.photo)
+          .then(() => {
+            cloth.map = null;
+            cloth.needsUpdate = true;
+          })
+          .catch(() => {});
+      tints.set(spec, m);
+      return m;
+    }
+    // "paint:": lo que trae sus colores en la geometría (un zapato con su suela, una percha con su gancho)
+    if (spec.startsWith("paint:")) {
+      m = new THREE.MeshStandardMaterial({ color: spec.slice(6), roughness: 0.62, envMapIntensity: 0.45, vertexColors: true });
+      tints.set(spec, m);
+      return m;
+    }
     if (spec.startsWith("linen:")) {
       const color = spec.slice(6);
       m = dressWith(
@@ -880,7 +932,7 @@ function tinted(spec: string): THREE.MeshStandardMaterial {
 }
 
 function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
-  if (/^(tint|gloss|rug|veneer|linen|stone):/.test(p.material)) return tinted(p.material);
+  if (/^(tint|gloss|rug|veneer|linen|stone|cloth|paint):/.test(p.material)) return tinted(p.material);
   const along = isVertical(p) ? "v" : "u";
   switch (p.material) {
     case "none":
@@ -1082,6 +1134,8 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
   // es lo que agarra el brillo a lo largo del borde, como en un mueble de verdad
   const edged = part.geometry === "box" && part.kind !== "led" && part.kind !== "glow" && Math.min(...part.size) >= 2;
   const cushion = useMemo(() => {
+    // la ropa y los accesorios del placard: una forma por tipo y medida, compartida
+    if (part.geometry === "garment" && part.garment) return garmentGeometry(part.garment, part.size);
     if (part.geometry === "arc" && part.arc) return arcGeometry(part);
     if (part.geometry === "sweep" && part.sweep) return sweepGeometry(part);
     if (part.geometry === "bend" && part.bend) return bendGeometry(part);
@@ -1129,8 +1183,14 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
     }
     return flat;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.sweep && JSON.stringify(part.sweep), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.plan && JSON.stringify(part.plan), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.welt, part.drape && JSON.stringify(part.drape), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
-  useEffect(() => () => cushion?.dispose(), [cushion]);
+  }, [part.geometry, edged, part.size[0], part.size[1], part.size[2], part.radius, part.arc && JSON.stringify(part.arc), part.sweep && JSON.stringify(part.sweep), part.bend && JSON.stringify(part.bend), part.corners && part.corners.join(","), part.plan && JSON.stringify(part.plan), part.tuft && JSON.stringify(part.tuft), part.wrinkle, part.puff, part.pinch, part.welt, part.drape && JSON.stringify(part.drape), part.garment && JSON.stringify(part.garment), (part.front || part.kind === "door" || part.kind === "drawer-front") && part.position.join(",")]);
+  // las formas compartidas (la ropa) no se liberan: las usan otras piezas
+  useEffect(
+    () => () => {
+      if (!cushion?.userData.shared) cushion?.dispose();
+    },
+    [cushion],
+  );
 
   const geometry = useMemo(() => {
     const g = geometries();

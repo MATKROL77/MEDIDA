@@ -61,7 +61,10 @@ export type PartKind =
   | "glow";
 
 /** "soft": caja de cantos redondeados, para almohadones y tapizados */
-export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "shade" | "bend" | "sweep" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "none";
+export type Geometry = "box" | "soft" | "cushion" | "puff" | "cyl" | "cone" | "shade" | "bend" | "sweep" | "trapezoid" | "quarter" | "knob" | "glow" | "arc" | "model" | "garment" | "none";
+
+/** las formas de la ambientación de un placard: prendas colgadas, su percha, ropa doblada, calzado y guardado */
+export type GarmentShape = "shirt" | "tee" | "sweater" | "jacket" | "coat" | "dress" | "pants" | "hanger" | "folded" | "shoe" | "box" | "basket";
 
 /**
  * Mecanizados de una pieza: lo que el taller tiene que hacer además de cortar
@@ -177,6 +180,13 @@ export type Part = {
    * el alto en cada punto del recorrido (la sección arranca en position[1]).
    */
   sweep?: { path: [number, number][]; from: number; to: number; heights: number[]; round: number };
+  /**
+   * Prenda o accesorio de un placard (geometry "garment"): una forma hecha a la
+   * medida de su caja. `variant` elige entre las variantes de la forma (los
+   * pliegues, el ruedo, el modelo de calzado) y `colors`, los colores propios
+   * de lo que lleva más de uno (suela y capellada, caja y etiqueta, percha y gancho).
+   */
+  garment?: { shape: GarmentShape; variant: number; colors?: string[] };
   /** ambientación (alfombra, tele, libros): se dibuja, pero no es parte del mueble ni del precio */
   decor?: boolean;
   /** null para lo que no sale de placa */

@@ -250,9 +250,26 @@ tiempo. Está en `useScrollShrink` (`src/components/controls.tsx`).
   canto del colchón conservando su espesor y cuelgan con pliegues) y el
   almohadón de adorno (`pinch`: fino en el borde, con las puntas
   pellizcadas) y el vivo (`welt`: un cordón de tela que rodea las caras
-  grandes siguiendo el canto). La ropa del placard es de lino, con pliegues
-  y el gancho de la percha. El sillón curvo hace lo mismo sobre su sección barrida, con
+  grandes siguiendo el canto). El sillón curvo hace lo mismo sobre su sección barrida, con
   las puntas redondeadas como un almohadón.
+- **Ropa y guardado del placard** (`src/lib/decor.ts` decide qué va y dónde;
+  `src/components/viewer/garments.ts` le da forma): cada prenda cuelga de su
+  percha (el gancho abraza el barral, los brazos de madera o la percha fina
+  con varilla): camisas con cuello, tapeta y mangas que caen, remeras, buzos
+  con puño y cintura, sacos y tapados con solapas, vestidos y pantalones
+  doblados sobre la varilla, con pliegues, el ruedo desparejo, largos y
+  grosores distintos, apenas giradas y con alguna percha vacía. En los
+  estantes, pilas de remeras, jeans y buzos doblados con el doblez al frente;
+  abajo, pares de zapatillas, zapatos y botitas; arriba, cajas de tela con
+  etiqueta o manija y canastos de fibra. Todo es procedural: una geometría por
+  forma, variante y medida, compartida entre las piezas iguales (cerca de mil
+  triángulos por prenda), con el color por vértice (el sombreado de los
+  pliegues en la ropa; la suela, la etiqueta o el gancho en lo demás) para que
+  cada cosa sea una sola malla con un solo material, que es lo que entiende el
+  trazado de rayos. Lo largo solo cuelga donde hay altura, nada atraviesa un
+  estante, un cajón ni el techo inclinado, y en la esquina de un placard en L
+  lo que se cruza con el otro tramo no se pone (`decor.test.ts`,
+  `garments.test.ts`).
 - **Juntas en sombra** (`src/lib/gaps.ts`): las caras de una placa metidas en
   una ranura (el costado de un frente contra el del vecino, el canto de un
   divisor detrás de dos frentes) se detectan en el armado y van en una malla
