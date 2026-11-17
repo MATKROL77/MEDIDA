@@ -17,7 +17,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
-import { DenoiseMaterial, WebGLPathTracer } from "three-gpu-pathtracer";
+import type { DenoiseMaterial, WebGLPathTracer } from "three-gpu-pathtracer";
 
 import { photoVersion } from "./photo";
 
@@ -112,6 +112,22 @@ type Props = {
   /** muestras por píxel para dar la foto por terminada */
   samples: number;
 };
+
+/**
+ * El trazado de rayos pesa varios cientos de KB: se baja recién la primera vez
+ * que alguien prende "Realismo", no con cada configurador.
+ */
+let tracerLib: typeof import("three-gpu-pathtracer") | null = null;
+let tracerLoad: Promise<void> | null = null;
+function loadTracer(onFail: (err: unknown) => void) {
+  tracerLoad ??= import("three-gpu-pathtracer").then((m) => {
+    tracerLib = m;
+  });
+  tracerLoad.catch((err) => {
+    tracerLoad = null;
+    onFail(err);
+  });
+}
 
 export function PhotoMode({ enabled, bus, onStatus, maxPixels, samples }: Props) {
   const gl = useThree((s) => s.gl);
@@ -223,7 +239,16 @@ export function PhotoMode({ enabled, bus, onStatus, maxPixels, samples }: Props)
 
     if (!s.active) {
       try {
+        if (!s.pt && !tracerLib) {
+          // mientras baja, se ve el 3D de siempre
+          loadTracer((err) => {
+            console.warn("Modo foto no disponible", err);
+          });
+          report({ state: "waiting", progress: 0 });
+          return;
+        }
         if (!s.pt) {
+          const { WebGLPathTracer, DenoiseMaterial } = tracerLib!;
           const pt = new WebGLPathTracer(gl);
           pt.rasterizeScene = false;
           // sin grano: la foto tapa el 3D recién cuando tiene casi todas sus pasadas;

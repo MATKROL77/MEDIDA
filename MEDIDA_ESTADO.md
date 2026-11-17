@@ -1,6 +1,6 @@
 # MEDIDA — estado operativo compartido
 
-Actualizado: 2026-11-16 (Argentina).
+Actualizado: 2026-11-17 (Argentina).
 
 ## Verificado
 
@@ -76,6 +76,17 @@ desde 213 px queda en 305 px y el panel pasa por debajo. Sin scroll
 horizontal a 390 y 1440 px;
 `npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
 y `build` sin errores. Falta probarlo en un teléfono real.
+
+**Motor más rápido (17/11/2026).** El 3D deja de dibujar cuando está
+quieto y se despierta con cualquier toque, cambio de opción o
+deslizamiento; el trazado de rayos (unos 200 KB) se baja recién al prender
+"Realismo"; la portada adelanta en segundo plano el motor 3D y la foto del
+estudio; texturas, modelos y la foto del estudio quedan guardados un día en
+el navegador. Verificado en Chromium: quieto, 0 dibujos en 3 s; al
+arrastrar el mueble o mover una medida vuelve a dibujar; sin errores.
+`npm test`, `typecheck`, `lint` y `build` sin errores. Falta medir los
+cuadros por segundo en una Mac y en teléfonos reales (el entorno de trabajo
+no tiene placa de video).
 
 **Portada directa y 3D más liviano (16/11/2026).** A pedido de Matías, la
 portada arranca con "Tus productos. Infinitas configuraciones." y, justo

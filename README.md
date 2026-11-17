@@ -420,8 +420,19 @@ requiere adaptación. Los precios de la demo son de muestra
 
 ## Rendimiento
 
-- La landing no tiene 3D: el título y las fotos de cada familia. El motor 3D
-  se baja recién al abrir un configurador.
+- La landing no tiene 3D: el título y las fotos de cada familia. Mientras
+  se la mira, el navegador baja en segundo plano el motor 3D y la foto del
+  estudio (`src/components/landing/Warmup.tsx`), así el configurador abre
+  enseguida.
+- El 3D se duerme cuando está quieto: con todo en su lugar deja de dibujar
+  (cada cuadro con sombras suaves, oclusión y brillo cuesta lo mismo aunque
+  nada cambie). Un toque, un cambio de opción, deslizar o una textura que
+  termina de bajar lo despiertan (`Sleeper` en `Scene.tsx`).
+- Tope de unos 2,4 millones de píxeles en el 3D, oclusión a media
+  resolución: en una pantalla Retina grande no dibuja al doble de densidad.
+- El trazado de rayos ("Realismo") se baja recién al prenderlo.
+- Texturas, modelos y la foto del estudio se guardan un día en el navegador
+  (`public/_headers`).
 - Las imágenes del sitio son capturas reales del configurador en WebP
   (`public/img/`). Las de la portada salen del modo foto (`foto=1` en
   `/render/`, ver `scripts/capture.mjs`): son la misma escena que después

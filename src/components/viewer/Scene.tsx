@@ -606,6 +606,81 @@ function StudioFallback() {
   );
 }
 
+/**
+ * Con todo quieto, el 3D deja de dibujar: un cuadro con sombras suaves,
+ * oclusión y brillo cuesta lo mismo aunque nada cambie, y redibujarlo 60
+ * veces por segundo calienta la compu y traba el teléfono. Cualquier toque,
+ * cambio de opción, deslizamiento o textura que termina de bajar lo despierta;
+ * se vuelve a dormir cuando pasaron unos segundos sin nada (las puertas,
+ * los cajones y la cámara ya llegaron a su lugar).
+ */
+const SLEEP_AFTER_MS = 2600;
+function Sleeper({ keepAwake }: { keepAwake: boolean }) {
+  const setFrameloop = useThree((s) => s.setFrameloop);
+  const get = useThree((s) => s.get);
+  const invalidate = useThree((s) => s.invalidate);
+  const element = useThree((s) => s.gl.domElement);
+  const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
+  const state = useRef({ last: performance.now(), asleep: false });
+  const wake = useRef(() => {});
+  wake.current = () => {
+    state.current.last = performance.now();
+    if (state.current.asleep) {
+      state.current.asleep = false;
+      setFrameloop("always");
+    }
+    invalidate();
+  };
+  // cada vez que cambia algo de la escena (una opción, abrir, rayos X…) o el tamaño del visor,
+  // que hace volar la cámara a su nuevo encuadre
+  useEffect(() => wake.current());
+  const size = useThree((s) => s.size);
+  useEffect(() => wake.current(), [size.width, size.height]);
+  useEffect(() => {
+    const on = () => wake.current();
+    // los toques llegan al contenedor del lienzo (ahí escuchan la cámara y la selección)
+    const host = element.parentElement?.parentElement ?? element;
+    const opts = { passive: true } as const;
+    for (const type of ["pointerdown", "pointermove", "wheel", "touchstart"] as const) host.addEventListener(type, on, opts);
+    window.addEventListener("scroll", on, opts);
+    window.addEventListener("keydown", on);
+    controls?.addEventListener("change", on);
+    // lo que termina de bajar (texturas, la foto del estudio, la decoración) también despierta
+    const manager = THREE.DefaultLoadingManager;
+    const prevLoad = manager.onLoad;
+    const prevProgress = manager.onProgress;
+    manager.onLoad = () => {
+      prevLoad?.();
+      on();
+    };
+    manager.onProgress = (...a) => {
+      prevProgress?.(...a);
+      on();
+    };
+    return () => {
+      for (const type of ["pointerdown", "pointermove", "wheel", "touchstart"] as const) host.removeEventListener(type, on);
+      window.removeEventListener("scroll", on);
+      window.removeEventListener("keydown", on);
+      controls?.removeEventListener("change", on);
+      manager.onLoad = prevLoad;
+      manager.onProgress = prevProgress;
+    };
+  }, [element, controls]);
+  useEffect(() => {
+    if (keepAwake) wake.current();
+  }, [keepAwake]);
+  useFrame(() => {
+    const st = state.current;
+    // el lienzo puede volver a "always" desde afuera (al redibujarse el componente): se lee el real
+    if (get().frameloop !== "always") return;
+    st.asleep = false;
+    if (keepAwake || performance.now() - st.last < SLEEP_AFTER_MS) return;
+    st.asleep = true;
+    setFrameloop("demand");
+  });
+  return null;
+}
+
 /** el acercamiento en vivo del visor del teléfono (ver `useScrollShrink`) */
 function ViewZoom({ zoom }: { zoom?: { current: number } }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -621,7 +696,7 @@ function ViewZoom({ zoom }: { zoom?: { current: number } }) {
 /** foto HDR de un estudio fotográfico real (Poly Haven, CC0): reflejos y luz de relleno creíbles */
 export const STUDIO_HDRI = "/env/studio_small_09-1k.hdr";
 
-function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoOn: boolean; mobile: boolean }) {
+function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoOn: boolean; mobile: boolean; awake: boolean }) {
   const kit = useMemo(() => createKit(props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave), [props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave]);
   useEffect(() => () => disposeKit(kit), [kit]);
   const { min, max } = props.assembly.bounds;
@@ -640,6 +715,8 @@ function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoO
       <SoftShadows size={22} samples={8} focus={0.55} />
       <Wardrobe props={props} kit={kit} />
       <ViewZoom zoom={props.zoom} />
+      {/* el trazado de rayos, las capturas y la calidad fija necesitan cuadros sin parar */}
+      <Sleeper keepAwake={props.photoOn || props.awake || !!props.countFrames || !!props.sway} />
       <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway && !props.photoOn} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
       <OrbitControls
         makeDefault
@@ -757,7 +834,7 @@ export default function Scene(props: ViewerProps) {
           }}
         />
         <SceneAnimContext.Provider value={anim}>
-          <SceneContents {...props} hq={hq} bus={bus} photoOn={photoOn} mobile={mobile} />
+          <SceneContents {...props} hq={hq} bus={bus} photoOn={photoOn} mobile={mobile} awake={forcedHigh} />
         </SceneAnimContext.Provider>
       </Canvas>
     </SceneAnimContext.Provider>

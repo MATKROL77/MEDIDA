@@ -5,6 +5,17 @@
 /img/*
   Cache-Control: public, max-age=604800
 
+# texturas, modelos y la foto del estudio: no cambian seguido. Un día sin
+# preguntar y una semana más sirviendo lo guardado mientras se revisa.
+/tex/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/models/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/env/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
 # Nadie puede meter el sitio adentro de otra página…
 /*
   X-Content-Type-Options: nosniff

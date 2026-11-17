@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { ContactSection } from "@/components/landing/ContactSection";
 import { FamilyCard } from "@/components/landing/FamilyCard";
+import { Warmup } from "@/components/landing/Warmup";
 import { ContactLink } from "@/components/site/ContactLink";
 import { IconWhatsapp } from "@/components/site/icons";
 import { FAMILIES } from "@/lib/families";
@@ -45,6 +46,7 @@ export default function Home() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <Warmup />
 
       {/* Hero: qué es y cómo hablar; debajo, directamente, los configuradores */}
       <section className="wrap pb-10 pt-12 sm:pb-12 sm:pt-14">
