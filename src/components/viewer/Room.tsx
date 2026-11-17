@@ -9,6 +9,8 @@ export { WALL_COLORS } from "./constants";
 import type { FloorType } from "./constants";
 import { concreteTexture, parquetTexture, pinoteaTexture, tileTexture } from "./materials";
 import { MM } from "./PartNode";
+import { retone } from "@/lib/tone";
+
 import { dressWith, photoSet, PHOTOS, tintFor, type PhotoId } from "./photo";
 
 export type Walls = "none" | "back" | "l-left" | "l-right";
@@ -38,8 +40,8 @@ const COVE_DROP = 0.004;
 const COVE_COLOR = "#e3dbce";
 /** el piso con foto alrededor del mueble; hacia afuera se funde en el del ciclorama */
 const FLOOR_SIZE = 14;
-const FADE_FROM = 2.8;
-const FADE_TO = 6.3;
+const FADE_FROM = 3.6;
+const FADE_TO = 6.7;
 
 function coveGeometry(): THREE.BufferGeometry {
   // del centro hacia afuera; la curva arranca sin quiebre y termina vertical
@@ -57,22 +59,67 @@ function coveGeometry(): THREE.BufferGeometry {
 const WALL_HEIGHT = 2900;
 const WALL_THICK = 110;
 /** cuánto sobra el tabique a cada lado del mueble */
-const WALL_MARGIN = 900;
+const WALL_MARGIN = 1500;
 /** el tabique más angosto que se dibuja (mm) */
-const MIN_WALL = 4800;
+const MIN_WALL = 5800;
+/** el zócalo: una tabla pintada al pie de la pared, que es lo que la hace pared y no un panel */
+const SKIRT_HEIGHT = 80;
+const SKIRT_THICK = 14;
+
+/** lo que aparece y desaparece con el ambiente */
+const FADING = ["floor", "wall", "skirt", "cove"] as const;
 
 type FloorLook = { map: THREE.Texture | null; normalMap: THREE.Texture | null; roughnessMap: THREE.Texture | null; roughness: number; color: THREE.Color };
 
-/** cada piso, con su foto y cómo se ve terminado: el plastificado brilla, el cemento no */
+/**
+ * Cada piso, con su foto y cómo se ve terminado: el plastificado brilla, el
+ * cemento no. `roughness` multiplica el mapa de la foto (que promedia entre
+ * 0,35 y 0,55): con 1,25 la madera queda en ~0,55, mate como un roble al
+ * aceite. Más brillante, a contraluz y de lejos el piso chispea. `tone` es el
+ * color al que se lleva el promedio de la foto y cuánto de su veta se deja:
+ * el piso acompaña, el protagonista es el mueble.
+ */
 type PhotoFloor = Exclude<FloorType, "estudio">;
-const FLOOR_PHOTOS: Record<PhotoFloor, { id: PhotoId; roughness: number; color?: string }> = {
-  madera: { id: "piso-madera", roughness: 0.6 },
+const FLOOR_PHOTOS: Record<PhotoFloor, { id: PhotoId; roughness: number; tone: { color: string; contrast: number; saturation: number } }> = {
+  // roble claro al aceite, del tono de la muestra
+  madera: { id: "piso-madera", roughness: 1.25, tone: { color: "#c6a882", contrast: 1.05, saturation: 0.9 } },
   // la pinotea plastificada es más rojiza y oscura que la madera cruda de la foto
-  pinotea: { id: "piso-pinotea", roughness: 0.42, color: "#a8693a" },
+  pinotea: { id: "piso-pinotea", roughness: 1.1, tone: { color: "#a3744c", contrast: 0.7, saturation: 0.6 } },
   // cemento alisado claro, como el de una galería
-  cemento: { id: "piso-cemento", roughness: 0.72, color: "#d2cec7" },
-  baldosa: { id: "piso-baldosa", roughness: 0.4 },
+  cemento: { id: "piso-cemento", roughness: 1.15, tone: { color: "#cfcbc4", contrast: 1, saturation: 1 } },
+  baldosa: { id: "piso-baldosa", roughness: 0.75, tone: { color: "#d3c6b1", contrast: 0.8, saturation: 0.8 } },
 };
+
+/** las fotos de piso ya llevadas a su tono: se hace una sola vez por piso */
+const toned = new Map<PhotoId, THREE.Texture>();
+
+/** la foto del piso con su promedio corrido al tono pedido; si no se puede leer, queda como vino */
+function tonedMap(id: PhotoId, source: THREE.Texture, tone: { color: string; contrast: number; saturation: number }): THREE.Texture {
+  const done = toned.get(id);
+  if (done) return done;
+  const average = PHOTOS[id].average;
+  const image = source.image as HTMLImageElement | undefined;
+  if (!average || !image?.width) return source;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(image, 0, 0);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const to = new THREE.Color(tone.color).getHex();
+    retone(data.data, [average[0], average[1], average[2]], [(to >> 16) & 255, (to >> 8) & 255, to & 255], tone.contrast, tone.saturation);
+    ctx.putImageData(data, 0, 0);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = source.anisotropy;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    toned.set(id, texture);
+    return texture;
+  } catch {
+    return source;
+  }
+}
 
 /**
  * El borde del piso: opaco alrededor del mueble y cada vez más transparente
@@ -114,11 +161,12 @@ async function photoFloor(type: PhotoFloor): Promise<FloorLook> {
     return c;
   };
   return {
-    map: fit(set.map),
+    map: fit(set.map && tonedMap(spec.id, set.map, spec.tone)),
     normalMap: fit(set.normalMap),
     roughnessMap: fit(set.roughnessMap),
     roughness: spec.roughness,
-    color: spec.color ? tintFor(spec.id, spec.color) : new THREE.Color("#ffffff"),
+    // si la foto no se pudo llevar a su tono, se tiñe como se pueda
+    color: set.map && toned.has(spec.id) ? new THREE.Color("#ffffff") : tintFor(spec.id, spec.tone.color),
   };
 }
 
@@ -145,6 +193,8 @@ function applyFloor(m: THREE.MeshStandardMaterial, look: FloorLook) {
   m.normalMap = look.normalMap;
   m.roughnessMap = look.roughnessMap;
   m.roughness = look.roughness;
+  // relieve suave: marcado, a contraluz y de lejos el piso chispea
+  m.normalScale.setScalar(0.45);
   m.color.copy(look.color);
   m.needsUpdate = true;
 }
@@ -176,6 +226,9 @@ export function Room({ min, max, walls, wall, floor }: Props) {
   const backWall = useRef<THREE.Mesh>(null);
   const leftWall = useRef<THREE.Mesh>(null);
   const rightWall = useRef<THREE.Mesh>(null);
+  const backSkirt = useRef<THREE.Mesh>(null);
+  const leftSkirt = useRef<THREE.Mesh>(null);
+  const rightSkirt = useRef<THREE.Mesh>(null);
 
   const mats = useMemo(() => {
     const first = drawnFloor("cemento");
@@ -186,6 +239,8 @@ export function Room({ min, max, walls, wall, floor }: Props) {
       floorNext: new THREE.MeshStandardMaterial({ ...first, alphaMap: fade, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }),
       // pintura sobre revoque: un relieve apenas visible cuando la luz pega de costado
       wall: dressWith(new THREE.MeshStandardMaterial({ color: wall, roughness: 0.95, transparent: true }), "pared", { normalScale: 0.35, project: true }),
+      // esmalte satinado, apenas más claro que la pared
+      skirt: new THREE.MeshStandardMaterial({ color: "#f3f0ea", roughness: 0.5, transparent: true }),
       shadow: new THREE.ShadowMaterial({ opacity: 0.16, transparent: true }),
       // pintura mate del ciclorama: del tono del cemento, para que el piso se funda sin costura
       // en el modo foto no hace sombra: la luz del ambiente entra como en un estudio abierto
@@ -201,6 +256,8 @@ export function Room({ min, max, walls, wall, floor }: Props) {
     wallColor.current.set(wall);
   }, [wall]);
 
+  const root = useRef<THREE.Group>(null);
+  const ground = useRef<THREE.Group>(null);
   const fade = useRef({ v: 1, active: false });
   const next = useRef<THREE.Mesh>(null);
   const base = useRef<THREE.Mesh>(null);
@@ -225,11 +282,18 @@ export function Room({ min, max, walls, wall, floor }: Props) {
     sv.current.step(d, SOFT);
     const [l, r, zb, zf] = sv.current.v;
     const room = anim.room.v;
+    // el piso y el fondo quedan quietos bajo la cámara: el mueble se centra corriéndose (ver
+    // `Centered`) y el piso deshace ese corrimiento. Así el borde donde el piso se pierde
+    // queda igual de lejos para todos lados, también con un sillón en el medio del ambiente,
+    // y la veta no se desliza cuando cambia una medida
+    const shift = root.current?.parent?.position;
+    if (shift && ground.current) ground.current.position.set(-shift.x, 0, -shift.z);
     mats.wall.color.lerp(wallColor.current, 1 - Math.exp(-d * 6));
-    for (const m of [mats.floor, mats.wall, mats.cove]) {
-      m.opacity = room;
-      m.depthWrite = room > 0.98;
-      m.visible = room > 0.01;
+    for (const m of FADING) {
+      const material = mats[m];
+      material.opacity = room;
+      material.depthWrite = room > 0.98;
+      material.visible = room > 0.01;
     }
     // fundido del piso: cuando el nuevo tapa al viejo, pasa a ser el de abajo
     const f = fade.current;
@@ -252,9 +316,9 @@ export function Room({ min, max, walls, wall, floor }: Props) {
         f.active = false;
       }
     }
-    // sobre fondo liso la sombra es lo único que apoya el mueble en el piso
-    mats.shadow.opacity = 0.3 * (1 - room);
-
+    // sobre fondo liso no hay piso: la sombra de la luz principal se pinta sola
+    mats.shadow.opacity = 0.26 * (1 - room);
+    mats.shadow.visible = room < 0.99;
 
     const h = WALL_HEIGHT * MM;
     const t = WALL_THICK * MM;
@@ -275,13 +339,32 @@ export function Room({ min, max, walls, wall, floor }: Props) {
       rightWall.current.position.set(r * MM + t / 2, h / 2, ((zb + zf) / 2) * MM);
       rightWall.current.scale.set(t, h, (zf - zb) * MM);
     }
+    // el zócalo corre al pie de cada pared, por la cara que da al ambiente
+    const sh = SKIRT_HEIGHT * MM;
+    const st = SKIRT_THICK * MM;
+    if (backSkirt.current) {
+      backSkirt.current.visible = back;
+      backSkirt.current.position.set(((l + r) / 2) * MM, sh / 2, zb * MM + st / 2);
+      backSkirt.current.scale.set((r - l) * MM, sh, st);
+    }
+    if (leftSkirt.current) {
+      leftSkirt.current.visible = left;
+      leftSkirt.current.position.set(l * MM + st / 2, sh / 2, ((zb + zf) / 2) * MM + st / 2);
+      leftSkirt.current.scale.set(st, sh, (zf - zb) * MM - st);
+    }
+    if (rightSkirt.current) {
+      rightSkirt.current.visible = right;
+      rightSkirt.current.position.set(r * MM - st / 2, sh / 2, ((zb + zf) / 2) * MM + st / 2);
+      rightSkirt.current.scale.set(st, sh, (zf - zb) * MM - st);
+    }
   });
 
   const cove = useMemo(coveGeometry, []);
   useEffect(() => () => cove.dispose(), [cove]);
 
   return (
-    <group>
+    <group ref={root} userData={{ noContact: true }}>
+      <group ref={ground}>
       <mesh geometry={cove} material={mats.cove} position={[0, -COVE_DROP, 0]} receiveShadow />
       {/* piso: en el showroom se pierde en el fondo; en estudio solo queda la sombra */}
       <mesh ref={base} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow material={mats.floor}>
@@ -293,6 +376,7 @@ export function Room({ min, max, walls, wall, floor }: Props) {
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0005, 0]} receiveShadow material={mats.shadow} userData={{ fake: true }}>
         <planeGeometry args={[14, 14]} />
       </mesh>
+      </group>
 
       <mesh ref={backWall} material={mats.wall} receiveShadow castShadow>
         <boxGeometry args={[1, 1, 1]} />
@@ -301,6 +385,15 @@ export function Room({ min, max, walls, wall, floor }: Props) {
         <boxGeometry args={[1, 1, 1]} />
       </mesh>
       <mesh ref={rightWall} material={mats.wall} receiveShadow castShadow>
+        <boxGeometry args={[1, 1, 1]} />
+      </mesh>
+      <mesh ref={backSkirt} material={mats.skirt} receiveShadow castShadow>
+        <boxGeometry args={[1, 1, 1]} />
+      </mesh>
+      <mesh ref={leftSkirt} material={mats.skirt} receiveShadow castShadow>
+        <boxGeometry args={[1, 1, 1]} />
+      </mesh>
+      <mesh ref={rightSkirt} material={mats.skirt} receiveShadow castShadow>
         <boxGeometry args={[1, 1, 1]} />
       </mesh>
     </group>

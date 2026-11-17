@@ -286,10 +286,32 @@ tiempo. Está en `useScrollShrink` (`src/components/controls.tsx`).
   como si salieran de la misma placa enchapada.
 - **Estudio**: el mueble se muestra en un ciclorama liso, el fondo curvo sin
   esquinas de un estudio de fotografía, del beige de la página. Lo que se
-  apoya o se cuelga de una pared tiene un tabique detrás. Se puede elegir un
-  piso con foto (madera, pinotea, cemento, baldosa), que se funde en el fondo.
-- **Luz**: una foto HDR de un estudio real (Studio Small 09, CC0) da los
-  reflejos y el relleno; una luz principal da las sombras.
+  apoya o se cuelga de una pared tiene un tabique detrás, con su zócalo. Se
+  puede elegir un piso con foto (madera, pinotea, cemento, baldosa), que se
+  funde en el fondo. Cada foto de piso se lleva a su tono corriendo su
+  promedio (`retone` en `src/lib/tone.ts`), no multiplicando su color: la veta
+  queda como es y el piso acompaña sin competir con el mueble. El piso queda
+  quieto bajo la cámara aunque el mueble cambie de medida.
+- **Luz del 3D rápido** (`KeyLight` y `LIGHT` en `Scene.tsx`): como la de un
+  planificador de muebles. Mucha luz pareja (la foto HDR de un estudio real,
+  Studio Small 09, CC0, más un relleno de cielo y piso inclinado hacia el
+  frente) para que los blancos se lean blancos y los interiores se vean, y
+  una sola luz directa de costado, como de ventana, que da el volumen y la
+  sombra (mapa de 2048, con penumbra que se abre con la distancia). Una luz
+  directa más se paga en cada píxel del mueble: no hay otra.
+- **Curva de tonos neutra** (la de Khronos para mostrar productos): los
+  colores salen como son y solo se aprietan los brillos. El fondo liso entra
+  con la luz justa para salir del color pedido (`neutralInverse` en
+  `src/lib/tone.ts`). El modo foto todavía usa la curva de película (ACES).
+- **Sombra de apoyo** (`Grounding.tsx`): una cámara a ras del piso mira el
+  mueble desde abajo y guarda qué tan cerca está cada cosa; eso se desenfoca
+  y se pinta en el piso, oscuro donde el mueble toca y más claro con la
+  altura, sin bordes. Se recalcula solo mientras algo se mueve (mapa de 256
+  px, 128 en calidad liviana). La oclusión de pantalla marca los rincones,
+  corta y suave, sin tapar los nichos.
+- **Luz de los LED**: la mancha pintada bajo cada tira no se suma encima
+  como una niebla clara: multiplica lo que tiene debajo, como la luz de
+  verdad. Un nogal alumbrado es un nogal más claro, no una franja beige.
 - **Modo foto** (`PhotoMode.tsx`, con `three-gpu-pathtracer`): cuando la
   escena se queda quieta medio segundo, el mismo 3D se recalcula con trazado
   de rayos en la placa de video. La luz rebota de verdad, los LED iluminan lo
