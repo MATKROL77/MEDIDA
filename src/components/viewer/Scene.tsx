@@ -643,19 +643,28 @@ function StudioFallback() {
  * cambio de opción, deslizamiento o textura que termina de bajar lo despierta;
  * se vuelve a dormir cuando pasaron unos segundos sin nada (las puertas,
  * los cajones y la cámara ya llegaron a su lugar).
+ *
+ * Antes de dormirse pide el cuadro final a toda nitidez (`onStill`): mientras
+ * algo se mueve el 3D usa la resolución que el equipo aguanta fluido, y quieto
+ * queda dibujado con la mejor que la pantalla puede mostrar.
  */
-const SLEEP_AFTER_MS = 2600;
-function Sleeper({ keepAwake }: { keepAwake: boolean }) {
+const SLEEP_AFTER_MS = 2200;
+const SHARP_FRAMES_MS = 450;
+function Sleeper({ keepAwake, still, onStill }: { keepAwake: boolean; still: boolean; onStill: (still: boolean) => void }) {
   const setFrameloop = useThree((s) => s.setFrameloop);
   const get = useThree((s) => s.get);
   const invalidate = useThree((s) => s.invalidate);
   const element = useThree((s) => s.gl.domElement);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const anim = useSceneAnim();
-  const state = useRef({ last: performance.now(), asleep: false });
+  const state = useRef({ last: performance.now(), asleep: false, sharpAt: 0, still });
   const wake = useRef(() => {});
   wake.current = () => {
     state.current.last = performance.now();
+    if (state.current.sharpAt) {
+      state.current.sharpAt = 0;
+      onStill(false);
+    }
     if (state.current.asleep) {
       state.current.asleep = false;
       setFrameloop("always");
@@ -664,18 +673,27 @@ function Sleeper({ keepAwake }: { keepAwake: boolean }) {
   };
   // cada vez que cambia algo de la escena (una opción, abrir, rayos X…) o el tamaño del visor,
   // que hace volar la cámara a su nuevo encuadre
-  useEffect(() => wake.current());
+  useEffect(() => {
+    // pasar al cuadro nítido (o volver) también redibuja este componente: eso no es un cambio
+    if (state.current.still !== still) state.current.still = still;
+    else wake.current();
+  });
   const size = useThree((s) => s.size);
   useEffect(() => wake.current(), [size.width, size.height]);
   useEffect(() => {
-    const on = () => wake.current();
+    // mover el mouse por encima sin apretar no cambia nada: no despierta
+    const on = (e?: Event) => {
+      if (e?.type === "pointermove" && !(e as PointerEvent).buttons) return;
+      wake.current();
+    };
     // los toques llegan al contenedor del lienzo (ahí escuchan la cámara y la selección)
     const host = element.parentElement?.parentElement ?? element;
     const opts = { passive: true } as const;
     for (const type of ["pointerdown", "pointermove", "wheel", "touchstart"] as const) host.addEventListener(type, on, opts);
     window.addEventListener("scroll", on, opts);
     window.addEventListener("keydown", on);
-    controls?.addEventListener("change", on);
+    const onControls = () => wake.current();
+    controls?.addEventListener("change", onControls);
     // lo que termina de bajar (texturas, la foto del estudio, la decoración) también despierta
     const manager = THREE.DefaultLoadingManager;
     const prevLoad = manager.onLoad;
@@ -692,7 +710,7 @@ function Sleeper({ keepAwake }: { keepAwake: boolean }) {
       for (const type of ["pointerdown", "pointermove", "wheel", "touchstart"] as const) host.removeEventListener(type, on);
       window.removeEventListener("scroll", on);
       window.removeEventListener("keydown", on);
-      controls?.removeEventListener("change", on);
+      controls?.removeEventListener("change", onControls);
       manager.onLoad = prevLoad;
       manager.onProgress = prevProgress;
     };
@@ -706,7 +724,14 @@ function Sleeper({ keepAwake }: { keepAwake: boolean }) {
     if (get().frameloop !== "always") return;
     st.asleep = false;
     // mientras una pieza, una puerta o la cámara se mueven, no se duerme
-    if (keepAwake || performance.now() - Math.max(st.last, anim.activeAt) < SLEEP_AFTER_MS) return;
+    const now = performance.now();
+    if (keepAwake || now - Math.max(st.last, anim.activeAt) < SLEEP_AFTER_MS) return;
+    if (!st.sharpAt) {
+      st.sharpAt = now;
+      onStill(true);
+      return;
+    }
+    if (now - st.sharpAt < SHARP_FRAMES_MS) return;
     st.asleep = true;
     setFrameloop("demand");
   });
@@ -762,7 +787,7 @@ function ViewZoom({ zoom }: { zoom?: { current: number } }) {
 /** foto HDR de un estudio fotográfico real (Poly Haven, CC0): reflejos y luz de relleno creíbles */
 export const STUDIO_HDRI = "/env/studio_small_09-1k.hdr";
 
-function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoOn: boolean; mobile: boolean; awake: boolean }) {
+function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoOn: boolean; mobile: boolean; awake: boolean; still: boolean; onStill: (still: boolean) => void }) {
   const kit = useMemo(() => createKit(props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave), [props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave]);
   useEffect(() => () => disposeKit(kit), [kit]);
   const { min, max } = props.assembly.bounds;
@@ -783,7 +808,7 @@ function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoO
       <ViewZoom zoom={props.zoom} />
       <ShadowGate />
       {/* el trazado de rayos, las capturas y la calidad fija necesitan cuadros sin parar */}
-      <Sleeper keepAwake={props.photoOn || props.awake || !!props.countFrames || !!props.sway} />
+      <Sleeper keepAwake={props.photoOn || props.awake || !!props.countFrames || !!props.sway} still={props.still} onStill={props.onStill} />
       <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway && !props.photoOn} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
       <OrbitControls
         makeDefault
@@ -834,6 +859,11 @@ export default function Scene(props: ViewerProps) {
   const fixedDpr = forcedHigh && typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1;
   const [dpr, setDpr] = useState(forcedLow || forcedHigh ? fixedDpr : Math.min(1.5, maxDpr, pixelCap(maxDpr)));
   const intro = props.intro !== false;
+  // quieto, el último cuadro se dibuja con la mejor nitidez que la pantalla muestra
+  const [still, setStill] = useState(false);
+  const stillRef = useRef(false);
+  stillRef.current = still;
+  const sharpDpr = still && !forcedLow && !forcedHigh && typeof window !== "undefined" ? Math.max(dpr, Math.min(maxDpr, window.devicePixelRatio || 1, pixelCap(maxDpr))) : dpr;
   // la calidad fijada puede cambiar con la escena ya andando
   useEffect(() => {
     if (!forcedLow && !forcedHigh) return;
@@ -874,7 +904,7 @@ export default function Scene(props: ViewerProps) {
       <Canvas
         shadows="soft"
         flat
-        dpr={dpr}
+        dpr={sharpDpr}
         frameloop={props.paused ? "never" : "always"}
         gl={{ antialias: false, powerPreference: "high-performance", stencil: false }}
         camera={{ position: [4, 3, 7], fov: 34, near: 0.05, far: 80 }}
@@ -892,19 +922,20 @@ export default function Scene(props: ViewerProps) {
           }}
           onDecline={() => {
             // el trazado usa la placa a propósito: esos cuadros lentos no cuentan
-            if (forcedHigh || bus.busy) return;
+            // (tampoco los del cuadro final a toda nitidez)
+            if (forcedHigh || bus.busy || stillRef.current) return;
             setHq(false);
             setDpr(1);
           }}
           flipflops={3}
           onFallback={() => {
-            if (forcedHigh || bus.busy) return;
+            if (forcedHigh || bus.busy || stillRef.current) return;
             setHq(false);
             setDpr(1);
           }}
         />
         <SceneAnimContext.Provider value={anim}>
-          <SceneContents {...props} hq={hq} bus={bus} photoOn={photoOn} mobile={mobile} awake={forcedHigh} />
+          <SceneContents {...props} hq={hq} bus={bus} photoOn={photoOn} mobile={mobile} awake={forcedHigh} still={still} onStill={setStill} />
         </SceneAnimContext.Provider>
       </Canvas>
     </SceneAnimContext.Provider>
