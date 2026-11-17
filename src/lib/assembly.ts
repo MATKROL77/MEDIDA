@@ -861,6 +861,8 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
     // verticales en los laterales. Cada uno lleva su luz: la caja del hueco que
     // alumbra, con el fondo, el piso, los laterales y la boca (`lib/led.ts`)
     let lit = false;
+    // la boca del módulo, donde va la cortina de luz: detrás de las puertas (las corredizas corren delante de los estantes)
+    const mouth = sliding ? shelfD + 4 : carcassD - 4;
     if (mod.ledShelves) {
       const tops = [...levels].sort((a, b) => a.y - b.y);
       // el estante fijo de los cajones no lleva tira: alumbraría los frentes por dentro
@@ -895,7 +897,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
             `${lv.id}:luz`,
             [x0, floorY, back],
             [w, gap, depth],
-            { from: [15, gap - LED_PROFILE[0], z - back + LED_PROFILE[1] / 2], axis: 0, length: len, emit: [1, -1], faces: ["z0", "y0", "y1", "x0", "x1", "air"], carrier: "y1", airAt: carcassD - 4 },
+            { from: [15, gap - LED_PROFILE[0], z - back + LED_PROFILE[1] / 2], axis: 0, length: len, emit: [1, -1], faces: ["z0", "y0", "y1", "x0", "x1", "air"], carrier: "y1", airAt: mouth },
             { module: m },
           ),
         );
@@ -911,7 +913,9 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
         // el lateral del frente en la esquina queda tapado por los estantes del lateral
         if (m === corner && side === cornerSideId) continue;
         const left = side === "L";
-        const z = back + carcassD - 70;
+        // cerca de la boca; con corredizas, detrás del lugar por donde corren las hojas
+        const inset = sliding ? SLIDING_RESERVE + 40 : 70;
+        const z = back + carcassD - inset;
         add({
           id: M(`led${side}`),
           label: "Perfil LED",
@@ -930,12 +934,12 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
             M(`luz${side}`),
             [x0, innerBottom, back],
             [w, h, carcassD],
-            { from: [left ? LED_PROFILE[0] : w - LED_PROFILE[0], 0, z - back + LED_PROFILE[1] / 2], axis: 1, length: h, emit: [0, left ? 1 : -1], faces: ["z0", "y0", "x0", "x1", "air"], carrier: left ? "x0" : "x1", airAt: carcassD - 4 },
+            { from: [left ? LED_PROFILE[0] : w - LED_PROFILE[0], 0, z - back + LED_PROFILE[1] / 2], axis: 1, length: h, emit: [0, left ? 1 : -1], faces: ["z0", "y0", "x0", "x1", "air"], carrier: left ? "x0" : "x1", airAt: mouth },
             { module: m },
           ),
         );
         // el perfil vertical va en la cara del lateral que da a este módulo
-        feature(verticalId(left ? m : m + 1), { type: "led-groove", face: left ? "right" : "left", offset: 63 });
+        feature(verticalId(left ? m : m + 1), { type: "led-groove", face: left ? "right" : "left", offset: inset - 7 });
         ctx.ledMeters += h / 1000;
       }
       lit = true;

@@ -326,9 +326,23 @@ tiempo. Está en `useScrollShrink` (`src/components/controls.tsx`).
   altura, sin bordes. Se recalcula solo mientras algo se mueve (mapa de 256
   px, 128 en calidad liviana). La oclusión de pantalla marca los rincones,
   corta y suave, sin tapar los nichos.
-- **Luz de los LED**: la mancha pintada bajo cada tira no se suma encima
-  como una niebla clara: multiplica lo que tiene debajo, como la luz de
-  verdad. Un nogal alumbrado es un nogal más claro, no una franja beige.
+- **Tiras LED** (`src/lib/led.ts`, `viewer/ledWash.ts`): cada tira es un
+  perfil de aluminio con su difusor opalino, que es lo que brilla (casi
+  blanco, con el tono de luz elegido, así el halo es de luz y no una aureola
+  de color). Lo que alumbra no es un degradé dibujado: cada tira lleva la
+  caja del hueco donde está (el estante de abajo, el fondo, los laterales,
+  la placa que la lleva) y un material calcula en cada píxel cuánta luz le
+  llega desde la tira entera, una cuenta con solución exacta. Así la luz cae
+  sola como en una foto: fuerte cerca, abierta y suave con la distancia, más
+  intensa en el lateral junto a la punta. Esa luz multiplica lo que tiene
+  debajo (un nogal alumbrado es un nogal más claro, no una franja beige) y,
+  en la boca de cada hueco cerrado, una cortina aclara todo lo que se ve a
+  través: la ropa y los objetos también quedan alumbrados. En el placard las
+  cajas salen del armado; en los demás muebles, `lightUp` las arma mirando
+  qué placas rodean a cada tira (bajo una cama no hay paredes: queda un
+  charco en el piso que se apaga solo). No hay luces de verdad: no encarece
+  el sombreado del mueble y es una malla de pocos rectángulos por tira, que
+  apagada ni se dibuja. Con las luces prendidas el ambiente baja a la mitad.
 - **Modo foto** (`PhotoMode.tsx`, con `three-gpu-pathtracer`): cuando la
   escena se queda quieta medio segundo, el mismo 3D se recalcula con trazado
   de rayos en la placa de video. La luz rebota de verdad, los LED iluminan lo
@@ -534,6 +548,7 @@ npm run capture -- http://localhost:4100
 | El PDF | `src/lib/orderPdf.ts` |
 | Escena 3D, cámara, luces, efectos | `src/components/viewer/Scene.tsx` |
 | Cómo se anima cada pieza | `src/components/viewer/PartNode.tsx` |
+| La luz de las tiras LED (cómo cae, cuánto alumbra, el perfil) | `src/lib/led.ts`, `src/components/viewer/ledWash.ts` |
 | Habitación, paredes, ventana | `src/components/viewer/Room.tsx` |
 | Panel y barra del configurador | `src/components/Configurator.tsx` |
 | Panel de las otras familias, 3D que se achica al deslizar en el teléfono | `src/components/FurnitureConfigurator.tsx`, `src/components/controls.tsx` |
