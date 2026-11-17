@@ -9,9 +9,8 @@ export { WALL_COLORS } from "./constants";
 import type { FloorType } from "./constants";
 import { concreteTexture, parquetTexture, pinoteaTexture, tileTexture } from "./materials";
 import { MM } from "./PartNode";
-import { retone } from "@/lib/tone";
 
-import { dressWith, photoSet, PHOTOS, tintFor, type PhotoId } from "./photo";
+import { dressWith, photoColor, photoSet, PHOTOS, type PhotoId } from "./photo";
 
 export type Walls = "none" | "back" | "l-left" | "l-right";
 
@@ -69,57 +68,23 @@ const SKIRT_THICK = 14;
 /** lo que aparece y desaparece con el ambiente */
 const FADING = ["floor", "wall", "skirt", "cove"] as const;
 
-type FloorLook = { map: THREE.Texture | null; normalMap: THREE.Texture | null; roughnessMap: THREE.Texture | null; roughness: number; color: THREE.Color };
+type FloorLook = { map: THREE.Texture | null; normalMap: THREE.Texture | null; roughnessMap: THREE.Texture | null; roughness: number; relief: number; color: THREE.Color };
 
 /**
  * Cada piso, con su foto y cómo se ve terminado: el plastificado brilla, el
- * cemento no. `roughness` multiplica el mapa de la foto (que promedia entre
- * 0,35 y 0,55): con 1,25 la madera queda en ~0,55, mate como un roble al
- * aceite. Más brillante, a contraluz y de lejos el piso chispea. `tone` es el
- * color al que se lleva el promedio de la foto y cuánto de su veta se deja:
- * el piso acompaña, el protagonista es el mueble.
+ * cemento no. `roughness` multiplica el mapa de la foto: la madera clara queda
+ * en ~0,55, mate como un roble al aceite; la pinotea plastificada, en ~0,42.
+ * Más brillante, a contraluz y de lejos el piso chispea. Las fotos ya vienen
+ * en su tono y, las de madera, armadas tabla por tabla para que no se repitan
+ * a la vista (scripts/textures.mjs).
  */
 type PhotoFloor = Exclude<FloorType, "estudio">;
-const FLOOR_PHOTOS: Record<PhotoFloor, { id: PhotoId; roughness: number; tone: { color: string; contrast: number; saturation: number } }> = {
-  // roble claro al aceite, del tono de la muestra
-  madera: { id: "piso-madera", roughness: 1.25, tone: { color: "#c6a882", contrast: 1.05, saturation: 0.9 } },
-  // la pinotea plastificada es más rojiza y oscura que la madera cruda de la foto
-  pinotea: { id: "piso-pinotea", roughness: 1.1, tone: { color: "#a3744c", contrast: 0.7, saturation: 0.6 } },
-  // cemento alisado claro, como el de una galería
-  cemento: { id: "piso-cemento", roughness: 1.15, tone: { color: "#cfcbc4", contrast: 1, saturation: 1 } },
-  baldosa: { id: "piso-baldosa", roughness: 0.75, tone: { color: "#d3c6b1", contrast: 0.8, saturation: 0.8 } },
+const FLOOR_PHOTOS: Record<PhotoFloor, { id: PhotoId; roughness: number; relief: number }> = {
+  madera: { id: "piso-madera", roughness: 1.45, relief: 0.8 },
+  pinotea: { id: "piso-pinotea", roughness: 0.9, relief: 0.6 },
+  cemento: { id: "piso-cemento", roughness: 1.15, relief: 0.45 },
+  baldosa: { id: "piso-baldosa", roughness: 0.75, relief: 0.45 },
 };
-
-/** las fotos de piso ya llevadas a su tono: se hace una sola vez por piso */
-const toned = new Map<PhotoId, THREE.Texture>();
-
-/** la foto del piso con su promedio corrido al tono pedido; si no se puede leer, queda como vino */
-function tonedMap(id: PhotoId, source: THREE.Texture, tone: { color: string; contrast: number; saturation: number }): THREE.Texture {
-  const done = toned.get(id);
-  if (done) return done;
-  const average = PHOTOS[id].average;
-  const image = source.image as HTMLImageElement | undefined;
-  if (!average || !image?.width) return source;
-  try {
-    const canvas = document.createElement("canvas");
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-    ctx.drawImage(image, 0, 0);
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const to = new THREE.Color(tone.color).getHex();
-    retone(data.data, [average[0], average[1], average[2]], [(to >> 16) & 255, (to >> 8) & 255, to & 255], tone.contrast, tone.saturation);
-    ctx.putImageData(data, 0, 0);
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = source.anisotropy;
-    texture.colorSpace = THREE.SRGBColorSpace;
-    toned.set(id, texture);
-    return texture;
-  } catch {
-    return source;
-  }
-}
 
 /**
  * El borde del piso: opaco alrededor del mueble y cada vez más transparente
@@ -152,7 +117,7 @@ async function photoFloor(type: PhotoFloor): Promise<FloorLook> {
   const spec = FLOOR_PHOTOS[type];
   const set = await photoSet(spec.id);
   const size = PHOTOS[spec.id].size;
-  // copias: la tarima usa la misma foto con otra repetición
+  // copias: la foto compartida queda con su repetición en metros
   const fit = (t?: THREE.Texture) => {
     if (!t) return null;
     const c = t.clone();
@@ -160,14 +125,12 @@ async function photoFloor(type: PhotoFloor): Promise<FloorLook> {
     c.needsUpdate = true;
     return c;
   };
-  return {
-    map: fit(set.map && tonedMap(spec.id, set.map, spec.tone)),
-    normalMap: fit(set.normalMap),
-    roughnessMap: fit(set.roughnessMap),
-    roughness: spec.roughness,
-    // si la foto no se pudo llevar a su tono, se tiñe como se pueda
-    color: set.map && toned.has(spec.id) ? new THREE.Color("#ffffff") : tintFor(spec.id, spec.tone.color),
-  };
+  return { map: fit(set.map), normalMap: fit(set.normalMap), roughnessMap: fit(set.roughnessMap), roughness: spec.roughness, relief: spec.relief, color: new THREE.Color("#ffffff") };
+}
+
+/** el piso de un color parejo, el promedio de su foto: lo que se ve hasta que la foto baja */
+function plainFloor(type: PhotoFloor): FloorLook {
+  return { map: null, normalMap: null, roughnessMap: null, roughness: 0.6, relief: 0, color: photoColor(FLOOR_PHOTOS[type].id, "#cfcbc4") };
 }
 
 /** el piso dibujado, para el primer cuadro y por si la foto no llega */
@@ -185,7 +148,7 @@ function drawnFloor(type: PhotoFloor): FloorLook {
     baldosa: () => ({ map: make(tileTexture(), FLOOR_SIZE / 1.2), roughness: 0.38 }),
   };
   const look = looks[type]();
-  return { map: look.map, normalMap: null, roughnessMap: null, roughness: look.roughness, color: new THREE.Color("#ffffff") };
+  return { map: look.map, normalMap: null, roughnessMap: null, roughness: look.roughness, relief: 0, color: new THREE.Color("#ffffff") };
 }
 
 function applyFloor(m: THREE.MeshStandardMaterial, look: FloorLook) {
@@ -194,7 +157,8 @@ function applyFloor(m: THREE.MeshStandardMaterial, look: FloorLook) {
   m.roughnessMap = look.roughnessMap;
   m.roughness = look.roughness;
   // relieve suave: marcado, a contraluz y de lejos el piso chispea
-  m.normalScale.setScalar(0.45);
+  m.normalScale.setScalar(look.relief);
+  m.userData.relief = look.relief;
   m.color.copy(look.color);
   m.needsUpdate = true;
 }
@@ -231,7 +195,8 @@ export function Room({ min, max, walls, wall, floor }: Props) {
   const rightSkirt = useRef<THREE.Mesh>(null);
 
   const mats = useMemo(() => {
-    const first = drawnFloor("cemento");
+    // arranca del color del piso elegido: cuando llega la foto, entra sobre su mismo tono
+    const { relief: _relief, ...first } = plainFloor(floor === "estudio" ? "madera" : floor);
     const fade = fadeTexture();
     return {
       floor: new THREE.MeshStandardMaterial({ ...first, alphaMap: fade, transparent: true }),
@@ -310,6 +275,7 @@ export function Room({ min, max, walls, wall, floor }: Props) {
           normalMap: mats.floorNext.normalMap,
           roughnessMap: mats.floorNext.roughnessMap,
           roughness: mats.floorNext.roughness,
+          relief: mats.floorNext.userData.relief ?? 0,
           color: mats.floorNext.color,
         });
         mats.floorNext.opacity = 0;

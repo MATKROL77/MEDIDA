@@ -53,7 +53,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
   // la alfombra, la tele, las lámparas: se pueden sacar para ver el mueble solo
   const [deco, setDeco] = useState(true);
   const [view, setView] = useState<{ name: ViewName; nonce: number }>({ name: "three", nonce: 0 });
-  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "estudio" });
+  const [environment, setEnvironment] = useState<{ mode: "room" | "studio"; wall: string; floor: FloorType }>({ mode: "room", wall: WALL_COLORS[0].hex, floor: "madera" });
   const [ready, setReady] = useState(false);
   // el módulo tocado en el 3D, para cambiarlo solo (en las familias que lo permiten)
   const [picked, setPicked] = useState<number | null>(null);

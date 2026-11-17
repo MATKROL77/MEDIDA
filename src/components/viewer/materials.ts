@@ -12,7 +12,7 @@ import * as THREE from "three";
 
 import { materialById } from "@/lib/catalog";
 
-import { dressWith, tintFor, type PhotoId } from "./photo";
+import { dressWith, photoColor, type PhotoId } from "./photo";
 
 /**
  * Con suavizado de bordes (MSAA), un triángulo más fino que un píxel se sombrea
@@ -28,6 +28,14 @@ for (const key of ["normal_pars_fragment", "normal_pars_vertex"] as const) {
 
 /** qué terminaciones del catálogo tienen foto de verdad */
 const VENEERS: Record<string, PhotoId> = { nogal: "nogal", roble: "roble" };
+const WHITE = new THREE.Color("#ffffff");
+/**
+ * El acabado de una chapa: laca satinada. `roughness` multiplica el mapa de la
+ * foto (que promedia 0,58): queda en ~0,5, un brillo abierto que no espeja.
+ * Encima, una capa fina de laca que da el reflejo largo de un mueble
+ * terminado. `relief`: cuánto se hunde el poro; se nota con la luz de costado.
+ */
+const VENEER_FINISH = { roughness: 0.86, clearcoat: 0.22, clearcoatRoughness: 0.42, relief: 0.9 };
 /**
  * La trama de las telas es una foto en gris con promedio 205 (ver
  * scripts/textures.mjs): multiplica el color y lo oscurece. Esta ganancia lo
@@ -303,19 +311,21 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     const m = materialById(id);
     const photo = VENEERS[id];
     const material = new THREE.MeshPhysicalMaterial({
-      // mientras baja la foto se ve el color del catálogo, nunca negro
-      color: photo ? m.color : m.grain ? "#ffffff" : m.color,
+      // mientras baja la foto se ve su color promedio, nunca negro
+      color: photo ? photoColor(photo, m.color) : m.grain ? "#ffffff" : m.color,
       map: !photo && m.grain ? woodTexture(m.color, along) : null,
-      roughness: m.grain ? 0.58 : 0.5,
+      // la melamina lisa es apenas texturada: devuelve la luz abierta, sin espejar la sala
+      roughness: m.grain ? 0.58 : 0.56,
       metalness: 0,
       transparent,
       envMapIntensity: 0.9,
       // una capa de barniz satinado: el reflejo largo y suave de un mueble terminado
-      clearcoat: photo ? 0.32 : 0.14,
-      clearcoatRoughness: photo ? 0.38 : 0.5,
+      clearcoat: photo ? VENEER_FINISH.clearcoat : 0.12,
+      clearcoatRoughness: photo ? VENEER_FINISH.clearcoatRoughness : 0.55,
     });
-    // chapa de verdad, proyectada según la medida de cada pieza, con un laqueado satinado
-    return photo ? dressWith(material, photo, { tint: tintFor(photo, m.color), roughness: 0.62, normalScale: 0.6 }) : material;
+    // chapa de verdad, proyectada según la medida de cada pieza. La foto ya viene en su tono
+    // (scripts/textures.mjs): no se tiñe, que es lo que la dejaba anaranjada
+    return photo ? dressWith(material, photo, { tint: WHITE, roughness: VENEER_FINISH.roughness, normalScale: VENEER_FINISH.relief }) : material;
   };
   const kit = {
     /** qué terminación va en los frentes: las piezas que la nombran la usan aunque no sean un frente */
@@ -363,12 +373,12 @@ function backing(bodyId: string) {
   const shade = body.grain ? 0.94 : 0.97;
   const drawn = !photo && body.grain;
   const material = new THREE.MeshStandardMaterial({
-    color: drawn ? new THREE.Color(shade, shade, shade) : new THREE.Color(body.color).multiplyScalar(shade),
+    color: drawn ? new THREE.Color(shade, shade, shade) : (photo ? photoColor(photo, body.color) : new THREE.Color(body.color)).multiplyScalar(shade),
     map: drawn ? woodTexture(body.color, "v") : null,
     roughness: 0.78,
     envMapIntensity: 0.7,
   });
-  return photo ? dressWith(material, photo, { tint: tintFor(photo, body.color).multiplyScalar(shade), roughness: 0.78, normalScale: 0.4 }) : material;
+  return photo ? dressWith(material, photo, { tint: new THREE.Color(shade, shade, shade), roughness: 1.3, normalScale: 0.5 }) : material;
 }
 
 /**
