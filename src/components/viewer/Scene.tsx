@@ -20,6 +20,7 @@ import { hiddenFaces } from "@/lib/gaps";
 import { MM, PartNode, Presence } from "./PartNode";
 import type { FloorType } from "./constants";
 import { Grounding } from "./Grounding";
+import { washMaterial } from "./ledWash";
 import { createPhotoBus, photoCapable, type PhotoBus, PhotoMode, type PhotoStatus } from "./PhotoMode";
 import { Room, type Walls } from "./Room";
 
@@ -101,9 +102,12 @@ function backdropColor(hex: string): THREE.Color {
  */
 const LIGHT = { environment: 0.72, sky: 1.15, key: 2.2 } as const;
 /** con los LED prendidos el ambiente baja, como al atardecer: no a oscuras */
-const DUSK = 0.3;
-/** cuánto más que su color alumbra la mancha de un LED lo que tiene debajo */
-const GLOW_GAIN = 2;
+const DUSK = 0.42;
+/** cuánto brilla el difusor de una tira prendida: lo justo para pasar el umbral del resplandor y dejar un halo suave */
+const LENS_GLOW = 5.5;
+/** cuánto blanco lleva el difusor prendido, y cuánto la luz que cae sobre las placas */
+const LENS_WHITE = 0.45;
+const WASH_WHITE = 0.5;
 
 const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
   front: [0, 0.14, 1],
@@ -126,8 +130,12 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   anim.room.target = props.environment.mode === "room" ? 1 : 0;
 
   const led = useMemo(() => new THREE.Color(ledHex(props.config)), [props.config]);
+  // el difusor encendido se ve casi blanco, con el tono de la tira: así el halo es de luz y no una aureola de color
+  const lens = useMemo(() => led.clone().lerp(new THREE.Color("#ffffff"), LENS_WHITE), [led]);
   // la luz que cae sobre una placa es menos teñida que la tira que la da: sobre un blanco se ve blanca cálida, no naranja
-  const glow = useMemo(() => led.clone().lerp(new THREE.Color("#ffffff"), 0.4).multiplyScalar(GLOW_GAIN), [led]);
+  const tint = useMemo(() => led.clone().lerp(new THREE.Color("#ffffff"), WASH_WHITE), [led]);
+  const wash = useMemo(() => washMaterial(kit), [kit]);
+  useEffect(() => () => wash.dispose(), [wash]);
   const fronts = useMemo(() => frontMaterials(kit), [kit]);
   const backdrop = props.backdrop ?? STUDIO_BACKDROP;
   // la curva de tonos aprieta los claros: el fondo liso entra con la luz justa para salir del color pedido
@@ -159,18 +167,13 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
     const l = anim.lights.v;
     const x = anim.xray.v;
     const e = anim.explode.v;
-    kit.led.emissive.copy(led);
-    kit.led.emissiveIntensity = 0.02 + l * 5.5;
-    // la mancha de luz multiplica lo que tiene debajo: su color entra con ganancia
-    const glowBase = l * (1 - 0.85 * e);
-    kit.glow.z.color.copy(glow);
-    kit.glow.z.opacity = glowBase * 0.9;
-    kit.glow.y.color.copy(glow);
-    kit.glow.y.opacity = glowBase * 0.7;
-    kit.glow["x+"].color.copy(glow);
-    kit.glow["x+"].opacity = glowBase * 0.6;
-    kit.glow["x-"].color.copy(glow);
-    kit.glow["x-"].opacity = glowBase * 0.6;
+    // el resorte de las luces rebota apenas: nunca por debajo de apagado
+    const on = Math.max(0, l);
+    kit.led.emissive.copy(lens);
+    kit.led.emissiveIntensity = 0.02 + on * LENS_GLOW;
+    // la luz sobre el hueco: su color y cuánto está prendida; despiezado, se apaga con las piezas que se van
+    wash.uniforms.tint.value.copy(tint);
+    wash.uniforms.strength.value = on * (1 - e) * (1 - e);
     for (const m of fronts) {
       m.opacity = 1 - 0.84 * x;
       m.depthWrite = m.opacity > 0.97;
