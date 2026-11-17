@@ -18,6 +18,8 @@ export const BOUNCY = { k: 170, c: 13 };
 export const SOFT = { k: 90, c: 19 };
 /** puertas y hojas corredizas: con peso, casi sin rebote para no pasarse del tope */
 export const HEAVY = { k: 48, c: 12.5 };
+/** piezas que llegan volando a su lugar: rápido y con un asentamiento apenas elástico */
+export const FLY = { k: 64, c: 13.6 };
 /** cajones: un poco más ágiles que las puertas */
 export const DRAWER = { k: 75, c: 15 };
 
@@ -92,6 +94,8 @@ export type SceneAnim = {
   bornAt: number;
   /** hasta este momento, lo que se monta aparece armado en vez de crecer (escenas sin entrada) */
   settledUntil: number;
+  /** la última vez que algo se movió (performance.now()): mientras haya movimiento, el 3D no se duerme */
+  activeAt: number;
 };
 
 export const SceneAnimContext = createContext<SceneAnim | null>(null);

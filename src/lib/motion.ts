@@ -216,3 +216,53 @@ export function sweep(leaf: Leaf, fromOffset: number, toOffset: number): [number
 export function overlaps(a: [number, number], g: Pick<DrawerGroup, "x0" | "x1">): boolean {
   return Math.min(a[1], g.x1) - Math.max(a[0], g.x0) > COVER_TOLERANCE;
 }
+
+// ---------------------------------------------------------------- armado
+
+/** de dónde llega una pieza al armarse el mueble y en qué momento */
+export type Entrance = {
+  /** desde dónde vuela, en mm respecto de su lugar; null: no vuela (aparece creciendo) */
+  from: [number, number, number] | null;
+  /** turno dentro del armado, de 0 (primera) a 1 (última) */
+  order: number;
+};
+
+const FRONTS = new Set<Part["kind"]>(["door", "sliding-door", "drawer-front", "mirror", "glass", "handle", "groove"]);
+
+/**
+ * El armado del mueble, como lo haría alguien en el taller: primero la base,
+ * después los laterales (cada uno desde su costado), el fondo y la tapa (desde
+ * arriba), lo de adentro (desde adelante) y al final los frentes. Cada pieza
+ * llega desde afuera de la pantalla y se acomoda en su lugar.
+ *
+ * `bounds` es la caja del tramo al que pertenece la pieza (sus coordenadas);
+ * `walls` evita que una pieza llegue atravesando una pared.
+ */
+export function entranceOf(part: Part, bounds: { min: [number, number, number]; max: [number, number, number] }, walls: Assembly["walls"] = "back"): Entrance {
+  // la luz pintada y la decoración no vuelan: aparecen cuando el mueble ya está armado
+  if (part.kind === "glow" || part.kind === "led") return { from: null, order: 0.92 };
+  if (part.decor) return { from: null, order: 1 };
+
+  const size = [0, 1, 2].map((i) => Math.max(1, bounds.max[i] - bounds.min[i]));
+  // dónde está la pieza dentro del mueble, de -1 a 1 en cada eje
+  const n = [0, 1, 2].map((i) => ((part.position[i] + part.size[i] / 2 - (bounds.min[i] + bounds.max[i]) / 2) / size[i]) * 2);
+  // lejos como para arrancar fuera de la pantalla: la cámara encuadra el mueble entero
+  const far = Math.max(2400, 1.5 * Math.hypot(size[0], size[1], size[2]));
+  const sweep = 0.07 * (n[0] + 1) * 0.5 + 0.05 * (n[1] + 1) * 0.5;
+
+  const front = part.front || FRONTS.has(part.kind);
+  if (front) return { from: [0, 0, far * 1.6], order: 0.68 + sweep };
+  if (part.kind === "top" || (part.kind !== "back" && n[1] > 0.8 && part.size[1] < size[1] * 0.5)) return { from: [0, far, 0], order: 0.52 + sweep };
+  if (part.kind === "back") return { from: [0, far, 0], order: 0.26 + sweep };
+  const thinX = part.size[0] < size[0] * 0.5;
+  if ((part.kind === "side" || Math.abs(n[0]) > 0.8) && thinX) {
+    const left = n[0] < 0;
+    // contra una pared de costado no puede llegar de ese lado: baja desde arriba
+    const blocked = (left && walls === "l-left") || (!left && walls === "l-right");
+    return { from: blocked ? [0, far, 0] : [left ? -far : far, 0, 0], order: 0.12 + sweep };
+  }
+  if (part.kind === "divider") return { from: [0, far, 0], order: 0.18 + sweep };
+  if (part.kind === "bottom" || part.kind === "plinth" || n[1] < -0.8) return { from: [0, 0, far * 1.6], order: sweep };
+  // lo de adentro: estantes, barrales, cajones
+  return { from: [0, 0, far * 1.6], order: 0.38 + sweep + (part.kind.startsWith("drawer") ? 0.12 : 0) };
+}

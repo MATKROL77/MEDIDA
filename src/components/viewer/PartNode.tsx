@@ -10,7 +10,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 
 import type { Part } from "@/lib/assembly";
 
-import { BOUNCY, clampDt, doorProgress, FIRM, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
+import { BOUNCY, clampDt, doorProgress, FIRM, FLY, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
 import type { MaterialKit } from "./materials";
 import { dressWith, meterUvs, tintFor } from "./photo";
 
@@ -917,6 +917,8 @@ type NodeProps = {
   kit: MaterialKit;
   /** segundos de espera antes de aparecer (la entrada escalonada) */
   delay: number;
+  /** desde dónde llega volando a su lugar, en mm; sin esto aparece creciendo */
+  from?: [number, number, number] | null;
   onSelect?: (run: number, module: number) => void;
   /** tocar una hoja corrediza la corre para el otro lado */
   onLeaf?: (id: string) => void;
@@ -1047,14 +1049,17 @@ function splitHidden(g: THREE.BufferGeometry, hidden: number): { visible: THREE.
   return { visible: pick(false), shaded: pick(true) };
 }
 
-export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden = 0 }: NodeProps) {
+export function PartNode({ part, exiting, kit, delay, from = null, onSelect, onLeaf, hidden = 0 }: NodeProps) {
   const anim = useSceneAnim();
   const outer = useRef<THREE.Group>(null);
   const rot = useRef<THREE.Group>(null);
   const mesh = useRef<THREE.Mesh>(null);
   const details = useRef<THREE.Group>(null);
   // crece al aparecer, salvo en una escena que arranca ya armada
-  const appear = useRef(spring(typeof performance !== "undefined" && performance.now() < anim.settledUntil ? 1 : 0));
+  const settled = typeof performance !== "undefined" && performance.now() < anim.settledUntil;
+  const appear = useRef(spring(settled ? 1 : 0));
+  // la pieza que llega volando: 1 es todavía afuera de la pantalla, 0 es en su lugar
+  const fly = useRef(spring(from && !settled ? 1 : 0));
   const born = useRef<number | null>(null);
   const door = part.kind === "door" && part.hinge ? part.hinge : null;
   const trap = part.geometry === "trapezoid";
@@ -1150,9 +1155,25 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     const now = state.clock.elapsedTime;
     if (born.current === null) born.current = now;
     const s = sv.current!;
-    s.step(d, FIRM);
-    appear.current.target = exiting ? 0 : now - born.current >= delay ? 1 : 0;
-    step(appear.current, d, BOUNCY);
+    let moving = s.step(d, FIRM);
+    const started = now - born.current >= delay;
+    appear.current.target = exiting ? 0 : started ? 1 : 0;
+    const flying = from !== null && !exiting;
+    if (flying && fly.current.v > 1e-4) {
+      // no crece: aparece entera, lejos, y viaja hasta su lugar
+      appear.current.v = started ? 1 : 0;
+      appear.current.vel = 0;
+      if (started) {
+        fly.current.target = 0;
+        step(fly.current, d, FLY);
+      }
+      moving = true;
+    } else if (step(appear.current, d, BOUNCY) || !started) moving = true;
+    if (moving) anim.activeAt = performance.now();
+    const f = flying ? fly.current.v : 0;
+    const fx = from ? from[0] * f : 0;
+    const fy = from ? from[1] * f : 0;
+    const fz = from ? from[2] * f : 0;
 
     const [px, py, pz, sx, sy, sz, rz, tl, tr] = s.v;
     const e = anim.explode.v;
@@ -1169,9 +1190,9 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     const pivot = door === "lid" ? [px + sx / 2, py + sy, pz] : door ? [door === "right" ? px + sx : px, py, pz + sz] : [px + sx / 2, py + sy / 2, pz + sz / 2];
     if (outer.current) {
       outer.current.position.set(
-        (pivot[0] + ex[0] * e + (os ? os[0] * drawer : 0) + slideX) * MM,
-        (pivot[1] + ex[1] * e + (os ? os[1] * drawer : 0)) * MM,
-        (pivot[2] + ex[2] * e + (os ? os[2] * drawer : 0)) * MM,
+        (pivot[0] + ex[0] * e + (os ? os[0] * drawer : 0) + slideX + fx) * MM,
+        (pivot[1] + ex[1] * e + (os ? os[1] * drawer : 0) + fy) * MM,
+        (pivot[2] + ex[2] * e + (os ? os[2] * drawer : 0) + fz) * MM,
       );
     }
     if (rot.current) {
@@ -1186,9 +1207,10 @@ export function PartNode({ part, exiting, kit, delay, onSelect, onLeaf, hidden =
     const m = mesh.current;
     // abierto o despiezado, la ranura deja de existir: todas las caras con el material de
     // siempre; con rayos X también (los frentes se vuelven transparentes y la copia no los sigue)
-    if (m && closedBox && material) m.material = drawer > 0.01 || e > 0.01 || anim.xray.v > 0.01 ? material : closedBox;
+    // (y mientras la pieza llega volando: suelta en el aire se ve entera)
+    if (m && closedBox && material) m.material = drawer > 0.01 || e > 0.01 || anim.xray.v > 0.01 || f > 0.002 ? material : closedBox;
     if (shadedMesh.current && shadedMaterial && material) {
-      const apart = drawer > 0.01 || e > 0.01 || anim.xray.v > 0.01 || Math.abs(slideX) > 1 || (door !== null && anim.open.v > 0.01);
+      const apart = drawer > 0.01 || e > 0.01 || anim.xray.v > 0.01 || f > 0.002 || Math.abs(slideX) > 1 || (door !== null && anim.open.v > 0.01);
       shadedMesh.current.material = apart ? material : shadedMaterial;
     }
     if (m) {

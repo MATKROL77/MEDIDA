@@ -13,7 +13,7 @@ import type { Assembly, RunAssembly } from "@/lib/assembly";
 import { ledHex, type WardrobeConfig } from "@/lib/model";
 
 import { clampDt, DRAWER, FIRM, HEAVY, type SceneAnim, SceneAnimContext, SOFT, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
-import { drawerGroupsOf, isCovered, leavesOf, overlaps, sweep } from "@/lib/motion";
+import { drawerGroupsOf, entranceOf, isCovered, leavesOf, overlaps, sweep } from "@/lib/motion";
 import { createKit, disposeKit, frontMaterials, GLASS_OPACITY, type MaterialKit } from "./materials";
 import { hiddenFaces } from "@/lib/gaps";
 import { MM, PartNode, Presence } from "./PartNode";
@@ -122,13 +122,14 @@ function AnimDriver({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   useFrame((_, dt) => {
     const d = clampDt(dt);
     sequence(anim, motion, wanted.current);
-    step(anim.open, d, HEAVY);
-    for (const s of anim.drawers.values()) step(s, d, DRAWER);
-    for (const s of anim.leaves.values()) step(s, d, HEAVY);
-    step(anim.explode, d, FIRM);
-    step(anim.xray, d, SOFT);
-    step(anim.lights, d, SOFT);
-    step(anim.room, d, SOFT);
+    let moving = step(anim.open, d, HEAVY);
+    for (const s of anim.drawers.values()) moving = step(s, d, DRAWER) || moving;
+    for (const s of anim.leaves.values()) moving = step(s, d, HEAVY) || moving;
+    moving = step(anim.explode, d, FIRM) || moving;
+    moving = step(anim.xray, d, SOFT) || moving;
+    moving = step(anim.lights, d, SOFT) || moving;
+    moving = step(anim.room, d, SOFT) || moving;
+    if (moving) anim.activeAt = performance.now();
 
     const l = anim.lights.v;
     const x = anim.xray.v;
@@ -345,6 +346,7 @@ function CameraRig({ assembly, view, intro, sway, framing, minRadius }: { assemb
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const size = useThree((s) => s.size);
+  const anim = useSceneAnim();
   const flight = useRef<{ pos: THREE.Vector3; target: THREE.Vector3; snap?: boolean } | null>(null);
   const first = useRef(true);
   // vaivén: desde qué ángulo oscila, desde cuándo, y si la persona tiene la cámara
@@ -417,6 +419,7 @@ function CameraRig({ assembly, view, intro, sway, framing, minRadius }: { assemb
     const f = flight.current;
     const w = swing.current;
     if (f) {
+      anim.activeAt = performance.now();
       w.flying = true;
       if (f.snap) {
         camera.position.copy(f.pos);
@@ -560,10 +563,28 @@ export function wallsOf(props: Pick<ViewerProps, "assembly" | "config">): Walls 
 
 function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
   const anim = useSceneAnim();
-  const totalH = Math.max(1, props.assembly.bounds.max[1]);
   const walls = wallsOf(props);
   // las caras metidas en ranuras (entre frentes, detrás de ellos): van en sombra
   const hidden = useMemo(() => new Map(props.assembly.runs.map((r) => [r.index, hiddenFaces(r.parts)])), [props.assembly]);
+  // la caja de cada tramo: de ahí sale de qué lado llega cada pieza al armarse
+  const boxes = useMemo(() => {
+    const map = new Map<number, { min: [number, number, number]; max: [number, number, number] }>();
+    for (const r of props.assembly.runs) {
+      const min: [number, number, number] = [Infinity, Infinity, Infinity];
+      const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+      for (const p of r.parts) {
+        if (p.decor || p.kind === "glow") continue;
+        for (let i = 0; i < 3; i++) {
+          min[i] = Math.min(min[i], p.position[i]);
+          max[i] = Math.max(max[i], p.position[i] + p.size[i]);
+        }
+      }
+      map.set(r.index, { min, max });
+    }
+    return map;
+  }, [props.assembly]);
+  // cómo entra cada pieza: se decide una vez, cuando aparece
+  const entrances = useRef(new Map<string, { delay: number; from: [number, number, number] | null }>());
   return (
     <Centered assembly={props.assembly}>
       <Room
@@ -579,10 +600,19 @@ function Wardrobe({ props, kit }: { props: ViewerProps; kit: MaterialKit }) {
         <RunGroup key={run.index} run={run}>
           <Presence parts={run.parts}>
             {(p, gone) => {
-              // al cargar, el placard se arma de abajo hacia arriba
-              const age = typeof performance === "undefined" ? 0 : (performance.now() - anim.bornAt) / 1000;
-              const delay = props.intro !== false && age < 1.2 ? 0.15 + (p.position[1] / totalH) * 0.55 + run.index * 0.12 : 0;
-              return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={delay} onSelect={props.onSelect} onLeaf={props.onLeaf} hidden={hidden.get(run.index)?.get(p.id)} />;
+              const key = `${run.index}:${p.id}`;
+              let entrance = entrances.current.get(key);
+              if (gone) entrances.current.delete(key);
+              else if (!entrance) {
+                // al cargar, el mueble se arma pieza por pieza, en orden de taller; después,
+                // lo que se agrega (un módulo, un estante, un cajón) llega enseguida
+                const age = typeof performance === "undefined" ? 0 : (performance.now() - anim.bornAt) / 1000;
+                const e = entranceOf(p, boxes.get(run.index)!, walls);
+                const first = props.intro !== false && age < 1.2;
+                entrance = { delay: first ? 0.25 + e.order * 1.45 + run.index * 0.15 : 0.02 + e.order * 0.4, from: props.intro === false ? null : e.from };
+                entrances.current.set(key, entrance);
+              }
+              return <PartNode key={p.id} part={p} exiting={gone} kit={kit} delay={entrance?.delay ?? 0} from={entrance?.from} onSelect={props.onSelect} onLeaf={props.onLeaf} hidden={hidden.get(run.index)?.get(p.id)} />;
             }}
           </Presence>
           {props.selection && props.selection.run === run.index && <SelectionBox run={run} module={props.selection.module} />}
@@ -621,6 +651,7 @@ function Sleeper({ keepAwake }: { keepAwake: boolean }) {
   const invalidate = useThree((s) => s.invalidate);
   const element = useThree((s) => s.gl.domElement);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
+  const anim = useSceneAnim();
   const state = useRef({ last: performance.now(), asleep: false });
   const wake = useRef(() => {});
   wake.current = () => {
@@ -674,10 +705,45 @@ function Sleeper({ keepAwake }: { keepAwake: boolean }) {
     // el lienzo puede volver a "always" desde afuera (al redibujarse el componente): se lee el real
     if (get().frameloop !== "always") return;
     st.asleep = false;
-    if (keepAwake || performance.now() - st.last < SLEEP_AFTER_MS) return;
+    // mientras una pieza, una puerta o la cámara se mueven, no se duerme
+    if (keepAwake || performance.now() - Math.max(st.last, anim.activeAt) < SLEEP_AFTER_MS) return;
     st.asleep = true;
     setFrameloop("demand");
   });
+  return null;
+}
+
+/**
+ * Girar la cámara no cambia las sombras: el mapa de sombras solo se vuelve a
+ * dibujar mientras algo del mueble se mueve (una medida, una puerta, una pieza
+ * que llega) o termina de bajar un modelo. Dar vueltas alrededor del mueble,
+ * que es lo que más se hace, cuesta así un dibujo de la escena en vez de dos.
+ */
+function ShadowGate() {
+  const anim = useSceneAnim();
+  const gl = useThree((s) => s.gl);
+  const dirtyUntil = useRef(0);
+  // cada vez que cambia lo que se muestra, y un rato después por si algo se acomoda
+  useEffect(() => {
+    dirtyUntil.current = performance.now() + 400;
+  });
+  useEffect(() => {
+    const manager = THREE.DefaultLoadingManager;
+    const prev = manager.onLoad;
+    manager.onLoad = () => {
+      prev?.();
+      dirtyUntil.current = performance.now() + 400;
+    };
+    return () => {
+      manager.onLoad = prev;
+      gl.shadowMap.autoUpdate = true;
+    };
+  }, [gl]);
+  useFrame(() => {
+    const now = performance.now();
+    gl.shadowMap.autoUpdate = false;
+    if (now < dirtyUntil.current || now - anim.activeAt < 300) gl.shadowMap.needsUpdate = true;
+  }, -1);
   return null;
 }
 
@@ -715,6 +781,7 @@ function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoO
       <SoftShadows size={22} samples={8} focus={0.55} />
       <Wardrobe props={props} kit={kit} />
       <ViewZoom zoom={props.zoom} />
+      <ShadowGate />
       {/* el trazado de rayos, las capturas y la calidad fija necesitan cuadros sin parar */}
       <Sleeper keepAwake={props.photoOn || props.awake || !!props.countFrames || !!props.sway} />
       <CameraRig assembly={props.assembly} view={props.view} intro={props.intro !== false} sway={!!props.sway && !props.photoOn} framing={props.framing ?? 1} minRadius={props.confine ? 1.05 : 0} />
@@ -783,6 +850,7 @@ export default function Scene(props: ViewerProps) {
       bornAt: typeof performance === "undefined" ? 0 : performance.now(),
       // sin entrada: lo que se monta en el primer momento aparece ya armado
       settledUntil: intro || typeof performance === "undefined" ? 0 : performance.now() + 500,
+      activeAt: 0,
     }),
     // el estado de la escena se crea una sola vez
     // eslint-disable-next-line react-hooks/exhaustive-deps
