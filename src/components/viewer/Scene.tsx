@@ -102,12 +102,12 @@ function backdropColor(hex: string): THREE.Color {
  */
 const LIGHT = { environment: 0.72, sky: 1.15, key: 2.2 } as const;
 /** con los LED prendidos el ambiente baja, como al atardecer: no a oscuras */
-const DUSK = 0.42;
+const DUSK = 0.5;
 /** cuánto brilla el difusor de una tira prendida: lo justo para pasar el umbral del resplandor y dejar un halo suave */
 const LENS_GLOW = 5.5;
 /** cuánto blanco lleva el difusor prendido, y cuánto la luz que cae sobre las placas */
 const LENS_WHITE = 0.45;
-const WASH_WHITE = 0.5;
+const WASH_WHITE = 0.42;
 
 const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
   front: [0, 0.14, 1],

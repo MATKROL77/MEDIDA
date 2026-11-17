@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { Part } from "@/lib/assembly";
-import { AIR_REACH, GATE, HALO_REACH, SOFT, washMesh } from "@/lib/led";
+import { AIR_REACH, END, GATE, HALO_REACH, SOFT, washMesh } from "@/lib/led";
 
 /**
  * La luz de las tiras LED en el 3D rápido: un material que calcula, en cada
@@ -17,13 +17,13 @@ import { AIR_REACH, GATE, HALO_REACH, SOFT, washMesh } from "@/lib/led";
 const MM = 0.001;
 
 /** cuánto aclara la luz lo que toca, por unidad de luz que llega */
-const GAIN = 0.22;
+const GAIN = 0.26;
 /** la cortina (lo que la tira alumbra en el aire del hueco) pesa menos que las caras */
 const AIR_GAIN = 0.045;
 /** el resplandor del difusor sobre la placa que lleva la tira, pegado al perfil */
 const HALO_GAIN = 1.6;
 /** tope de cuánto se aclara una placa pegada a la tira: no se quema */
-const CEILING = 1.5;
+const CEILING = 1.6;
 
 const VERTEX = /* glsl */ `
 attribute vec3 rel;
@@ -77,7 +77,7 @@ void main() {
     float a = -(vAim.y * vRel.y + vAim.z * vRel.z);
     float d1 = sqrt(r2 + u1 * u1);
     float d2 = sqrt(r2 + u2 * u2);
-    e = gate * (a * (u2 / d2 - u1 / d1) / r2 + vAim.x * (1.0 / d1 - 1.0 / d2)) * ${GAIN.toFixed(4)};
+    e = gate * (a * (u2 / d2 - u1 / d1) / r2 + ${END.toFixed(3)} * vAim.x * (1.0 / d1 - 1.0 / d2)) * ${GAIN.toFixed(4)};
   }
   e = max(e, 0.0) * fade(vEdge.x, vUv.x) * fade(vEdge.y, 1.0 - vUv.x) * fade(vEdge.z, vUv.y) * fade(vEdge.w, 1.0 - vUv.y);
   // cerca de la tira la luz se aprieta en vez de quemar
@@ -148,7 +148,7 @@ export function washGeometry(part: Part): THREE.BufferGeometry | null {
 export type StripShape = { channel: THREE.BufferGeometry; diffuser: THREE.BufferGeometry };
 const shapes = new Map<string, StripShape>();
 /** qué parte del alto de la tira es el canal de aluminio; el resto es el difusor */
-const CHANNEL = 0.3;
+const CHANNEL = 0.24;
 /** el difusor es apenas más angosto que el canal: asoma la pestaña de aluminio */
 const LENS = 0.84;
 

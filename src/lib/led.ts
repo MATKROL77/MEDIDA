@@ -47,6 +47,8 @@ export const AIR_REACH = 0.14;
 export const HALO_REACH = 0.014;
 /** en cuántos metros, pasando el plano de la tira, la luz termina de prenderse (el difusor asoma: no corta en seco) */
 export const GATE = 0.03;
+/** cuánto de su luz manda la tira a lo largo de sí misma: un difusor largo alumbra hacia los costados, poco hacia las puntas */
+export const END = 0.5;
 /** las caras se despegan de la placa para no pelearse con ella, en mm */
 const LIFT = 1;
 /** cuánto de cada lado abierto se usa para apagar la luz */
@@ -71,7 +73,7 @@ export function irradiance(rel: Vec3, n: Vec3, length: number): number {
   const u1 = -rel[0];
   const u2 = length - rel[0];
   const a = -(n[1] * rel[1] + n[2] * rel[2]);
-  return Math.max(0, smooth(-rel[1] / GATE) * (a * (j1(u2) - j1(u1)) + n[0] * (j2(u2) - j2(u1))));
+  return Math.max(0, smooth(-rel[1] / GATE) * (a * (j1(u2) - j1(u1)) + END * n[0] * (j2(u2) - j2(u1))));
 }
 
 /** luz que cruza un punto del aire, mire para donde mire lo que haya ahí: la de la cortina */
@@ -188,7 +190,8 @@ export function lightUp(parts: Part[]): void {
     // la placa que lleva la tira: el techo del hueco
     const top = strip.position[1] + strip.size[1];
     const own = group(strip);
-    const others = parts.filter((p) => p !== strip && real(p));
+    // la tira de un cajón solo ve su cajón; una tira quieta ve todo (un cajón abajo le tapa el piso)
+    const others = parts.filter((p) => p !== strip && real(p) && (!own || group(p) === own));
     // las del mismo grupo: lo que está quieto para una tira quieta, el cajón para la tira del cajón
     const mine = (p: Part) => group(p) === own && boxy(p) && (own ? true : !p.front && !p.hinge && !p.slide);
 

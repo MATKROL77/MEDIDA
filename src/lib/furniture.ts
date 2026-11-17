@@ -893,7 +893,8 @@ const BUILDERS: Record<string, Builder> = {
       for (const [id, z] of [["f", d - inset - s / 2 - 9], ["b", inset + s / 2 - 9]] as const) piece(parts, `apron:${id}`, "Faldón", "divider", c.body, [a, under - 90, z], [w - 2 * a, 80, T]);
       for (const [id, x] of [["l", inset + s / 2 - 9], ["r", w - inset - s / 2 - 9]] as const) piece(parts, `apron:${id}`, "Faldón", "divider", c.body, [x, under - 90, a], [T, 80, d - 2 * a]);
     }
-    if (v.led) led(parts, "led", 120, under - 8, d - 150, w - 240);
+    // bajo la tapa, detrás del faldón de adelante: no se ve la tira, se ve su luz en el piso
+    if (v.led) led(parts, "led", 120, under - 8, d - 190, w - 240);
     if (v.kind !== "escritorio") {
       // una mesa de comedor: al centro, un jarrón y un cuenco; un velador no va
       prop(parts, "deco:top:jarron", "Jarrón", "jarron-antiguo", w / 2 - 280, h, d / 2 - 128);
@@ -1345,7 +1346,8 @@ const BUILDERS: Record<string, Builder> = {
           piece(parts, `sd${side}${k}:f`, "Frente de cajón", "drawer-front", c.front, [X(w - T, T), fy, z], [T, fh, dl - 6], { front: true, module: mod + k, openShift: out, band: { long: 2, short: 2 }, details: [grip] });
           drawerBox(parts, `sd${side}${k}`, mod + k, out, [X(w - T - STORE_DEPTH + 20, STORE_DEPTH - 20), fy + 14, z + 12], [STORE_DEPTH - 20, fh - 46, dl - 30], "x");
           if (v.led) {
-            const l = piece(parts, `sd${side}${k}:led`, "Tira LED del cajón", "led", "led", [X(w - T - 10, 10), fy + fh - 40, z + 40], [10, STRIP[0], dl - 86], { noCut: true });
+            // pegada al frente por adentro (a la izquierda, pasando el contrafrente del cajón)
+            const l = piece(parts, `sd${side}${k}:led`, "Tira LED del cajón", "led", "led", [right ? w - T - 10 : T + 15, fy + fh - 40, z + 40], [10, STRIP[0], dl - 86], { noCut: true });
             l.module = mod + k;
             l.openShift = out;
           }
@@ -1399,7 +1401,8 @@ const BUILDERS: Record<string, Builder> = {
       piece(parts, "plinth", "Zócalo", "plinth", "tint:#201812", [220, 0, z0 + 220], [w - 440, lift, len - 440], { noCut: true });
     }
     // luz abajo de la base cuando hay lugar entre la cama y el piso (con patas o flotante)
-    if (v.led && v.base !== "caja") led(parts, "led", 260, lift - 8, z0 + len * 0.5, w - 520);
+    // hacia los pies, donde la luz sale de abajo de la cama y se ve sobre el piso
+    if (v.led && v.base !== "caja") led(parts, "led", 260, lift - 8, z0 + len - 150, w - 520);
 
     // lo que la viste: colchón, acolchado y almohadas; una mesa de luz a cada lado
     const my = h - 50;
