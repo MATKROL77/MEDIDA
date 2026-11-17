@@ -42,11 +42,15 @@ const VENEER_FINISH = { roughness: 0.86, clearcoat: 0.22, clearcoatRoughness: 0.
  * compensa para que el tapizado quede del color de su muestra.
  */
 const DETAIL_GAIN = 1 / Math.pow(205 / 255, 2.2);
-/** cuánto relieve y cuánto brillo rasante tiene cada tela */
+/**
+ * Cuánto relieve y cuánto brillo rasante tiene cada tela. El brillo rasante
+ * (sheen) es el pelo de la fibra que aclara los bordes y las curvas: poco en
+ * un lino, que es seco; mucho en la pana, que es puro pelo.
+ */
 const WEAVE_LOOK: Record<string, { normal: number; sheen: number; sheenRoughness: number; lift: number }> = {
-  lino: { normal: 1.5, sheen: 0.45, sheenRoughness: 0.55, lift: 0.18 },
-  pana: { normal: 0.9, sheen: 1, sheenRoughness: 0.32, lift: 0.4 },
-  boucle: { normal: 2.1, sheen: 0.55, sheenRoughness: 0.7, lift: 0.2 },
+  lino: { normal: 1.1, sheen: 0.28, sheenRoughness: 0.6, lift: 0.15 },
+  pana: { normal: 0.8, sheen: 0.9, sheenRoughness: 0.34, lift: 0.35 },
+  boucle: { normal: 1.6, sheen: 0.4, sheenRoughness: 0.75, lift: 0.2 },
 };
 /** la trama de cada tipo de tela */
 const WEAVES: Record<string, PhotoId> = { lino: "tela-lino", pana: "tela-pana", boucle: "tela-boucle", cuero: "tela-cuero" };

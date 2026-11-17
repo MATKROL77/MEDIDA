@@ -14,7 +14,7 @@ Las genera `scripts/textures.mjs`.
 | pared | [Beige Wall 001](https://polyhaven.com/a/beige_wall_001) | Dimitrios Savva, Rico Cilliers |
 | tela-lino | [Rough Linen](https://polyhaven.com/a/rough_linen) | colormass, Rico Cilliers |
 | tela-pana | [Velour Velvet](https://polyhaven.com/a/velour_velvet) | colormass, Rico Cilliers |
-| tela-boucle | [Wool Boucle](https://polyhaven.com/a/wool_boucle) | colormass, Rico Cilliers |
+| tela-boucle | [Curly Teddy Natural](https://polyhaven.com/a/curly_teddy_natural) | colormass, Rico Cilliers |
 | tela-lana | [Poly Wool Herringbone](https://polyhaven.com/a/poly_wool_herringbone) | colormass, Rico Cilliers |
 | tela-cuero | [Brown Leather](https://polyhaven.com/a/brown_leather) | Rob Tuytel |
 | piedra | [Marble 01](https://polyhaven.com/a/marble_01) | Rob Tuytel |

@@ -60,18 +60,21 @@ const SETS = [
   // roble: corte al cuarto, veta fina y pareja; el tono de un roble natural sin teñir
   { id: "roble", slug: "oak_veneer_04", use: "veneer", turn: true, seed: 23, leaves: [0.11, 0.24], leafTone: 0.02, streak: 0.035, tone: { color: "#c9a67e", contrast: 1.5, saturation: 0.85 } },
   // roble claro en tablas anchas, al aceite: el piso acompaña, el protagonista es el mueble
-  { id: "piso-madera", slug: "laminate_floor_02", use: "planks", rows: 8, seed: 5, plankTone: 0.035, lay: "v", tone: { color: "#c9b08d", contrast: 0.85, saturation: 0.8 } },
+  { id: "piso-madera", slug: "laminate_floor_02", use: "planks", rows: 8, seed: 5, plankTone: 0.045, lay: "v", tone: { color: "#c5ab88", contrast: 1.05, saturation: 0.8 } },
   // pinotea plastificada: tablas angostas y largas (la foto, a la mitad de ancho), rojiza
   { id: "piso-pinotea", slug: "wood_floor", use: "planks", turn: true, rows: 9, seed: 17, plankTone: 0.05, lay: "v", scale: [0.5, 1], tone: { color: "#a8744a", contrast: 0.8, saturation: 0.75 } },
   // cemento alisado claro, como el de una galería
   { id: "piso-cemento", slug: "concrete_floor_worn_001", use: "color", tone: { color: "#cfcbc4", contrast: 1, saturation: 1 } },
   { id: "piso-baldosa", slug: "floor_tiles_08", use: "color", tone: { color: "#d3c6b1", contrast: 0.8, saturation: 0.8 } },
   { id: "pared", slug: "beige_wall_001", use: "relief" },
-  { id: "tela-lino", slug: "rough_linen", use: "detail" },
-  { id: "tela-pana", slug: "velour_velvet", use: "detail" },
-  { id: "tela-boucle", slug: "wool_boucle", use: "shade" },
-  { id: "tela-lana", slug: "poly_wool_herringbone", use: "detail" },
-  { id: "tela-cuero", slug: "brown_leather", use: "detail" },
+  // las telas: `contrast` es cuánto se marca la trama sobre el color (desvío, de 0 a 255). Un
+  // tapizado a la distancia de un catálogo es casi liso: la trama se adivina, no se cuenta
+  { id: "tela-lino", slug: "rough_linen", use: "detail", contrast: 12 },
+  { id: "tela-pana", slug: "velour_velvet", use: "detail", contrast: 9 },
+  // bouclé de rulo cerrado, del que se usa en tapicería
+  { id: "tela-boucle", slug: "curly_teddy_natural", use: "detail", contrast: 16 },
+  { id: "tela-lana", slug: "poly_wool_herringbone", use: "detail", contrast: 30 },
+  { id: "tela-cuero", slug: "brown_leather", use: "detail", contrast: 13 },
   { id: "piedra", slug: "marble_01", use: "color" },
 ];
 
@@ -101,18 +104,17 @@ async function download(url, file) {
   await writeFile(file, Buffer.from(await res.arrayBuffer()));
 }
 
-/** la trama en gris de las telas: promedio claro y contraste parejo (desvío), en 0–255 */
+/** la trama en gris de las telas: promedio claro, en 0–255 */
 const DETAIL_MEAN = 205;
-const DETAIL_CONTRAST = 30;
 
-/** lleva unos valores a gris con ese promedio y ese contraste */
-function normalized(values) {
+/** lleva unos valores a gris con ese promedio y el contraste pedido (desvío) */
+function normalized(values, contrast) {
   let sum = 0;
   for (const v of values) sum += v;
   const mean = sum / values.length;
   let varSum = 0;
   for (const v of values) varSum += (v - mean) ** 2;
-  const k = DETAIL_CONTRAST / Math.max(1e-3, Math.sqrt(varSum / values.length));
+  const k = contrast / Math.max(1e-3, Math.sqrt(varSum / values.length));
   const out = Buffer.alloc(values.length);
   for (let i = 0; i < values.length; i++) out[i] = Math.max(0, Math.min(255, Math.round(DETAIL_MEAN + (values[i] - mean) * k)));
   return out;
@@ -204,14 +206,22 @@ function reliefFrom(photo, strength) {
     return dst;
   };
   const soft = blur(blur(grey, true), false);
-  const h = grey.map((v, i) => v - soft[i]);
+  // y apenas suavizado (3 px): sin el ruido de la foto, que no es relieve y pesa al comprimir
+  const fine = (src) => src.map((_, i) => {
+    const x = i % n;
+    const y = (i - x) / n;
+    let sum = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) sum += src[((y + dy + n) % n) * n + ((x + dx + n) % n)];
+    return sum / 9;
+  });
+  const h = fine(grey.map((v, i) => v - soft[i]));
   const data = Buffer.alloc(n * n * 3);
   const at = (x, y) => h[((y + n) % n) * n + ((x + n) % n)];
   for (let y = 0; y < n; y++)
     for (let x = 0; x < n; x++) {
-      const dx = (at(x + 1, y) - at(x - 1, y)) * 6 * strength;
+      const dx = (at(x + 1, y) - at(x - 1, y)) * 10 * strength;
       // la imagen crece hacia abajo y el mapa (OpenGL) mide hacia arriba
-      const dy = (at(x, y - 1) - at(x, y + 1)) * 6 * strength;
+      const dy = (at(x, y - 1) - at(x, y + 1)) * 10 * strength;
       const len = Math.hypot(dx, dy, 1);
       const to = (y * n + x) * 3;
       data[to] = Math.round(127.5 - (dx / len) * 127.5);
@@ -362,7 +372,7 @@ for (const set of SETS) {
     // el relieve sale de la foto misma: el poro y la veta oscura van hundidos, como en una
     // chapa de verdad o en una melamina de poro sincronizado. (El mapa de normales que trae
     // la foto es casi plano: comprimido para la web no queda nada.)
-    await webp(reliefFrom(set.turn ? turned(photo, false) : photo, set.pore ?? 1), SOURCE, 88).toFile(file("-nor"));
+    await webp(reliefFrom(set.turn ? turned(photo, false) : photo, set.pore ?? 1), SOURCE, 72).toFile(file("-nor"));
     entry.maps.push("normal");
     if (src.rough) {
       const rough = await raw(src.rough, 512);
@@ -382,7 +392,7 @@ for (const set of SETS) {
     const photo = await prepared(src.diff, false);
     const build = plankFloor(photo, set);
     const floor = build(photo, "color");
-    await webp(laid({ data: toned(floor.data, set.tone), size: floor.size }, false), BUILT, 80).toFile(file(""));
+    await webp(laid({ data: toned(floor.data, set.tone), size: floor.size }, false), BUILT, 76).toFile(file(""));
     // a lo largo de la tabla y a lo ancho: una pinotea es la misma foto con las tablas más angostas
     const [across, along] = set.scale ?? [1, 1];
     const covered = [real[0] * 2 * along, real[1] * 2 * across];
@@ -410,10 +420,10 @@ for (const set of SETS) {
     entry.maps.push("color");
   }
   if (set.use === "detail" && src.diff) {
-    // en gris, con un promedio claro y un contraste parejo: multiplica el color de
-    // la tela sin oscurecerlo, y la trama se lee igual en todas las telas
+    // en gris, con un promedio claro y el contraste de cada tela: multiplica el color
+    // elegido sin oscurecerlo
     const { data, info } = await sharp(src.diff).resize(512).toColourspace("b-w").raw().toBuffer({ resolveWithObject: true });
-    await sharp(normalized(Float32Array.from(data)), { raw: { width: info.width, height: info.height, channels: 1 } })
+    await sharp(normalized(Float32Array.from(data), set.contrast), { raw: { width: info.width, height: info.height, channels: 1 } })
       .webp({ quality: 82 })
       .toFile(file(""));
     entry.maps.push("color");
@@ -427,7 +437,7 @@ for (const set of SETS) {
       const n = [data[i * 3] / 127.5 - 1, data[i * 3 + 1] / 127.5 - 1, data[i * 3 + 2] / 127.5 - 1];
       values[i] = Math.max(0, n[0] * l[0] + n[1] * l[1] + n[2] * l[2]);
     }
-    await sharp(normalized(values), { raw: { width: info.width, height: info.height, channels: 1 } }).webp({ quality: 82 }).toFile(file(""));
+    await sharp(normalized(values, set.contrast), { raw: { width: info.width, height: info.height, channels: 1 } }).webp({ quality: 82 }).toFile(file(""));
     entry.maps.push("color");
   }
   if (set.use !== "veneer" && set.use !== "planks") {

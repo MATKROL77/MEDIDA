@@ -29,13 +29,13 @@ const loader = typeof window === "undefined" ? null : new THREE.TextureLoader();
 const sets = new Map<PhotoId, Promise<PhotoSet>>();
 
 /**
- * Las telas se ven a la distancia de una foto de catálogo: con el sillón
- * entero en pantalla, cada píxel cubre varios milímetros y una trama a escala
- * real (el rulo de un bouclé, el cruzado de un lino) se promedia y desaparece.
- * Como en la fotografía de producto, la trama se agranda un poco para que se
- * lea. Las chapas y los pisos van a escala real.
+ * Cuánto se agranda una trama respecto de su medida real. Las telas de
+ * tapicería van a escala real: a la distancia de un catálogo un lino se ve
+ * casi liso, con la trama apenas adivinada, y agrandada se lee gruesa y
+ * ruidosa. Solo la lana de espiga (alfombras, buzos) se agranda, para que su
+ * dibujo se alcance a leer.
  */
-const READABLE: Partial<Record<PhotoId, number>> = { "tela-lino": 1.3, "tela-pana": 1.2, "tela-boucle": 1.4, "tela-lana": 1.8, "tela-cuero": 1 };
+const READABLE: Partial<Record<PhotoId, number>> = { "tela-lana": 1.8 };
 
 /** cambia cada vez que un material recibe su foto: el modo foto rearma la escena cuando pasa */
 let version = 0;
