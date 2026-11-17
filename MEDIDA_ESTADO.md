@@ -77,6 +77,29 @@ horizontal a 390 y 1440 px;
 `npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
 y `build` sin errores. Falta probarlo en un teléfono real.
 
+**Realismo, primera tanda (17/11/2026).** Matías pidió que el 3D de siempre
+se vea con la calidad del planificador PAX de IKEA. Hecho con tres agentes
+en copias aisladas del repo e integrado acá:
+- Ropa y guardado del placard: prendas con forma real en perchas (camisas,
+  remeras, buzos, sacos, vestidos, pantalones), pilas dobladas, zapatillas,
+  cajas de tela y canastos, en lugar de placas planas. Todo procedural.
+- Luz, sombras y ambiente: interiores blancos que se leen blancos, nichos
+  que se ven (antes eran agujeros negros), sombra de apoyo suave bajo los
+  muebles, zócalo, y sin los artefactos de antes (abanicos bajo las puertas,
+  rectángulo de la sombra de contacto).
+- Las sombras se rehacen contando cuadros y no tiempo: en un equipo lento
+  quedaban congeladas a mitad del armado animado.
+- En el modo Realismo la ropa nueva salía negra (el trazado copia mal los
+  colores por vértice de tres componentes): pasó a RGBA.
+Verificado: capturas en Chromium de las siete familias y de las páginas
+reales del placard y los sillones; foto trazada de prueba a pocas muestras
+(la ropa sale con su color; a esa calidad no se puede juzgar el resultado
+final); `npm test` (110 pruebas), `typecheck`, `lint`, `build`; sin scroll
+horizontal a 390 y 1440 px. La decoración de las otras seis familias se
+perdió en un reinicio del entorno y se está rehaciendo junto con las
+texturas y las tiras LED (segunda tanda, en curso). Falta medir la fluidez
+en equipos reales.
+
 **Editar cada módulo, arreglado (17/11/2026).** Matías avisó que en las
 bibliotecas y los muebles de TV no se podía editar cada parte. La edición por
 módulo existía pero fallaba en el uso: tocar dentro de un hueco (el fondo, un
@@ -94,9 +117,7 @@ frentes); lo que se agrega después llega igual. El mapa de sombras solo se
 redibuja cuando el mueble cambia, y al quedar quieto el 3D dibuja un cuadro
 final a toda nitidez antes de dormirse. Verificado en Chromium con una
 secuencia cuadro a cuadro (placard y mueble de TV) y con `npm test` (84
-pruebas), `typecheck`, `lint` y `build`. Sigue en curso, sin publicar: la
-ropa del placard, la luz, las sombras y el ambiente, y la decoración de las
-demás familias.
+pruebas), `typecheck`, `lint` y `build`.
 
 **Motor más rápido (17/11/2026).** El 3D deja de dibujar cuando está
 quieto y se despierta con cualquier toque, cambio de opción o
