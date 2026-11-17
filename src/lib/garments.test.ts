@@ -35,6 +35,8 @@ test("cada forma entra en su caja, es liviana y lleva lo que el visor y el traza
     const pos = g.getAttribute("position");
     const nor = g.getAttribute("normal");
     const col = g.getAttribute("color");
+    // RGBA: con tres componentes el trazado de rayos no copia el color y la prenda sale negra
+    assert.equal(col.itemSize, 4, `${name}: el color tiene que ser RGBA`);
     assert.ok(g.getIndex(), `${name}: sin índice`);
     const triangles = g.getIndex()!.count / 3;
     assert.ok(triangles >= 100 && triangles <= 1300, `${name}: ${triangles} triángulos`);

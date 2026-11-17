@@ -130,7 +130,11 @@ class Builder {
     g.setAttribute("position", new THREE.BufferAttribute(position, 3));
     g.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
     g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(this.uv), 2));
-    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(this.col), 3));
+    // el color va con cuatro componentes: el trazado de rayos une las mallas con colores RGBA
+    // y los de tres componentes los copia mal (la ropa salía negra en el modo Realismo)
+    const rgba = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) rgba.set([this.col[i * 3], this.col[i * 3 + 1], this.col[i * 3 + 2], 1], i * 4);
+    g.setAttribute("color", new THREE.BufferAttribute(rgba, 4));
     g.setIndex(count > 65535 ? new THREE.BufferAttribute(new Uint32Array(idx), 1) : new THREE.BufferAttribute(new Uint16Array(idx), 1));
     g.computeBoundingBox();
     g.computeBoundingSphere();
