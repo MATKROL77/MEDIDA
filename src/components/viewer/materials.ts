@@ -247,6 +247,83 @@ export function tileTexture(): THREE.Texture {
   });
 }
 
+let room: THREE.Texture | null = null;
+/**
+ * Lo que refleja un espejo en el 3D rápido. Los reflejos salen de la foto de
+ * un estudio fotográfico, que es oscuro fuera de sus paneles de luz: le queda
+ * bien a un metal, pero un espejo de placard se veía como una placa negra. Un
+ * espejo de verdad devuelve la habitación que tiene enfrente: acá se pinta
+ * una, fuera de foco (cielorraso claro, pared, una ventana, un mueble, el piso
+ * de madera), en una imagen chica que se arma una sola vez. El trazado de
+ * rayos no la usa: ahí el espejo refleja la escena de verdad.
+ */
+export function roomReflection(): THREE.Texture {
+  if (room) return room;
+  const w = 512;
+  const h = 256;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d")!;
+  // de arriba (el cenit) hacia abajo (el piso bajo los pies); el horizonte queda a media altura
+  const sky = ctx.createLinearGradient(0, 0, 0, h);
+  sky.addColorStop(0, "#f7f4ee");
+  sky.addColorStop(0.36, "#f1ede6");
+  sky.addColorStop(0.4, "#e7e1d8");
+  sky.addColorStop(0.5, "#e2dbd0");
+  sky.addColorStop(0.505, "#cdb99b");
+  sky.addColorStop(0.62, "#c3ad8d");
+  sky.addColorStop(1, "#a8926f");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h);
+  // las tablas del piso, que se abren desde abajo de quien mira: en el espejo son las
+  // líneas en fuga de un piso de madera
+  for (let i = 0; i < 96; i++) {
+    const tone = ((i * 7919) % 13) / 13 - 0.5;
+    ctx.fillStyle = tone > 0 ? `rgba(255,244,224,${(tone * 0.22).toFixed(3)})` : `rgba(70,48,24,${(-tone * 0.2).toFixed(3)})`;
+    ctx.fillRect((i / 96) * w, 0.505 * h, w / 96 + 0.5, 0.495 * h);
+  }
+  // lo que hay en la habitación, apenas fuera de foco: ventanas claras y su luz en el piso,
+  // muebles más oscuros contra la pared, una alfombra. Un espejo se reconoce porque devuelve
+  // formas; devolviendo un color parejo parece una placa pintada
+  ctx.filter = "blur(2.5px)";
+  const patch = (x: number, y: number, pw: number, ph: number, color: string) => {
+    ctx.fillStyle = color;
+    // también corrido una vuelta entera: la imagen empalma de punta a punta
+    for (const dx of [-w, 0, w]) ctx.fillRect(x * w + dx, y * h, pw * w, ph * h);
+  };
+  const oval = (x: number, y: number, rx: number, ry: number, color: string) => {
+    ctx.fillStyle = color;
+    for (const dx of [-w, 0, w]) {
+      ctx.beginPath();
+      ctx.ellipse(x * w + dx, y * h, rx * w, ry * h, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  };
+  for (const [x, wide] of [
+    [0.04, 0.07],
+    [0.3, 0.05],
+    [0.56, 0.09],
+    [0.86, 0.06],
+  ]) {
+    patch(x, 0.32, wide, 0.16, "#ffffff");
+    // la luz que entra por la ventana, tirada en el piso
+    patch(x - 0.01, 0.56, wide + 0.02, 0.07, "rgba(255,246,226,0.55)");
+  }
+  patch(0.15, 0.41, 0.1, 0.15, "#a8957b");
+  patch(0.42, 0.39, 0.07, 0.19, "#857869");
+  patch(0.68, 0.44, 0.13, 0.11, "#96866f");
+  patch(0.93, 0.4, 0.05, 0.16, "#b5a690");
+  oval(0.22, 0.68, 0.09, 0.05, "#8f9796");
+  oval(0.5, 0.7, 0.07, 0.06, "#a58a72");
+  oval(0.78, 0.67, 0.1, 0.05, "#8b9193");
+  ctx.filter = "none";
+  room = new THREE.CanvasTexture(c);
+  room.mapping = THREE.EquirectangularReflectionMapping;
+  room.colorSpace = THREE.SRGBColorSpace;
+  return room;
+}
+
 /** degradés para las tarjetas de luz de los LED */
 /** vidrio fumé: deja ver el interior y las luces, pero se nota que hay vidrio */
 export const GLASS_OPACITY = 0.42;
@@ -346,7 +423,8 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     metal: new THREE.MeshStandardMaterial({ color: "#c9ccd0", metalness: 1, roughness: 0.32 }),
     handle: new THREE.MeshStandardMaterial({ color: "#2a2a2a", metalness: 0.75, roughness: 0.28, transparent: true }),
     groove: new THREE.MeshStandardMaterial({ color: "#191714", roughness: 0.9, transparent: true }),
-    mirror: new THREE.MeshStandardMaterial({ color: "#f2f5f6", metalness: 1, roughness: 0.035, envMapIntensity: 1.4, transparent: true }),
+    // el espejo devuelve una habitación clara (ver roomReflection), apenas azulado como el vidrio plateado
+    mirror: new THREE.MeshStandardMaterial({ color: "#eef2f3", metalness: 1, roughness: 0.03, envMap: roomReflection(), envMapIntensity: 0.95, transparent: true }),
     // el vidrio no escribe profundidad: si no, según desde dónde se mire tapa lo que está
     // detrás y es transparente (las patas de una mesa, que toman el material de los frentes)
     glass: Object.assign(new THREE.MeshStandardMaterial({ color: "#3a4246", metalness: 0.2, roughness: 0.05, transparent: true, opacity: GLASS_OPACITY, envMapIntensity: 1.2, depthWrite: false }), {

@@ -56,7 +56,7 @@ const cache = path.resolve(process.argv[2] ?? path.join(tmpdir(), "medida-tex"))
  */
 const SETS = [
   // nogal: chapa de veta derecha con sus vetas oscuras; marrón apagado, no anaranjado
-  { id: "nogal", slug: "black_walnut_veneer_01", use: "veneer", turn: true, seed: 11, leaves: [0.12, 0.26], leafTone: 0.05, streak: 0.07, tone: { color: "#7a5c46", contrast: 1.5, saturation: 0.8 } },
+  { id: "nogal", slug: "black_walnut_veneer_01", use: "veneer", turn: true, seed: 11, leaves: [0.12, 0.26], leafTone: 0.05, streak: 0.07, tone: { color: "#7a5c46", contrast: 1.25, saturation: 0.8 } },
   // roble: corte al cuarto, veta fina y pareja; el tono de un roble natural sin teñir
   { id: "roble", slug: "oak_veneer_04", use: "veneer", turn: true, seed: 23, leaves: [0.11, 0.24], leafTone: 0.02, streak: 0.035, tone: { color: "#c9a67e", contrast: 1.5, saturation: 0.85 } },
   // roble claro en tablas anchas, al aceite: el piso acompaña, el protagonista es el mueble

@@ -196,14 +196,16 @@ export function Room({ min, max, walls, wall, floor }: Props) {
 
   const mats = useMemo(() => {
     // arranca del color del piso elegido: cuando llega la foto, entra sobre su mismo tono
-    const { relief: _relief, ...first } = plainFloor(floor === "estudio" ? "madera" : floor);
+    const plain = plainFloor(floor === "estudio" ? "madera" : floor);
+    const first = { map: plain.map, roughness: plain.roughness, color: plain.color };
     const fade = fadeTexture();
     return {
       floor: new THREE.MeshStandardMaterial({ ...first, alphaMap: fade, transparent: true }),
       /** el piso nuevo entra con un fundido encima del anterior */
       floorNext: new THREE.MeshStandardMaterial({ ...first, alphaMap: fade, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 }),
-      // pintura sobre revoque: un relieve apenas visible cuando la luz pega de costado
-      wall: dressWith(new THREE.MeshStandardMaterial({ color: wall, roughness: 0.95, transparent: true }), "pared", { normalScale: 0.35, project: true }),
+      // pintura mate sobre revoque: no devuelve brillo (el mapa de la foto promedia 0,62: con 1,45
+      // queda en ~0,9) y el relieve del rodillo apenas se adivina cuando la luz pega de costado
+      wall: dressWith(new THREE.MeshStandardMaterial({ color: wall, roughness: 0.95, transparent: true }), "pared", { normalScale: 0.5, roughness: 1.45, project: true }),
       // esmalte satinado, apenas más claro que la pared
       skirt: new THREE.MeshStandardMaterial({ color: "#f3f0ea", roughness: 0.5, transparent: true }),
       shadow: new THREE.ShadowMaterial({ opacity: 0.16, transparent: true }),
