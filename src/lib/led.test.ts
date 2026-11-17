@@ -121,7 +121,7 @@ test("el nicho del mueble de TV se alumbra entero: piso, fondo, laterales y lo q
   // bajo una cama con patas no hay paredes: un charco en el piso que se apaga solo
   const bed = partsOf("camas", { base: "patas", head: "madera", sides: "no", foot: "liso" });
   const pool = bed.find((p) => p.id === "led:luz")!;
-  assert.deepEqual(pool.wash!.faces, ["y0", "y1"]);
+  assert.deepEqual(pool.wash!.faces, ["y0"]);
   assert.deepEqual([...pool.wash!.open!].sort(), ["x0", "x1", "z0", "z1"]);
   assert.ok(pool.position[1] < 10);
 });

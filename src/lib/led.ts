@@ -216,16 +216,16 @@ export function lightUp(parts: Part[]): void {
 
     // las paredes: placas que cubren buena parte del alto del hueco
     const walls = others.filter((p) => mine(p) && p !== floor && overlap(y0, top, p.position[1], p.position[1] + p.size[1]) >= gap * 0.5);
-    const wall = (axis: 0 | 2, sign: 1 | -1, from: number, limit: number, lo: number, hi: number): number | null => {
+    const wall = (axis: 0 | 2, sign: 1 | -1, from: number, limit: number, lo: number, hi: number): { face: number; part: Part } | null => {
       const other = axis === 0 ? 2 : 0;
-      let best: number | null = null;
+      let best: { face: number; part: Part } | null = null;
       for (const p of walls) {
         if (overlap(lo, hi, p.position[other], p.position[other] + p.size[other]) < (hi - lo) * 0.5) continue;
         // la cara de la placa que mira al hueco
         const face = sign < 0 ? p.position[axis] + p.size[axis] : p.position[axis];
         const dist = sign < 0 ? from - face : face - from;
         if (dist < -3 || dist > limit) continue;
-        if (best === null || (sign < 0 ? face > best : face < best)) best = face;
+        if (best === null || (sign < 0 ? face > best.face : face < best.face)) best = { face, part: p };
       }
       return best;
     };
@@ -233,11 +233,17 @@ export function lightUp(parts: Part[]): void {
     const endHi = wall(A, 1, a1, 220, c0, c1);
     const sideLo = wall(C, -1, c0, 900, a0, a1);
     const sideHi = wall(C, 1, c1, 900, a0, a1);
+    const ends = [endLo, endHi].filter((e) => e !== null);
 
     // la caja: de pared a pared; donde no hay, hasta donde llega la luz o hasta el borde de la placa del piso
-    const edge = (axis: 0 | 2, sign: 1 | -1, found: number | null, from: number): [number, boolean] => {
-      if (found !== null) return [found, false];
-      const far = from + sign * reach;
+    const edge = (axis: 0 | 2, sign: 1 | -1, found: { face: number } | null, from: number): [number, boolean] => {
+      if (found !== null) return [found.face, false];
+      let far = from + sign * reach;
+      // entre dos costados (las bases de una mesa), la luz llega hasta donde llegan ellos: más allá se abriría y se pierde
+      if (axis === C && ends.length) {
+        const rim = sign < 0 ? Math.max(...ends.map((e) => e.part.position[C])) : Math.min(...ends.map((e) => e.part.position[C] + e.part.size[C]));
+        far = sign < 0 ? Math.max(far, Math.min(rim, from - 60)) : Math.min(far, Math.max(rim, from + 60));
+      }
       if (!floor) return [far, true];
       const rim = sign < 0 ? floor.position[axis] : floor.position[axis] + floor.size[axis];
       const cut = sign < 0 ? rim > far : rim < far;
@@ -256,7 +262,9 @@ export function lightUp(parts: Part[]): void {
     size[A] = bA1 - bA0;
     size[C] = bC1 - bC0;
     const name = (axis: 0 | 2, hi: boolean): WashSide => `${axis === 0 ? "x" : "z"}${hi ? 1 : 0}` as WashSide;
-    const faces: WashFace[] = ["y0", "y1"];
+    // la placa que lleva la tira recibe el resplandor del difusor; una tira al aire (bajo unos cajones) no tiene dónde
+    const carried = parts.some((p) => p !== strip && real(p) && Math.abs(p.position[1] - top) <= 5 && overlap(a0, a1, p.position[A], p.position[A] + p.size[A]) >= strip.size[A] * 0.5 && p.position[C] <= cMid && p.position[C] + p.size[C] >= cMid);
+    const faces: WashFace[] = carried ? ["y0", "y1"] : ["y0"];
     const open: WashSide[] = [];
     for (const [axis, hi, found, isOpen] of [[A, false, endLo, oA0], [A, true, endHi, oA1], [C, false, sideLo, oC0], [C, true, sideHi, oC1]] as const) {
       if (found !== null) faces.push(name(axis, hi));
@@ -267,7 +275,7 @@ export function lightUp(parts: Part[]): void {
     const from: Vec3 = [0, gap - strip.size[1], 0];
     from[A] = a0 - bA0;
     from[C] = cMid - bC0;
-    const wash: Wash = { from, axis: A, length: strip.size[A], emit: [1, -1], faces, carrier: "y1", open };
+    const wash: Wash = { from, axis: A, length: strip.size[A], emit: [1, -1], faces, carrier: carried ? "y1" : undefined, open };
     const extra: Partial<Part> = { explode: strip.explode };
     if (strip.openShift) {
       extra.module = strip.module;

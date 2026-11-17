@@ -620,17 +620,21 @@ function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d
   }
 }
 
-/** el perfil de una tira LED: cuánto asoma de la placa y cuánto mide de ancho, en mm */
-const STRIP = [8, 14] as const;
+/**
+ * El perfil de una tira LED: cuánto asoma de la placa y cuánto mide de ancho,
+ * en mm. Es bajo a propósito: metido detrás del canto de una tapa, mirando
+ * desde arriba no asoma (asomando medio milímetro se vería una fila de puntos).
+ */
+const STRIP = [6, 14] as const;
 
 /**
- * Tira LED: un perfil con difusor colgado de (x, y + 8, z), con `y` 8 mm bajo
- * la placa que lo lleva. La luz que tira (sobre el estante de abajo, el fondo,
- * los laterales o el piso de la habitación) se arma sola al final, mirando qué
- * tiene alrededor: `lightUp` en `lib/led.ts`.
+ * Tira LED: un perfil con difusor pegado por abajo a la placa que lo lleva
+ * (`y` es 8 mm bajo esa placa). La luz que tira (sobre el estante de abajo, el
+ * fondo, los laterales o el piso de la habitación) se arma sola al final,
+ * mirando qué tiene alrededor: `lightUp` en `lib/led.ts`.
  */
 function led(list: Part[], id: string, x: number, y: number, z: number, length: number) {
-  piece(list, id, "Tira LED", "led", "led", [x, y, z], [length, STRIP[0], STRIP[1]], { noCut: true });
+  piece(list, id, "Tira LED", "led", "led", [x, y + 8 - STRIP[0], z], [length, STRIP[0], STRIP[1]], { noCut: true });
 }
 
 // ---- ambientación: lo que rodea al mueble para verlo en un lugar de verdad
@@ -1401,8 +1405,8 @@ const BUILDERS: Record<string, Builder> = {
       piece(parts, "plinth", "Zócalo", "plinth", "tint:#201812", [220, 0, z0 + 220], [w - 440, lift, len - 440], { noCut: true });
     }
     // luz abajo de la base cuando hay lugar entre la cama y el piso (con patas o flotante)
-    // hacia los pies, donde la luz sale de abajo de la cama y se ve sobre el piso
-    if (v.led && v.base !== "caja") led(parts, "led", 260, lift - 8, z0 + len - 150, w - 520);
+    // pegada por adentro al larguero de los pies, a ras de su canto de abajo: la luz sale de abajo de la cama y se ve sobre el piso
+    if (v.led && v.base !== "caja") led(parts, "led", 260, lift - 2, z0 + len - t - STRIP[1], w - 520);
 
     // lo que la viste: colchón, acolchado y almohadas; una mesa de luz a cada lado
     const my = h - 50;
