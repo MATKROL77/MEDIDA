@@ -317,7 +317,6 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     // chapa de verdad, proyectada según la medida de cada pieza, con un laqueado satinado
     return photo ? dressWith(material, photo, { tint: tintFor(photo, m.color), roughness: 0.62, normalScale: 0.6 }) : material;
   };
-  const body = materialById(bodyId);
   const kit = {
     /** qué terminación va en los frentes: las piezas que la nombran la usan aunque no sean un frente */
     doorId,
