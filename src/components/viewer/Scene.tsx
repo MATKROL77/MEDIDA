@@ -695,7 +695,7 @@ function Sleeper({ keepAwake, still, onStill }: { keepAwake: boolean; still: boo
   const element = useThree((s) => s.gl.domElement);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const anim = useSceneAnim();
-  const state = useRef({ last: performance.now(), asleep: false, sharpAt: 0, still });
+  const state = useRef({ last: performance.now(), asleep: false, sharpAt: 0, still, seen: 0, quiet: 0 });
   const wake = useRef(() => {});
   wake.current = () => {
     state.current.last = performance.now();
@@ -763,7 +763,13 @@ function Sleeper({ keepAwake, still, onStill }: { keepAwake: boolean; still: boo
     st.asleep = false;
     // mientras una pieza, una puerta o la cámara se mueven, no se duerme
     const now = performance.now();
-    if (keepAwake || now - Math.max(st.last, anim.activeAt) < SLEEP_AFTER_MS) return;
+    // además del tiempo, tienen que haber pasado unos cuadros quietos: en un equipo lento
+    // dos segundos pueden ser dos cuadros, y las sombras todavía se están acomodando
+    if (anim.activeAt !== st.seen) {
+      st.seen = anim.activeAt;
+      st.quiet = 0;
+    } else st.quiet++;
+    if (keepAwake || st.quiet < 8 || now - Math.max(st.last, anim.activeAt) < SLEEP_AFTER_MS) return;
     if (!st.sharpAt) {
       st.sharpAt = now;
       onStill(true);
@@ -786,9 +792,13 @@ function ShadowGate() {
   const anim = useSceneAnim();
   const gl = useThree((s) => s.gl);
   const dirtyUntil = useRef(0);
+  // cuadros que faltan rehacer: se cuenta en cuadros además de en tiempo, así en un equipo
+  // lento la sombra no queda como estaba a mitad de un movimiento
+  const pending = useRef({ frames: 6, seen: 0 });
   // cada vez que cambia lo que se muestra, y un rato después por si algo se acomoda
   useEffect(() => {
     dirtyUntil.current = performance.now() + 400;
+    pending.current.frames = Math.max(pending.current.frames, 4);
   });
   useEffect(() => {
     const manager = THREE.DefaultLoadingManager;
@@ -796,6 +806,7 @@ function ShadowGate() {
     manager.onLoad = () => {
       prev?.();
       dirtyUntil.current = performance.now() + 400;
+      pending.current.frames = Math.max(pending.current.frames, 4);
     };
     return () => {
       manager.onLoad = prev;
@@ -805,7 +816,15 @@ function ShadowGate() {
   useFrame(() => {
     const now = performance.now();
     gl.shadowMap.autoUpdate = false;
-    if (now < dirtyUntil.current || now - anim.activeAt < 300) gl.shadowMap.needsUpdate = true;
+    const p = pending.current;
+    if (anim.activeAt !== p.seen) {
+      p.seen = anim.activeAt;
+      p.frames = Math.max(p.frames, 4);
+    }
+    if (p.frames > 0 || now < dirtyUntil.current || now - anim.activeAt < 300) {
+      gl.shadowMap.needsUpdate = true;
+      if (p.frames > 0) p.frames--;
+    }
   }, -1);
   return null;
 }

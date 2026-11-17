@@ -154,7 +154,7 @@ export function Grounding({ assembly, hq, strength }: Props) {
     [kit],
   );
 
-  const state = useRef({ last: 0, frame: 0 });
+  const state = useRef({ last: 0, frame: 0, seen: 0, settle: 0 });
   // cualquier cambio de la escena (una medida, abrir, despiezar) la deja activa un rato
   useEffect(() => {
     state.current.last = performance.now();
@@ -175,7 +175,13 @@ export function Grounding({ assembly, hq, strength }: Props) {
     st.frame++;
     // en la vista explotada las piezas vuelan: la sombra de apoyo se afloja
     kit.shadow.opacity = strength * (1 - 0.6 * anim.explode.v);
-    const active = performance.now() - st.last < ACTIVE_MS || moving(anim);
+    // algo se movió desde el cuadro anterior (una pieza que llega, una medida): se cuenta en
+    // cuadros y no en tiempo, así en un equipo lento la sombra no queda a mitad de camino
+    if (anim.activeAt !== st.seen) {
+      st.seen = anim.activeAt;
+      st.settle = 4;
+    }
+    const active = performance.now() - st.last < ACTIVE_MS || moving(anim) || st.settle-- > 0;
     if (!active && st.frame % IDLE_EVERY !== 0) return;
 
     const target = gl.getRenderTarget();
@@ -184,6 +190,9 @@ export function Grounding({ assembly, hq, strength }: Props) {
     const background = scene.background;
     const override = scene.overrideMaterial;
     const shadows = gl.shadowMap.autoUpdate;
+    // este dibujo no tiene que gastar el pedido de rehacer los mapas de sombra: con piezas
+    // escondidas saldrían mal, y el dibujo de verdad ya no los rehacería
+    const pending = gl.shadowMap.needsUpdate;
     const autoClear = gl.autoClear;
 
     kit.hidden.length = 0;
@@ -192,6 +201,7 @@ export function Grounding({ assembly, hq, strength }: Props) {
     scene.overrideMaterial = kit.depth;
     // los mapas de sombra de las luces no cambian por mirar desde abajo
     gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = false;
     gl.autoClear = true;
     gl.setClearColor(0xffffff, 0);
     try {
@@ -201,6 +211,7 @@ export function Grounding({ assembly, hq, strength }: Props) {
       scene.overrideMaterial = override;
       scene.background = background;
       gl.shadowMap.autoUpdate = shadows;
+      gl.shadowMap.needsUpdate = pending;
       for (const o of kit.hidden) o.visible = true;
       kit.hidden.length = 0;
     }
