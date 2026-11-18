@@ -26,6 +26,12 @@ export const rnd = (seed: number, k: number): number => {
   return v - Math.floor(v);
 };
 const pick = <T>(list: readonly T[], r: number): T => list[Math.min(list.length - 1, Math.floor(r * list.length))];
+/** un entero estable a partir de un texto: dos huecos con distinto nombre no salen iguales */
+export const hash = (text: string): number => {
+  let h = 7;
+  for (const ch of text) h = (h * 31 + ch.charCodeAt(0)) % 99991;
+  return h;
+};
 
 /** una cosa de la ambientación: una caja con su esquina mínima y su medida */
 export function thing(id: string, label: string, material: string, position: Vec3, size: Vec3, shape: Shape = {}): Part {
@@ -84,9 +90,11 @@ export function bookRow(id: string, x: number, y: number, back: number, front: n
   const leanWidth = () => lt * Math.cos(tilt) + lh * Math.sin(tilt);
   const book = (k: number, bx: number, t: number, h: number, shape: Shape = {}, by = y) => {
     const d = Math.min(front - back, Math.round(h * (0.66 + 0.1 * rnd(seed, 40 + k))));
-    parts.push(thing(`${id}:${k}`, "Libro", `tint:${pick(SPINES, rnd(seed, 60 + k))}`, [bx, by, front - d - Math.round(6 * rnd(seed, 50 + k))], [t, h, d], shape));
+    parts.push(thing(`${id}:${k}`, "Libro", `tint:${pick(SPINES, rnd(seed, 60 + k))}`, [bx, by, Math.max(back, front - d - Math.round(6 * rnd(seed, 50 + k)))], [t, h, d], shape));
   };
-  let cx = x + (lean === "start" ? leanWidth() + 1 : 0);
+  // el lugar que se le guarda al recostado delante de la hilera
+  const lead = lean === "start" ? leanWidth() + 1 : 0;
+  let cx = x + lead;
   const limit = x + width - (lean === "end" ? leanWidth() + 1 : 0);
   let first = 0;
   let last = 0;
@@ -111,10 +119,11 @@ export function bookRow(id: string, x: number, y: number, back: number, front: n
   if (k === 0) return { parts: [], end: x };
   if (lean) {
     // se apoya en el canto de abajo y toca al vecino con la punta de arriba: no puede ser más alto que él
-    lh = Math.min(lh, Math.floor(((lean === "end" ? last : first) - 6) / Math.cos(tilt)));
+    lh = Math.min(lh, Math.floor(((lean === "end" ? last : first) - 6 - lt * Math.sin(tilt)) / Math.cos(tilt)));
     if (lh >= 150) {
       const half = (lt / 2) * Math.cos(tilt) + (lh / 2) * Math.sin(tilt);
-      const mx = lean === "end" ? cx + half : x + half;
+      // contra la punta de la hilera, o contra su arranque (queda donde lo deje el alto del vecino)
+      const mx = lean === "end" ? cx + half : x + lead - 1 - half;
       const my = y + (lt / 2) * Math.sin(tilt) + (lh / 2) * Math.cos(tilt);
       book(99, mx - lt / 2, lt, lh, { rotationZ: lean === "end" ? tilt : -tilt }, my - lh / 2);
       if (lean === "end") cx += 2 * half + 1;
@@ -168,12 +177,13 @@ const FRAMES = ["tint:#2b2b2c", "veneer:#b08d62", "tint:#f1ede6"];
 
 /**
  * Un cuadro apoyado, recostado contra el fondo: el marco, el paspartú y una
- * lámina lisa. Apoya su canto de atrás en (y, zb); `w` × `h` es el marco.
+ * lámina lisa. `wall` es la cara contra la que se recuesta (la toca con el
+ * canto de arriba; el de abajo queda un poco adelante); `w` × `h` es el marco.
  */
-export function frame(id: string, cx: number, y: number, zb: number, w: number, h: number, seed: number): Part[] {
+export function frame(id: string, cx: number, y: number, wall: number, w: number, h: number, seed: number): Part[] {
   const lean = 0.12;
   const t = 16;
-  const c = restOn(cx, y, zb, h, t, lean);
+  const c = restOn(cx, y, wall + h * Math.sin(lean), h, t, lean);
   // hacia dónde mira la cara de adelante
   const n: Vec3 = [0, Math.sin(lean), Math.cos(lean)];
   const at = (k: number): Vec3 => [c[0] + n[0] * k, c[1] + n[1] * k, c[2] + n[2] * k];
@@ -241,14 +251,14 @@ export function rug(id: string, x: number, z: number, w: number, d: number, colo
 export function rugFor(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
   const light = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-  return light > 0.62 ? "#8f8a82" : light > 0.36 ? "#d6cfc2" : "#cfc8bb";
+  return light > 0.62 ? "#b9b2a6" : light > 0.36 ? "#d6cfc2" : "#cfc8bb";
 }
 
 /** los dos tonos de almohadón que van con una tela: uno que contrasta y uno de acento */
 export function cushionsFor(hex: string): [string, string] {
   const n = parseInt(hex.slice(1), 16);
   const light = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-  return light > 0.62 ? ["#4c5660", "#a9765c"] : light > 0.36 ? ["#e4dccb", "#3f4650"] : ["#ddd4c2", "#b3905a"];
+  return light > 0.62 ? ["#4c5660", "#96705a"] : light > 0.36 ? ["#e4dccb", "#3f4650"] : ["#ddd4c2", "#b3905a"];
 }
 
 // ---------------------------------------------------------------- estantes
@@ -257,26 +267,46 @@ export function cushionsFor(hex: string): [string, string] {
 export type Cell = { x: number; y: number; z: number; w: number; h: number; d: number };
 
 /**
- * Un objeto solo, elegido entre los que entran parados en el alto, el ancho y
- * el fondo que hay. `back`: hasta dónde puede recostarse un cuadro.
+ * Un objeto, elegido entre los que entran parados en el alto, el ancho y el
+ * fondo que hay; `turn` dice cuál toca (se van turnando: no sale siempre el
+ * mismo). `back`: hasta dónde puede recostarse un cuadro. `solo`: va solo en
+ * su lugar, así que lleva algo chico al lado para no quedar perdido.
  */
-function accent(id: string, cx: number, y: number, cz: number, back: number, height: number, width: number, depth: number, seed: number): Part[] {
+function accent(id: string, cx: number, y: number, at: number, back: number, height: number, width: number, depth: number, turn: number, solo = false): Part[] {
   const room = height - 18;
   const options: (() => Part[])[] = [];
+  // en profundidad, donde se pide o lo más cerca que entre sin asomar del estante ni meterse en el fondo
+  const inside = (size: number, want = at) => Math.min(back + depth - size / 2 - 2, Math.max(back + size / 2 + 2, want));
   const add = (model: DecorModel, label: string, least: number, scale = 1) => {
     const [mw, mh, md] = DECOR_MODELS[model];
-    const k = Math.min(scale, room / mh, width / mw, depth / md);
-    if (k >= least * scale) options.push(() => [scanned(`${id}:${model}`, label, model, cx, y, cz, k)]);
+    const k = Math.min(scale, room / mh, width / mw, (depth - 6) / md);
+    if (k < least * scale) return;
+    const cz = inside(md * k);
+    options.push(() => {
+      const out = [scanned(`${id}:${model}`, label, model, cx, y, cz, k)];
+      // al lado y un poco adelante, algo bajo que lo acompañe
+      const side = cx + (mw * k) / 2 + 75;
+      if (solo && model !== "cuenco" && width >= mw * k + 260 && depth >= 150) out.push(...(model === "suculenta" ? [scanned(`${id}:bronce`, "Jarrón", "jarron-bronce", side, y, inside(61, cz - 20), Math.min(1, room / 170))] : candle(`${id}:vela`, side, y, inside(96, cz + 25), Math.min(80, room - 20))));
+      return out;
+    });
   };
   add("suculenta", "Suculenta", 0.7);
-  add("jarron", "Jarrón", 0.8, 0.72);
-  add("jarron-bronce", "Jarrón", 0.85);
+  add("jarron", "Jarrón", 0.62, 0.72);
+  if (room >= 260 && width >= 240 && depth >= 110) options.push(() => frame(id, cx, y, back + 4, 200, 250, turn));
   add("jarron-alto", "Jarrón", 0.8, 0.8);
-  if (room >= 110 && width >= 100 && depth >= 100) options.push(() => candle(id, cx, y, cz, Math.min(110, room - 12)));
-  if (room >= 260 && width >= 240 && depth >= 110) options.push(() => frame(id, cx, y, back + 14, 200, 250, seed));
-  if (room >= 215 && width >= 300 && depth >= 110) options.push(() => frame(id, cx, y, back + 14, 260, 200, seed + 3));
-  if (!options.length) return [];
-  return pick(options, rnd(seed, 7))();
+  if (solo) add("cuenco", "Cuenco", 0.6, 0.8);
+  if (room >= 215 && width >= 300 && depth >= 110) options.push(() => frame(id, cx, y, back + 4, 260, 200, turn + 3));
+  if (!options.length) return room >= 70 && width >= 100 && depth >= 104 ? candle(id, cx, y, inside(96), Math.min(110, room - 12)) : [];
+  return options[Math.abs(Math.round(turn)) % options.length]();
+}
+
+/** lo que corona una pila de libros acostados: por turno, un jarroncito, una vela, un cuenco chico o nada */
+function topping(id: string, cx: number, y: number, cz: number, height: number, span: number, turn: number): Part[] {
+  const kind = Math.abs(Math.round(turn)) % 4;
+  if (kind === 0 && height >= 190 && span >= 90) return [scanned(`${id}:bronce`, "Jarrón", "jarron-bronce", cx, y, cz)];
+  if (kind === 1 && height >= 100 && span >= 104) return candle(id, cx, y, cz, Math.min(90, height - 30));
+  if (kind === 2 && height >= 80 && span >= 120) return [scanned(`${id}:cuenco`, "Cuenco", "cuenco", cx, y, cz, Math.min(0.5, (span * 0.92) / 313))];
+  return [];
 }
 
 /**
@@ -290,12 +320,19 @@ export function shelfScene(id: string, cell: Cell, seed: number, full: boolean):
   if (w < 120 || h < 60 || d < 110) return out;
   const front = z + Math.min(d - 12, 250);
   const cz = z + Math.min(d, 280) / 2 + 6;
-  const kind = Math.floor(rnd(seed, 1) * 4);
-  const stackAt = (cx: number, n: number, tag: string, topping: boolean) => {
-    const size = Math.min(1, (d - 16) / 215, (w - 20) / 290);
-    const s = bookStack(`${id}:${tag}`, cx, y, cz, Math.min(n, Math.floor((h - 20) / 38)), seed + 11, size);
+  // qué composición toca y, dentro de ella, qué objeto: se van turnando con la semilla
+  const kind = Math.abs(Math.round(seed)) % 4;
+  const turn = Math.floor(Math.abs(Math.round(seed)) / 4);
+  // una pila acostada, centrada donde se pide o lo más cerca que entre (apenas girados, ocupan un poco más que su medida)
+  const stackAt = (at: number, n: number, tag: string, crowned: boolean, from = x) => {
+    const size = Math.min(1, (d - 10) / 256, (x + w - from - 8) / 332);
+    if (size < 0.55) return;
+    const cx = Math.min(x + w - 166 * size - 3, Math.max(from + 166 * size + 3, at));
+    const s = bookStack(`${id}:${tag}`, cx, y, z + Math.max((256 * size) / 2 + 2, Math.min(d, 280) / 2 + 6), Math.min(n, Math.floor((h - 20) / 38)), seed + 11, size);
     out.push(...s.parts);
-    if (topping && s.parts.length) out.push(...accent(`${id}:${tag}:o`, cx, s.top, cz, cz - 60, Math.min(h - (s.top - y), 190), 150, 150, seed + 5));
+    const last = s.parts[s.parts.length - 1];
+    // lo de arriba no puede ser más grande que el libro en el que apoya
+    if (crowned && last) out.push(...topping(`${id}:${tag}:o`, cx, s.top, last.position[2] + last.size[2] / 2, h - (s.top - y), Math.min(last.size[0], last.size[2]) - 14, turn));
   };
   if (h < 175) {
     // bajo: una pila acostada y, si hay lugar, un cuenco
@@ -308,24 +345,24 @@ export function shelfScene(id: string, cell: Cell, seed: number, full: boolean):
   if (full) {
     if (kind === 0 && w >= 420) {
       // una hilera a la izquierda con uno recostado, y algo solo a la derecha
-      const row = bookRow(`${id}:l`, x + 6, y, z, front, w * 0.56, h, seed, "end");
-      out.push(...row.parts, ...accent(`${id}:o`, (row.end + x + w) / 2 + 10, y, cz, z, h, x + w - row.end - 50, d - 20, seed));
+      const row = bookRow(`${id}:l`, x + 6, y, z, front, w * 0.52, h, seed, "end");
+      out.push(...row.parts, ...accent(`${id}:o`, (row.end + x + w) / 2 + 10, y, cz, z, h, x + w - row.end - 50, d, turn));
     } else if (kind === 1 && w >= 420) {
       // al revés: el objeto a la izquierda y la hilera contra el lateral derecho
-      const from = x + w * 0.42;
-      out.push(...bookRow(`${id}:l`, from, y, z, front, x + w - 6 - from, h, seed, "start").parts, ...accent(`${id}:o`, x + w * 0.2, y, cz, z, h, w * 0.32, d - 20, seed));
+      const from = x + w * 0.46;
+      out.push(...bookRow(`${id}:l`, from, y, z, front, x + w - 6 - from, h, seed, "start").parts, ...accent(`${id}:o`, x + w * 0.22, y, cz, z, h, w * 0.36, d, turn));
     } else if (kind === 2 && w >= 480) {
       // una hilera corta y una pila acostada con algo encima
       const row = bookRow(`${id}:l`, x + 6, y, z, front, w * 0.4, h, seed, null);
       out.push(...row.parts);
-      stackAt(Math.max(row.end + 175, x + w * 0.72), 3, "p", true);
+      stackAt(x + w * 0.72, 3, "p", true, row.end + 12);
     } else {
       // la hilera sola, con uno recostado al final
       out.push(...bookRow(`${id}:l`, x + 6, y, z, front, Math.min(w - 12, Math.max(w * 0.7, 260)), h, seed, w >= 300 ? "end" : null).parts);
     }
     return out;
   }
-  if (kind === 0 && w >= 560 && h >= 230) {
+  if (kind === 0 && w >= 480 && h >= 230) {
     // dos cajas de tela, una al lado de la otra
     const bw = Math.min(300, (w - 60) / 2);
     const bh = Math.min(230, h - 40);
@@ -334,14 +371,13 @@ export function shelfScene(id: string, cell: Cell, seed: number, full: boolean):
     for (let k = 0; k < 2; k++) out.push(storageBox(`${id}:caja${k}`, x0 + k * (bw + 24), y, z + Math.max(8, d - bd - 30), [bw, bh, bd], seed));
   } else if (kind === 1 && w >= 300) {
     stackAt(x + w * (0.36 + 0.3 * rnd(seed, 3)), 3, "p", true);
-  } else if (kind === 2 && w >= 420) {
+  } else if (kind === 2 && w >= 420 && h >= 180) {
     // un cuadro apoyado y algo chico delante, corrido
     const tall = h >= 300;
     const fh = tall ? 260 : Math.min(200, h - 30);
     const fw = tall ? 210 : Math.min(270, w - 80);
-    if (fh >= 150) out.push(...frame(`${id}:cuadro`, x + w * 0.4, y, z + 14, fw, fh, seed));
-    out.push(...accent(`${id}:o`, x + w * 0.4 + fw / 2 + 80, y, cz + 20, z, Math.min(h, 215), w * 0.6 - fw / 2 - 100, d - 20, seed + 1));
-  } else out.push(...accent(`${id}:o`, x + w * (0.4 + 0.25 * rnd(seed, 4)), y, cz, z, h, w * 0.5, d - 20, seed + 2));
+    out.push(...frame(`${id}:cuadro`, x + w * 0.4, y, z + 4, fw, fh, seed), ...accent(`${id}:o`, x + w * 0.4 + fw / 2 + 80, y, cz + 20, z, Math.min(h, 215), w * 0.6 - fw / 2 - 100, d, turn + 1));
+  } else out.push(...accent(`${id}:o`, x + w * (0.38 + 0.16 * rnd(seed, 4)), y, cz, z, h, w * 0.56, d, turn, true));
   return out;
 }
 
@@ -379,7 +415,7 @@ export function deskScene(w: number, d: number, y: number, round: boolean): Part
     const [px, pz] = at(0.92, -0.75);
     out.push(...lamp("deco:lamp", Math.min(px, w - 170), y, Math.max(pz, 165)));
   }
-  if (w >= 1000) out.push(mug("deco:taza", lx + 245, y, lapZ + 20));
+  if (w >= 1000) out.push(mug("deco:taza", lx + 245, y, lapZ + 20, "#5d6b76"));
   if (w >= 1150 && d >= 560) {
     const [bx, bz] = at(-0.82, -0.35);
     const stack = bookStack("deco:libros", Math.max(bx, 200), y, Math.max(bz, 150), 3, 4, 0.92);
@@ -488,8 +524,8 @@ export function tvTopScene(w: number, d: number, y: number, inset: number, barWi
   const x0 = inset + 30;
   if (side >= 380) {
     const stack = bookStack("deco:top:libros", x0 + 250, y, cz, 2, 13, Math.min(0.95, (d - 90) / 215));
-    out.push(scanned("deco:top:jarron", "Jarrón", "jarron", x0 + 70, y, cz - 30, 0.8), ...stack.parts, scanned("deco:top:bronce", "Jarrón", "jarron-bronce", x0 + 255, stack.top, cz));
-    out.push(scanned("deco:top:planta", "Suculenta", "suculenta", w - x0 - 95, y, cz + 10), ...frame("deco:top:cuadro", w - x0 - 265, y, 16, 230, 300, 5));
+    out.push(scanned("deco:top:jarron", "Jarrón", "jarron", x0 + 70, y, cz - 30, 0.65), ...stack.parts, scanned("deco:top:bronce", "Jarrón", "jarron-bronce", x0 + 255, stack.top, cz));
+    out.push(scanned("deco:top:planta", "Suculenta", "suculenta", w - x0 - 265, y, cz + 30), ...frame("deco:top:cuadro", w - x0 - 150, y, 6, 200, 250, 5));
   } else if (side >= 170) {
     out.push(scanned("deco:top:jarron", "Jarrón", "jarron", x0 + 70, y, cz, 0.7), scanned("deco:top:planta", "Suculenta", "suculenta", w - x0 - 80, y, cz, 0.85));
   } else if (side >= 90) out.push(scanned("deco:top:bronce", "Jarrón", "jarron-bronce", x0 + 30, y, cz));

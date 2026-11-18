@@ -615,6 +615,12 @@ function casters(list: Part[], id: string, w: number, d: number, h: number) {
     }
 }
 
+/** el regatón de una pata de caño: el disco regulable que apoya en el piso, apenas más ancho que el caño (va con la pata: no es una pieza aparte) */
+function glide(leg: Part) {
+  const s = leg.size[0];
+  leg.details = [{ id: `${leg.id}:regaton`, label: "Regatón", kind: "plinth", material: "iron", run: 0, module: null, position: [-5, 0, -5], size: [s + 10, 5, s + 10], geometry: "cyl", cut: null, explode: [0, 0, 0] }];
+}
+
 /** cuatro patas en las esquinas de un rectángulo, metidas `inset` desde cada borde */
 function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d: number, h: number, kind: "recta" | "conica" | "hierro" | "metal", material: string, inset: number) {
   const s = kind === "hierro" ? 28 : kind === "metal" ? 30 : kind === "conica" ? 58 : 64;
@@ -624,7 +630,8 @@ function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d
     [x0 + inset, z0 + d - inset - s],
     [x0 + w - inset - s, z0 + d - inset - s],
   ].entries()) {
-    piece(list, `${prefix}:${i}`, "Pata", "plinth", kind === "hierro" || kind === "metal" ? "iron" : material, [x, 0, z], [s, h, s], { geometry: kind === "conica" ? "cone" : kind === "metal" ? "cyl" : "box", noCut: true });
+    const leg = piece(list, `${prefix}:${i}`, "Pata", "plinth", kind === "hierro" || kind === "metal" ? "iron" : material, [x, 0, z], [s, h, s], { geometry: kind === "conica" ? "cone" : kind === "metal" ? "cyl" : "box", noCut: true });
+    if (kind === "metal") glide(leg);
   }
 }
 
@@ -654,6 +661,9 @@ function wash(list: Part[], id: string, x: number, w: number, ledY: number, floo
 // ---- ambientación: lo que rodea al mueble para verlo en un lugar de verdad
 
 const deco = { decor: true, noCut: true } as const;
+/** cuántos huecos tiene el mueble que se está armando (por su lista de piezas): de ahí sale cuánto se llena cada uno */
+const crowding = new WeakMap<Part[], number>();
+
 /**
  * Lo que va en un hueco de estante, sobre el estante que termina en `y`: una
  * hilera de libros con algo al lado, o lo que entre si el hueco es bajo (la
@@ -662,9 +672,16 @@ const deco = { decor: true, noCut: true } as const;
  * estante en el que apoya.
  */
 function shelfDecor(list: Part[], id: string, x: number, y: number, z: number, width: number, space: number, seed: number, full = true) {
+  // en una biblioteca muy grande no todos los huecos llevan su hilera de libros: cada libro es
+  // una pieza más que dibujar, y con un centenar alcanza para que se vea llena
+  const cells = crowding.get(list) ?? 0;
+  const every = cells > 16 ? Math.round(1 / Math.min(1, Math.max(0.3, (240 / cells - 5.3) / 6.5))) : 1;
+  const [, column = 0, row = 0] = id.match(/(\d+):(\d+)$/) ?? [];
+  if ((Number(column) * 2 + Number(row)) % every !== 0) full = false;
   const board = list.findLast((p) => !p.decor && p.kind !== "glow" && p.kind !== "led" && Math.abs(p.position[1] + p.size[1] - y) < 1 && p.position[0] <= x + 1 && p.position[0] + p.size[0] >= x + width - 1);
   const depth = board ? board.position[2] + board.size[2] - z - 8 : 170;
-  list.push(...stage.shelfScene(id, { x, y, z, w: width, h: space, d: depth }, seed, full));
+  // el nombre del hueco entra en la semilla: dos huecos vecinos no salen iguales
+  list.push(...stage.shelfScene(id, { x, y, z, w: width, h: space, d: depth }, stage.hash(id) + seed, full));
 }
 
 /**
@@ -676,6 +693,8 @@ function shelfDecor(list: Part[], id: string, x: number, y: number, z: number, w
  */
 function shelfRest(list: Part[], id: string, boards: Part[], inset: number, seed: number, skip: (y: number) => boolean = () => false) {
   const sorted = [...boards].sort((p, q) => p.position[1] - q.position[1]);
+  // cuántos quedan libres: uno de cada cinco, y la mitad si la biblioteca es muy grande
+  const free = (crowding.get(list) ?? 0) > 20 ? 0.5 : 0.22;
   for (let k = 0; k < sorted.length - 1; k++) {
     const b = sorted[k];
     const y = b.position[1] + b.size[1];
@@ -684,15 +703,15 @@ function shelfRest(list: Part[], id: string, boards: Part[], inset: number, seed
     const width = b.size[0] - 2 * inset;
     // ya tiene lo suyo, o es uno de los que se dejan libres
     const taken = list.some((p) => p.decor && Math.abs(p.position[1] - y) < 1 && p.position[0] >= b.position[0] - 1 && p.position[0] < b.position[0] + b.size[0]);
-    if (taken || skip(y) || space < 60 || stage.rnd(seed + k, 9) < 0.22) continue;
-    shelfDecor(list, `${id}:${k}`, x, y, 30, width, space, seed * 5 + k * 3 + 1, false);
+    if (taken || skip(y) || space < 60 || stage.rnd(seed + k, 9) < free) continue;
+    shelfDecor(list, `${id}:${k}`, x, y, 30, width, space, seed * 7 + k * 5 + 2, false);
   }
 }
 /** al pie de una biblioteca, del lado de la luz: un canasto con una manta, si el mueble es alto */
 function floorDecor(list: Part[], w: number, d: number, h: number) {
   if (h < 1200) return;
-  const size: Vec3 = [400, 330, 380];
-  list.push(stage.basket("deco:canasto", w + 330, 0, Math.max(d, 300) - 60, size, 1), stage.foldedThrow("deco:canasto:manta", w + 330, 215, Math.max(d, 300) - 60, "#c8bca8", [300, 150, 300], 0.3));
+  const size: Vec3 = [370, 300, 350];
+  list.push(stage.basket("deco:canasto", w + 310, 0, Math.max(d, 300) - 70, size, 1), stage.foldedThrow("deco:canasto:manta", w + 310, 205, Math.max(d, 300) - 70, "#b9ad98", [270, 120, 250], 0.3));
 }
 
 /**
@@ -772,8 +791,9 @@ function organicSofa(v: Record<string, Value>, c: FurnitureConfig): ReturnType<B
   const ball = path[tableAtStart ? Math.round(steps * 0.78) : Math.round(steps * 0.22)];
   piece(parts, "deco:ball", "Almohadón redondo", "shelf", "fabric", [ball[0] - 130, lift + 420, ball[1] - d / 2 + 250], [260, 260, 260], { geometry: "knob", noCut: true, decor: true });
   // una alfombra redonda que asoma por delante
-  const reach = d + bow * 0.55 + 620;
-  parts.push(stage.rug("deco:rug", x0 + L / 2 - (L + 500) / 2, reach - (L + 500) * 0.62, L + 500, (L + 500) * 0.62, stage.rugFor(fabricById(c.fabric).color), true));
+  const rw = L + pod + 560;
+  const rd = d + bow + 620;
+  parts.push(stage.rug("deco:rug", (L + pod) / 2 - rw / 2, d / 2 + bow * 0.05 + 180 - rd / 2, rw, rd, stage.rugFor(fabricById(c.fabric).color), true));
 
   if (table !== "no") {
     // la mesita: madera doblada en una vuelta (arriba, el lado del sillón y abajo), abierta hacia afuera, y una tapa de piedra
@@ -1019,7 +1039,7 @@ const BUILDERS: Record<string, Builder> = {
       parts.push(...stage.bedsideScene(w, d, topY));
       return { parts, drawers, doors, wall: true };
     }
-    parts.push(...stage.coffeeScene(w, d, topY));
+    parts.push(...stage.coffeeScene(w, d, topY), stage.rug("deco:rug", -460, -380, w + 920, d + 760, stage.rugFor(materialById(c.front).color)));
     // en el estante de abajo, si lo hay y queda a la vista
     const low = parts.find((p) => p.id === "shelf" && p.position[1] < 120);
     if (low) {
@@ -1193,6 +1213,7 @@ const BUILDERS: Record<string, Builder> = {
     const iron = v.structure === "hierro";
     const columns = Math.max(1, Math.ceil((w - T) / 820));
     let doors = 0;
+    crowding.set(parts, columns * (n + 1));
 
     if (iron) {
       // parantes de hierro adelante y atrás, con los estantes de madera pasando de lado a lado
@@ -1456,7 +1477,7 @@ const BUILDERS: Record<string, Builder> = {
     c1("deco:throw", "Manta", "#a0927f", [t + mw / 2 - tw / 2 - fall, my + 281, z0 + ml + 38 - fold], [tw + 2 * fall, 26, fold + fall], 10, 7);
     parts[parts.length - 1].drape = { w: tw, d: fold, drop: 170 };
     // delante de cada almohada, un almohadón de adorno recostado contra ella
-    const accents = ["#8b9186", "#b59677"];
+    const accents = ["#7d857c", "#9c8a78"];
     for (let k = 0; k < pillows; k++) {
       const cx = t + (mw / pillows) * (k + 0.5) + (pillows > 1 ? (k ? -70 : 70) : 0);
       parts.push(stage.cushion(`deco:pillow:c${k}`, accents[k % 2], cx, my + 252, z0 + 545, k ? 400 : 440, k ? 380 : 420, 0.8, 140));
@@ -1557,7 +1578,10 @@ const BUILDERS: Record<string, Builder> = {
       let k = 0;
       for (let col = 0; col < cols; col++) {
         const lx = -w / 2 + 90 + ((w - 180) * col) / (cols - 1);
-        for (const dz of [-depth / 2 + 110, depth / 2 - 110]) put(f, `${id}:leg${k++}`, "Pata", "plinth", metal ? "iron" : c.body, lx, 0, lz + dz, [s, lift + 12, s], 2, { geometry: metal ? "cyl" : "cone" });
+        for (const dz of [-depth / 2 + 110, depth / 2 - 110]) {
+          const leg = put(f, `${id}:leg${k++}`, "Pata", "plinth", metal ? "iron" : c.body, lx, 0, lz + dz, [s, lift + 12, s], 2, { geometry: metal ? "cyl" : "cone" });
+          if (metal) glide(leg);
+        }
       }
     };
 
@@ -1676,16 +1700,16 @@ const BUILDERS: Record<string, Builder> = {
       parts.push(stage.cushion("deco:cushion:1", accent, x0 + 430, seatY, at(380) + 128, 400, 380, lean + 0.06, 130));
       if (seats > 1) parts.push(stage.cushion("deco:cushion:2", accent === "#3f4650" ? tone : "#d9cdb8", total - x0 - 270, seatY, at(430), 440, 430, lean));
       // una manta: sobre el apoyabrazos si lo hay (cae a los dos lados); si no, doblada en la punta del asiento
-      const wool = accent === "#a9765c" ? "#b8a58c" : "#bfb5a3";
+      const wool = tone === "#4c5660" ? "#8b948f" : "#d9d0bf";
       if (arm) {
         const hang = 170;
-        const blanket = piece(parts, "deco:manta", "Manta", "shelf", `linen:${wool}`, [total - arm - hang + 6, lift + 562, d * 0.34], [arm + 2 * hang - 12, 16, 430], { ...deco, geometry: "cushion" });
+        const blanket = piece(parts, "deco:manta", "Manta", "shelf", `linen:${wool}`, [total - arm - hang + 6, lift + 562, d * 0.3], [arm + 2 * hang - 12, 14, 500], { ...deco, geometry: "cushion" });
         blanket.radius = 7;
         blanket.wrinkle = 6;
         blanket.drape = { w: arm - 6, d: 600, drop: hang - 20 };
       } else if (seats > 1) parts.push(stage.foldedThrow("deco:manta", total - x0 - 230, seatY - 6, d - 330, wool, [330, 78, 400]));
       // la alfombra: toma las patas de adelante y sigue hasta pasar el puff
-      const reach = (v.ottoman || v.chaise !== "no" ? d + 640 : d) + 520;
+      const reach = (v.ottoman || v.chaise !== "no" ? d + 640 : d) + 380;
       parts.push(stage.rug("deco:rug", -280, d * 0.52, total + 560, reach - d * 0.52, stage.rugFor(fabricById(c.fabric).color)));
     }
     return { parts, drawers: 0, doors: 0, gap: 160 };
