@@ -8,7 +8,7 @@ import { Watermark } from "@/components/Watermark";
 import { catalog } from "@/lib/catalog";
 import { pieceDrawing } from "@/lib/drawings";
 import { DEFAULT_CONFIG, LAYOUT_LABELS, totalHeight, type WardrobeConfig } from "@/lib/model";
-import { money, quote, type BoardUse, type CutRow } from "@/lib/quote";
+import { decimal, money, quote, type BoardUse, type CutRow } from "@/lib/quote";
 import { currentQuery } from "@/lib/query";
 import { buildOrderPdf } from "@/lib/orderPdf";
 import { decodeConfig, encodeConfig } from "@/lib/share";
@@ -97,7 +97,7 @@ export default function Workshop() {
         <Stat label="Precio al cliente" value={money(q.price)} />
         <Stat label="Costo" value={money(q.cost)} />
         <Stat label="Margen" value={money(margin)} note={`${Math.round((margin / q.price) * 100)} % del precio`} />
-        <Stat label="Placas" value={String(boardCount)} note={`${q.bandingMeters.toFixed(1)} m de canto`} />
+        <Stat label="Placas" value={String(boardCount)} note={`${decimal(q.bandingMeters)} m de canto`} />
       </section>
 
       <section className="space-y-4">
@@ -152,7 +152,7 @@ export default function Workshop() {
             {q.assembly.hardware.map((h) => (
               <li key={h.key} className="flex justify-between gap-4 px-5 py-2.5">
                 <span>{h.label}</span>
-                <span className="tabular-nums text-ink-2">{h.unit === "u" ? `${h.qty} u` : `${h.qty.toFixed(2)} ${h.unit}`}</span>
+                <span className="tabular-nums text-ink-2">{h.unit === "u" ? `${h.qty} u` : `${decimal(h.qty, 2)} ${h.unit}`}</span>
               </li>
             ))}
           </ul>

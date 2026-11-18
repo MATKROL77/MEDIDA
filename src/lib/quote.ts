@@ -224,7 +224,7 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
     sensor: cat.led.sensor,
     rgbController: cat.led.rgbController,
   };
-  const qtyLabel = (qty: number, unit: string) => (unit === "u" ? `${qty}` : `${qty.toFixed(2)} ${unit}`);
+  const qtyLabel = (qty: number, unit: string) => (unit === "u" ? `${qty}` : `${decimal(qty, 2)} ${unit}`);
   const boardCount = boards.reduce((s, b) => s + b.count, 0);
 
   const costs: CostLine[] = [
@@ -236,7 +236,7 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
     {
       label: "Tapacanto",
       // un 10 % más por despuntes y cantos que se rehacen
-      detail: `${(banding * 1.1).toFixed(1)} m × ${money(cat.edgeBandPerMeter)}`,
+      detail: `${decimal(banding * 1.1)} m × ${money(cat.edgeBandPerMeter)}`,
       amount: banding * 1.1 * cat.edgeBandPerMeter,
     },
     ...hardware.map((h) => ({
@@ -256,7 +256,7 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
     },
     {
       label: "Instalación de luces",
-      detail: `${assembly.ledMeters.toFixed(1)} m × ${money(cat.led.installPerMeter)}`,
+      detail: `${decimal(assembly.ledMeters)} m × ${money(cat.led.installPerMeter)}`,
       amount: assembly.ledMeters * cat.led.installPerMeter,
     },
     {
@@ -271,6 +271,11 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
   const price = Math.ceil((cost * (1 + cat.margin)) / 1000) * 1000;
 
   return { assembly, parts, rows, boards, bandingMeters: banding, costs, cost, price };
+}
+
+/** un número con coma decimal, como se escribe acá: 65,2 */
+export function decimal(value: number, digits = 1): string {
+  return value.toFixed(digits).replace(".", ",");
 }
 
 export function money(value: number): string {

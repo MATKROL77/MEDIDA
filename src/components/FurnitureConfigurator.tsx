@@ -432,6 +432,8 @@ function ModulePanel({ label, picked, controls, values, changed, onChange, onRes
       </div>
       {controls.map((c) => {
         const v = values[c.key];
+        // la cantidad de cajones solo cuenta cuando el módulo es de cajones
+        if (c.key === "drawers" && values.kind !== undefined && values.kind !== "cajones") return null;
         if (c.type === "count") return <Stepper key={c.key} label={c.label} value={v as number} min={c.min} max={c.max} onChange={(n) => onChange(c.key, n)} />;
         if (c.type === "choice")
           return (

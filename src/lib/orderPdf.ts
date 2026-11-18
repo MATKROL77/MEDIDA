@@ -10,7 +10,7 @@ import { catalog } from "./catalog.ts";
 import { product } from "./product.ts";
 import { INK, fitDrawing, pieceDrawing, type Drawing } from "./drawings.ts";
 import { DOOR_STYLE_LABELS, LED_COLORS, hasLeds, totalHeight, type WardrobeConfig } from "./model.ts";
-import { money, summaryByTitle, type CutRow, type Quote } from "./quote.ts";
+import { decimal, money, summaryByTitle, type CutRow, type Quote } from "./quote.ts";
 
 const PAGE_W = 1240;
 const PAGE_H = 1754;
@@ -202,8 +202,8 @@ function coverPage(config: WardrobeConfig, q: Quote, snapshot: HTMLImageElement 
   const stats = [
     ["Precio al cliente", money(q.price)],
     ["Placas", String(q.boards.reduce((s, b) => s + b.count, 0))],
-    ["Canto", `${q.bandingMeters.toFixed(1)} m`],
-    ["Tira LED", `${q.assembly.ledMeters.toFixed(1)} m`],
+    ["Canto", `${decimal(q.bandingMeters)} m`],
+    ["Tira LED", `${decimal(q.assembly.ledMeters)} m`],
   ];
   const sw = (PAGE_W - 2 * M - 3 * 20) / 4;
   stats.forEach(([label, value], i) => {
@@ -282,7 +282,7 @@ function hardwarePage(q: Quote, page: number, total: number): HTMLCanvasElement 
   let y = M + 70;
   for (const h of q.assembly.hardware) {
     text(ctx, h.label, M, y, 20);
-    text(ctx, h.unit === "u" ? `${h.qty} u` : `${h.qty.toFixed(2)} ${h.unit}`, PAGE_W - M, y, 20, { align: "right", weight: 600 });
+    text(ctx, h.unit === "u" ? `${h.qty} u` : `${decimal(h.qty, 2)} ${h.unit}`, PAGE_W - M, y, 20, { align: "right", weight: 600 });
     ctx.fillStyle = "#eee8de";
     ctx.fillRect(M, y + 14, PAGE_W - 2 * M, 1);
     y += 44;

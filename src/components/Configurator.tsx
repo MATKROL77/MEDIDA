@@ -60,7 +60,7 @@ import { drawerGroupsOf, leavesOf, openOffsets, toggleLeaf } from "@/lib/motion"
 import { buildOrderPdf, type OrderPdf } from "@/lib/orderPdf";
 import { shrinkImage } from "@/lib/preview";
 import { currentQuery, rememberQuery } from "@/lib/query";
-import { money, quote } from "@/lib/quote";
+import { decimal, money, quote } from "@/lib/quote";
 import { decodeConfig, designSummary, encodeConfig, orderMessage } from "@/lib/share";
 import type { Workshop } from "@/lib/workshop";
 
@@ -773,7 +773,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
 
           {tab === "luz" && (
             <>
-              <Section title="Dónde va la luz" hint={lit ? `${result.assembly.ledMeters.toFixed(1)} m de tira` : undefined}>
+              <Section title="Dónde va la luz" hint={lit ? `${decimal(result.assembly.ledMeters)} m de tira` : undefined}>
                 <Toggle label="Bajo cada estante, en todos" checked={allLed("ledShelves")} onChange={(v) => updateAllModules({ ledShelves: v })} />
                 <Toggle label="Perfiles verticales, en todos" checked={allLed("ledSides")} onChange={(v) => updateAllModules({ ledSides: v })} />
                 <div className="space-y-1.5 rounded-2xl bg-paper p-3">
