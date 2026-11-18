@@ -79,7 +79,7 @@ export default function RenderStage() {
       explode: q.get("explotado") === "1",
       xray: q.get("adentro") === "1",
       room: q.get("ambiente") === "habitacion",
-      floor: floor && FLOORS.some((f) => f.id === floor) ? floor : "estudio",
+      floor: floor && FLOORS.some((f) => f.id === floor) ? floor : "madera",
       wall: WALL_COLORS.find((w) => w.id === q.get("pared"))?.hex ?? WALL_COLORS[0].hex,
       backdrop: backdrop && /^[0-9a-f]{6}$/i.test(backdrop) ? `#${backdrop}` : undefined,
       framing: Math.min(1.5, Math.max(0.5, Number(q.get("encuadre")) || 1)),

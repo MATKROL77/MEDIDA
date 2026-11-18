@@ -218,17 +218,36 @@ tiempo. Está en `useScrollShrink` (`src/components/controls.tsx`).
 ## Realismo del 3D
 
 - **Texturas fotográficas** de Poly Haven (CC0): chapas de nogal y roble;
-  lino, pana, bouclé, lana y cuero de tapicería; cemento, baldosa, pared. Las
-  baja y las prepara `npm run textures` (`scripts/textures.mjs`), con su tamaño
-  real en `src/components/viewer/textures.json`. Cada pieza lleva coordenadas
-  de textura en metros (`meterUvs` en `photo.ts`) con la veta a lo largo de su
+  lino, pana, bouclé, lana y cuero de tapicería; pisos de tablas, cemento,
+  baldosa, pared. Las baja y las prepara `npm run textures`
+  (`scripts/textures.mjs`), con su tamaño real en
+  `src/components/viewer/textures.json`. Cada pieza lleva coordenadas de
+  textura en metros (`meterUvs` en `photo.ts`) con la veta a lo largo de su
   lado más largo: nada se estira al cambiar una medida. Créditos en
   `public/tex/CREDITOS.md`.
-- **Telas que se leen como telas**: cada tela tiene su trama en gris (con
-  promedio y contraste parejos; la del bouclé sale de su propio relieve), su
-  relieve y el brillo rasante de la fibra (sheen). Con el mueble entero en
-  pantalla, una trama a escala real se promedia y desaparece: como en una foto
-  de catálogo, se agranda un poco para que se lea (`READABLE` en `photo.ts`).
+- **Madera sin repetición** (`src/lib/texture-layout.ts`, con sus pruebas): una
+  foto de chapa cubre 1 m y repetida en una puerta de 2,4 m se le ve el mismo
+  dibujo cada metro. Al prepararla se arma una placa de 2 m como se arma una
+  de verdad: con hojas de 10 a 25 cm sacadas de distintos lugares de la foto,
+  cada una de un tono apenas distinto, y un veteado ancho encima. Los pisos
+  se arman tabla por tabla: cada tabla de la foto entra cuatro veces, dada
+  vuelta de las cuatro maneras, con las juntas trabadas y sin repetir tabla
+  entre hileras vecinas. Las fotos salen ya en su tono final (el roble, un
+  roble natural sin teñir; el nogal, marrón apagado): el 3D no las tiñe. El
+  poro de la chapa sale de la foto misma (lo oscuro va hundido) y encima
+  lleva una laca satinada. Las piezas que no son frentes toman la placa desde
+  un lugar distinto y dada vuelta, así dos estantes iguales no muestran el
+  mismo dibujo.
+- **Telas que se leen como telas**: cada tela tiene su trama en gris, su
+  relieve y el brillo rasante de la fibra (sheen). Van a escala real y con la
+  trama apenas marcada: a la distancia de un catálogo un lino es casi liso y
+  la trama se adivina; agrandada y contrastada se ve gruesa y ruidosa. El
+  bouclé es de rulo cerrado, el cuero lleva su graneado y un brillo apagado.
+- **Espejo**: en el 3D rápido los reflejos salen de la foto de un estudio
+  fotográfico, que es oscuro fuera de sus paneles de luz: un espejo de
+  placard se veía negro. Ahora devuelve una habitación clara pintada, fuera
+  de foco (`roomReflection` en `materials.ts`); no es el reflejo de la
+  escena, que solo lo calcula el trazado de rayos.
 - **Sillón curvo de una pieza**: la base, el respaldo y los almohadones son
   piezas curvas (una sección redondeada barrida a lo largo del arco, con la
   tela corriendo a lo largo de la curva), sin tramos rectos ni líneas entre
@@ -305,10 +324,12 @@ tiempo. Está en `useScrollShrink` (`src/components/controls.tsx`).
   esquinas de un estudio de fotografía, del beige de la página. Lo que se
   apoya o se cuelga de una pared tiene un tabique detrás, con su zócalo. Se
   puede elegir un piso con foto (madera, pinotea, cemento, baldosa), que se
-  funde en el fondo. Cada foto de piso se lleva a su tono corriendo su
-  promedio (`retone` en `src/lib/tone.ts`), no multiplicando su color: la veta
-  queda como es y el piso acompaña sin competir con el mueble. El piso queda
-  quieto bajo la cámara aunque el mueble cambie de medida.
+  funde en el fondo; el ambiente arranca con el de madera clara. Cada foto
+  de piso se lleva a su tono al prepararla, corriendo su promedio (`retone`
+  en `src/lib/tone.ts`), no multiplicando su color: la veta queda como es y
+  el piso acompaña sin competir con el mueble. El piso queda quieto bajo la
+  cámara aunque el mueble cambie de medida. La pared es pintura mate, con el
+  relieve del revoque apenas marcado.
 - **Luz del 3D rápido** (`KeyLight` y `LIGHT` en `Scene.tsx`): como la de un
   planificador de muebles. Mucha luz pareja (la foto HDR de un estudio real,
   Studio Small 09, CC0, más un relleno de cielo y piso inclinado hacia el

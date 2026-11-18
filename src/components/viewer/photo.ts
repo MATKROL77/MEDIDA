@@ -14,7 +14,12 @@ import * as THREE from "three";
 import manifest from "./textures.json";
 
 export type PhotoId = keyof typeof manifest;
-type Entry = { size: number[]; grain: "u" | "v" | null; maps: string[]; average?: number[] };
+/**
+ * `size`: lo que cubre la foto de color, en metros. `relief`: lo que cubre su
+ * relieve cuando no es lo mismo (una chapa se arma en una placa de 2 m con
+ * hojas de la foto, pero su poro sigue repitiéndose cada metro: ahí no se nota).
+ */
+type Entry = { size: number[]; relief?: number[]; maps: string[]; average?: number[] };
 
 export const PHOTOS = manifest as Record<PhotoId, Entry>;
 
@@ -24,13 +29,13 @@ const loader = typeof window === "undefined" ? null : new THREE.TextureLoader();
 const sets = new Map<PhotoId, Promise<PhotoSet>>();
 
 /**
- * Las telas se ven a la distancia de una foto de catálogo: con el sillón
- * entero en pantalla, cada píxel cubre varios milímetros y una trama a escala
- * real (el rulo de un bouclé, el cruzado de un lino) se promedia y desaparece.
- * Como en la fotografía de producto, la trama se agranda un poco para que se
- * lea. Las chapas y los pisos van a escala real.
+ * Cuánto se agranda una trama respecto de su medida real. Las telas de
+ * tapicería van a escala real: a la distancia de un catálogo un lino se ve
+ * casi liso, con la trama apenas adivinada, y agrandada se lee gruesa y
+ * ruidosa. Solo la lana de espiga (alfombras, buzos) se agranda, para que su
+ * dibujo se alcance a leer.
  */
-const READABLE: Partial<Record<PhotoId, number>> = { "tela-lino": 2.2, "tela-pana": 1.6, "tela-boucle": 1.9, "tela-lana": 1.8, "tela-cuero": 1.3 };
+const READABLE: Partial<Record<PhotoId, number>> = { "tela-lana": 1.8 };
 
 /** cambia cada vez que un material recibe su foto: el modo foto rearma la escena cuando pasa */
 let version = 0;
@@ -64,7 +69,9 @@ export function photoSet(id: PhotoId): Promise<PhotoSet> {
     ]).then(([map, normalMap, roughnessMap]) => {
       // las coordenadas de las piezas están en metros: la repetición lleva la foto a su medida real
       const k = READABLE[id] ?? 1;
-      for (const t of [map, normalMap, roughnessMap]) t?.repeat.set(1 / (e.size[0] * k), 1 / (e.size[1] * k));
+      const relief = e.relief ?? e.size;
+      map?.repeat.set(1 / (e.size[0] * k), 1 / (e.size[1] * k));
+      for (const t of [normalMap, roughnessMap]) t?.repeat.set(1 / (relief[0] * k), 1 / (relief[1] * k));
       return { map, normalMap, roughnessMap };
     });
     // si una textura no llega, el material se queda con su color liso: nunca negro
@@ -85,6 +92,12 @@ export function tintFor(id: PhotoId, target: string): THREE.Color {
   const base = new THREE.Color().setRGB(avg[0] / 255, avg[1] / 255, avg[2] / 255, THREE.SRGBColorSpace);
   const clamp = (v: number) => Math.min(2.2, Math.max(0.05, v));
   return new THREE.Color(clamp(want.r / base.r), clamp(want.g / base.g), clamp(want.b / base.b));
+}
+
+/** el color promedio de una foto: lo que se ve mientras baja, y de lejos */
+export function photoColor(id: PhotoId, fallback: string): THREE.Color {
+  const avg = PHOTOS[id].average;
+  return avg ? new THREE.Color().setRGB(avg[0] / 255, avg[1] / 255, avg[2] / 255, THREE.SRGBColorSpace) : new THREE.Color(fallback);
 }
 
 /** un número estable a partir de un texto: de dónde arranca la foto en cada pieza */
@@ -110,6 +123,9 @@ export function meterUvs(geometry: THREE.BufferGeometry, size: number[], key: st
   // como si salieran de la misma placa. Sin origen, cada pieza arranca en un lugar distinto
   const ox = origin ? 0 : hash(key) * 3;
   const oy = origin ? 0 : hash(`${key}:y`) * 3;
+  // y además puede salir de la placa dada vuelta: dos estantes iguales no muestran el mismo dibujo
+  const mx = !origin && hash(`${key}:mx`) < 0.5 ? -1 : 1;
+  const my = !origin && hash(`${key}:my`) < 0.5 ? -1 : 1;
   const uv = new Float32Array(pos.count * 2);
   // la cara se elige por triángulo, no por vértice: en un canto redondeado un
   // triángulo con vértices proyectados en caras distintas estira la foto
@@ -129,8 +145,8 @@ export function meterUvs(geometry: THREE.BufferGeometry, size: number[], key: st
     const across = axes.find((x) => x !== along)!;
     for (let i = t; i < t + 3; i++) {
       const p = origin ? [pos.getX(i) + origin[0], pos.getY(i) + origin[1], pos.getZ(i) + origin[2]] : [pos.getX(i), pos.getY(i), pos.getZ(i)];
-      uv[i * 2] = p[across] + ox;
-      uv[i * 2 + 1] = p[along] + oy;
+      uv[i * 2] = mx * p[across] + ox;
+      uv[i * 2 + 1] = my * p[along] + oy;
     }
   }
   geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
