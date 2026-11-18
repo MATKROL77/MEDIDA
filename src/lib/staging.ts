@@ -336,9 +336,11 @@ export function shelfScene(id: string, cell: Cell, seed: number, full: boolean):
   };
   if (h < 175) {
     // bajo: una pila acostada y, si hay lugar, un cuenco
-    if (w >= 640 && h >= 115) {
-      stackAt(x + w * 0.27, 2, "p", false);
-      out.push(scanned(`${id}:cuenco`, "Cuenco", "cuenco", x + w * 0.7, y, cz, Math.min(0.85, (d - 20) / 309)));
+    // (por turno: tres huecos seguidos con el mismo cuenco en el mismo lugar delatan el molde)
+    if (w >= 640 && h >= 115 && kind !== 3) {
+      const flip = kind === 1;
+      if (kind !== 2) stackAt(x + w * (flip ? 0.7 : 0.27), 2, "p", false);
+      if (kind !== 0 || turn % 2 === 0) out.push(scanned(`${id}:cuenco`, "Cuenco", "cuenco", x + w * (kind === 2 ? 0.5 : flip ? 0.28 : 0.7), y, cz, Math.min(0.85, (d - 20) / 309)));
     } else stackAt(x + w / 2 + (rnd(seed, 2) - 0.5) * w * 0.2, 3, "p", false);
     return out;
   }
@@ -476,7 +478,8 @@ export function underScene(cell: Cell): Part[] {
   if (w < 400 || h < 90 || d < 240) return out;
   const cz = z + d / 2;
   out.push(...bookStack("deco:bajo:libros", x + w * 0.27, y, cz, Math.min(3, Math.floor((h - 20) / 38)), 21, Math.min(1, (d - 40) / 215)).parts);
-  if (w >= 760 && h >= 150) out.push(basket("deco:bajo:canasto", x + w * 0.72, y, cz, [Math.min(340, w * 0.3), Math.min(200, h - 40), Math.min(280, d - 60)], 2));
+  // el canasto se arrima al centro: contra la punta se metía en la curva de una ratona de esquinas dobladas
+  if (w >= 760 && h >= 150) out.push(basket("deco:bajo:canasto", x + w * 0.66, y, cz, [Math.min(300, w * 0.26), Math.min(190, h - 50), Math.min(280, d - 60)], 2));
   return out;
 }
 

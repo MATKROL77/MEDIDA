@@ -324,6 +324,23 @@ export function roomReflection(): THREE.Texture {
   return room;
 }
 
+/**
+ * El difusor de una tira LED. Visto de lejos o de canto mide menos de un píxel,
+ * y algo tan brillante y tan fino se dibuja como una fila de puntos. El brillo
+ * se apaga cuando la cara ocupa menos de un par de píxeles: de cerca brilla, de
+ * lejos queda la luz que tira y no los puntitos.
+ */
+function ledLens() {
+  const m = new THREE.MeshStandardMaterial({ color: "#e6e6e6", roughness: 0.4, emissive: "#000000", emissiveIntensity: 0 });
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec2 vLensUv;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvLensUv = uv;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vLensUv;")
+      .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n{ vec2 fw = fwidth(vLensUv); totalEmissiveRadiance *= smoothstep(0.7, 2.4, 1.0 / max(max(fw.x, fw.y), 1e-5)); }");
+  };
+  return m;
+}
+
 /** vidrio fumé: deja ver el interior y las luces, pero se nota que hay vidrio */
 export const GLASS_OPACITY = 0.42;
 
@@ -378,7 +395,7 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
       userData: { noContact: true },
     }),
     frame: new THREE.MeshStandardMaterial({ color: "#b8bcc1", metalness: 1, roughness: 0.3, transparent: true }),
-    led: new THREE.MeshStandardMaterial({ color: "#e6e6e6", roughness: 0.4, emissive: "#000000", emissiveIntensity: 0 }),
+    led: ledLens(),
   };
   return kit;
 }

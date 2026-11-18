@@ -877,7 +877,8 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
         if (gap < 120) return;
         const len = w - 30;
         const top = lv.id === M("top");
-        const z = top ? back + carcassD - 50 : back + shelfD - 30;
+        // con corredizas, la tira de arriba también va detrás de las hojas: adelante chocaba con ellas
+        const z = top && !sliding ? back + carcassD - 50 : back + shelfD - 30;
         add({
           id: `${lv.id}:led`,
           label: "Tira LED",
@@ -891,7 +892,9 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
           explode: top ? [0, 220, 0] : [0, 0, 170],
         });
         // el piso del hueco es el estante de abajo (o el piso del módulo, que llega hasta adelante)
-        const depth = below ? shelfD : carcassD;
+        // (con corredizas la luz termina donde empiezan las hojas: si no, el plano alumbrado
+        // del estante las atravesaba y se veía como una raya clara en la puerta)
+        const depth = below || sliding ? shelfD : carcassD;
         add(
           washPart(
             `${lv.id}:luz`,

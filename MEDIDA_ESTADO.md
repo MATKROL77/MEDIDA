@@ -77,6 +77,24 @@ horizontal a 390 y 1440 px;
 `npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
 y `build` sin errores. Falta probarlo en un teléfono real.
 
+**Revisión crítica y arreglos (18/11/2026).** Tres agentes críticos
+revisaron variantes que nadie había mirado; el entorno se reinició antes de
+que informaran, pero quedaron sus capturas y recortes, y de ahí salió esto:
+- Corredizas con luz: una raya clara a la altura del estante y luz que se
+  escapaba por arriba. La luz de las tiras terminaba delante de las hojas y
+  las atravesaba; ahora termina donde empiezan, y la tira de arriba va detrás.
+- Tiras LED que se veían como una fila de puntos de lejos: el difusor apaga
+  su brillo cuando mide menos de un par de píxeles.
+- Interior durazno con tiras de estante y perfiles laterales a la vez: la
+  luz tiñe menos.
+- Chapas: cada hoja corre de seguido en vez de ida y vuelta (quedaba
+  espejada sobre sí misma) y los tres mapas empalman consigo mismos.
+- Decoración: los huecos bajos del mueble de TV ya no repiten el mismo
+  cuenco en el mismo lugar; el canasto de la ratona no toca la curva.
+Verificado con las mismas vistas donde se veía cada defecto, antes y
+después. El crítico de sillones, camas y mesas no llegó a entregar nada:
+esas variantes quedaron sin revisar por un tercero.
+
 **Realismo, segunda tanda (18/11/2026).** A pedido de Matías ("las
 texturas no se ven realistas… las luces de las tiras led no se ven como
 deberían"). Tres agentes en copias aisladas, integrado acá:

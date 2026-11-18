@@ -18,7 +18,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { leafLayout, pingPong, plankLayout, streaks } from "../src/lib/texture-layout.ts";
+import { leafLayout, plankLayout, streaks } from "../src/lib/texture-layout.ts";
 import { retone } from "../src/lib/tone.ts";
 
 const require = createRequire(import.meta.url);
@@ -234,9 +234,48 @@ function reliefFrom(photo, strength) {
 const webp = (img, size, quality) => sharp(img.data, { raw: { width: img.size, height: img.size, channels: 3 } }).resize(size, size).webp({ quality, effort: 6 });
 
 /**
+ * Hace que una imagen empalme consigo misma a lo alto (y a lo ancho con
+ * `both`): cerca de cada borde se funde con ella misma corrida media imagen,
+ * que ahí es continua. La foto de una chapa no cierra del todo de una punta a
+ * la otra, y esa diferencia era una raya fina a media puerta. `normal`: es un
+ * mapa de normales y hay que volver a llevarlo a largo uno.
+ */
+function seamless(img, both = false, normal = false) {
+  const n = img.size;
+  const band = Math.round(n / 10);
+  const pass = (src, vertical) => {
+    const out = Buffer.from(src);
+    const half = n >> 1;
+    for (let a = 0; a < n; a++) {
+      const edge = Math.min(a, n - 1 - a);
+      if (edge >= band) continue;
+      // 1 en el borde, 0 al terminar la franja, con entrada y salida suaves
+      const t = 1 - edge / band;
+      const m = t * t * (3 - 2 * t);
+      const shifted = (a + half) % n;
+      for (let b = 0; b < n; b++) {
+        const to = (vertical ? a * n + b : b * n + a) * 3;
+        const from = (vertical ? shifted * n + b : b * n + shifted) * 3;
+        for (let k = 0; k < 3; k++) out[to + k] = Math.round(src[to + k] * (1 - m) + src[from + k] * m);
+      }
+    }
+    return out;
+  };
+  let data = pass(img.data, true);
+  if (both) data = pass(data, false);
+  if (normal)
+    for (let i = 0; i < n * n; i++) {
+      const v = [0, 1, 2].map((k) => (data[i * 3 + k] / 255) * 2 - 1);
+      const l = Math.hypot(v[0], v[1], v[2]) || 1;
+      for (let k = 0; k < 3; k++) data[i * 3 + k] = Math.round(((v[k] / l) * 0.5 + 0.5) * 255);
+    }
+  return { data, size: n };
+}
+
+/**
  * La placa enchapada: hojas de la foto una al lado de la otra, con la veta a
- * lo alto. A lo largo la foto se recorre de ida y vuelta (no se repite de
- * corrido y empalma en los bordes).
+ * lo alto. A lo largo la foto corre de seguido, cada hoja desde otro punto: la
+ * foto empalma consigo misma, así que la placa también.
  */
 function veneerSheet(photo, set) {
   const n = photo.size;
@@ -249,7 +288,9 @@ function veneerSheet(photo, set) {
       const across = (leaf.across + x - leaf.from) % n;
       const sx = leaf.mirror ? n - 1 - across : across;
       for (let y = 0; y < size; y++) {
-        const sy = pingPong(y + leaf.along, n);
+        // de corrido y no de ida y vuelta: donde la foto pegaba la vuelta, cada hoja quedaba
+        // espejada sobre sí misma y en una puerta alta se veía la raya (la foto empalma sola)
+        const sy = (y + leaf.along) % n;
         // el veteado ancho no baja derecho como una regla: ondula apenas a lo largo
         const sway = Math.round(5 * Math.sin((2 * Math.PI * y) / size + leaf.along) + 3 * Math.sin((6 * Math.PI * y) / size));
         const gain = leaf.gain * bands[(x + sway + size) % size];
@@ -363,7 +404,7 @@ for (const set of SETS) {
   if (set.use === "veneer" && src.diff) {
     const photo = await raw(src.diff, SOURCE);
     const sheet = veneerSheet(set.turn ? turned(photo, false) : photo, set);
-    await webp({ data: toned(sheet.data, set.tone), size: sheet.size }, BUILT, 80).toFile(file(""));
+    await webp(seamless({ data: toned(sheet.data, set.tone), size: sheet.size }), BUILT, 80).toFile(file(""));
     // la placa armada cubre el doble que la foto; el relieve sigue a la medida de la foto
     entry.size = [real[0] * 2, real[1] * 2];
     entry.relief = real;
@@ -372,11 +413,11 @@ for (const set of SETS) {
     // el relieve sale de la foto misma: el poro y la veta oscura van hundidos, como en una
     // chapa de verdad o en una melamina de poro sincronizado. (El mapa de normales que trae
     // la foto es casi plano: comprimido para la web no queda nada.)
-    await webp(reliefFrom(set.turn ? turned(photo, false) : photo, set.pore ?? 1), SOURCE, 72).toFile(file("-nor"));
+    await webp(seamless(reliefFrom(set.turn ? turned(photo, false) : photo, set.pore ?? 1), true, true), SOURCE, 72).toFile(file("-nor"));
     entry.maps.push("normal");
     if (src.rough) {
       const rough = await raw(src.rough, 512);
-      await webp(set.turn ? turned(rough, false) : rough, 512, 78).toFile(file("-rough"));
+      await webp(seamless(set.turn ? turned(rough, false) : rough, true), 512, 78).toFile(file("-rough"));
       entry.maps.push("roughness");
     }
   }

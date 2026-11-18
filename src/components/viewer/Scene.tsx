@@ -107,7 +107,7 @@ const DUSK = 0.5;
 const LENS_GLOW = 4.6;
 /** cuánto blanco lleva el difusor prendido, y cuánto la luz que cae sobre las placas */
 const LENS_WHITE = 0.45;
-const WASH_WHITE = 0.5;
+const WASH_WHITE = 0.68;
 
 const VIEW_DIRS: Record<ViewName, [number, number, number]> = {
   front: [0, 0.14, 1],
