@@ -12,6 +12,7 @@ import type { Part } from "@/lib/assembly";
 
 import { BOUNCY, clampDt, doorProgress, FIRM, FLY, spring, springFor, SpringVec, step, useSceneAnim } from "./anim";
 import { garmentGeometry } from "./garments";
+import { stripOrientation, stripShape, washGeometry, washMaterial } from "./ledWash";
 import type { MaterialKit } from "./materials";
 import { dressWith, meterUvs, photoSet, tintFor, type PhotoId } from "./photo";
 
@@ -950,9 +951,10 @@ function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
     case "glass":
       return kit.glass;
     case "led":
-      return kit.led;
+      // el canal de aluminio; el difusor, que es lo que brilla, va en una malla hija
+      return kit.metal;
     case "glow":
-      return kit.glow[p.glow ?? "z"];
+      return p.wash ? washMaterial(kit) : null;
     case "fabric":
       return kit.fabric;
     case "iron":
@@ -1196,7 +1198,6 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
     const g = geometries();
     if (part.geometry === "quarter") return part.quarter === "left" ? g.quarterLeft : g.quarterRight;
     if (part.geometry === "knob") return g.sphere;
-    if (part.geometry === "glow") return g.plane;
     if (part.geometry === "soft") return g.soft;
     if (part.geometry === "puff") return g.puff;
     if (part.geometry === "cyl") return g.cyl;
@@ -1205,12 +1206,13 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
     return g.box;
   }, [part.geometry, part.quarter]);
 
-  const glowRotation = useMemo<[number, number, number]>(() => {
-    if (part.glow === "y") return [-Math.PI / 2, 0, 0];
-    if (part.glow === "x+") return [0, Math.PI / 2, 0];
-    if (part.glow === "x-") return [0, -Math.PI / 2, 0];
-    return [0, 0, 0];
-  }, [part.glow]);
+  // la tira: el canal de aluminio y su difusor, según para dónde corre y alumbra
+  const strip = part.kind === "led" ? stripShape(stripOrientation(part)) : null;
+  // la luz que tira sobre el hueco: las caras de su caja, en una sola malla
+  const washKey = part.wash ? `${part.size.join(",")}|${JSON.stringify(part.wash)}` : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const wash = useMemo(() => washGeometry(part), [washKey]);
+  useEffect(() => () => wash?.dispose(), [wash]);
 
   useFrame((state, dt) => {
     const d = clampDt(dt);
@@ -1289,9 +1291,9 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
         m.position.set((part.quarter === "left" ? sx / 2 : -sx / 2) * MM, 0, (-sz / 2) * MM);
         m.scale.set(sx * MM * a, sy * MM * a, sz * MM * a);
       } else if (part.geometry === "glow") {
-        if (part.glow === "y") m.scale.set(sx * MM * a, sz * MM * a, 1);
-        else if (part.glow === "x+" || part.glow === "x-") m.scale.set(sz * MM * a, sy * MM * a, 1);
-        else m.scale.set(sx * MM * a, sy * MM * a, 1);
+        // la malla ya tiene la medida del hueco: acompaña la animación, y apagada ni se dibuja
+        m.scale.set((sx / Math.max(part.size[0], 1)) * a, (sy / Math.max(part.size[1], 1)) * a, (sz / Math.max(part.size[2], 1)) * a);
+        m.visible = anim.lights.v > 0.003 && e < 0.98;
       } else {
         if (door === "lid") m.position.set(0, (-sy / 2) * MM, (sz / 2) * MM);
         else if (door) m.position.set(((door === "right" ? -sx : sx) / 2) * MM, (sy / 2) * MM, (-sz / 2) * MM);
@@ -1358,9 +1360,8 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
         {material && (
           <mesh
             ref={mesh}
-            geometry={trap && trapGeo ? trapGeo : (split?.visible ?? cushion ?? geometry)}
+            geometry={trap && trapGeo ? trapGeo : (split?.visible ?? cushion ?? wash ?? strip?.channel ?? geometry)}
             material={material}
-            rotation={part.geometry === "glow" ? glowRotation : undefined}
             castShadow={castShadow}
             receiveShadow={part.kind !== "glow"}
             onClick={handleClick}
@@ -1368,6 +1369,8 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
           >
             {/* hija de la malla: sigue su posición y su escala */}
             {split && shadedMaterial && <mesh ref={shadedMesh} geometry={split.shaded} material={shadedMaterial} castShadow={castShadow} receiveShadow />}
+            {/* el difusor de la tira: lo que brilla (y lo que el trazado de rayos toma como emisor) */}
+            {strip && <mesh geometry={strip.diffuser} material={kit.led} />}
           </mesh>
         )}
         {part.kind === "led" && <LedLight part={part} kit={kit} />}

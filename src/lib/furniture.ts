@@ -12,6 +12,7 @@
 
 import type { Assembly, Cut, Part, PartKind, Vec3 } from "./assembly.ts";
 import { catalog, materialById } from "./catalog.ts";
+import { lightUp } from "./led.ts";
 import { DECOR_MODELS, type DecorModel } from "./decor-models.ts";
 import type { DesignSummary } from "./designs.ts";
 
@@ -423,7 +424,7 @@ const INSIDE = "tint:#ece8e1";
 const ROOM_CENTER = 1900;
 const NOT_BOARD = ["metal", "iron", "fabric", "handle", "glass", "led", "glow", "back"];
 
-type Extra = Partial<Pick<Part, "front" | "hinge" | "openShift" | "details" | "geometry" | "module" | "decor" | "glow" | "openAngle">> & {
+type Extra = Partial<Pick<Part, "front" | "hinge" | "openShift" | "details" | "geometry" | "module" | "decor" | "openAngle">> & {
   noCut?: boolean;
   band?: Cut["band"];
   /** sale de placa aunque su material sea un color fijo (la melamina blanca de adentro) */
@@ -445,7 +446,6 @@ function piece(list: Part[], id: string, label: string, kind: PartKind, material
     position,
     size,
     geometry: extra.geometry ?? "box",
-    glow: extra.glow,
     decor: extra.decor,
     cut: board ? { length: Math.round(sorted[0]), width: Math.round(sorted[1]), thickness: Math.round(sorted[2]), band: extra.band ?? { long: 1, short: 0 } } : null,
     // al separar las piezas, la ambientación se queda en su lugar
@@ -509,12 +509,11 @@ function drawer(list: Part[], id: string, module: number, x: number, y: number, 
     details: gripFor(id, grip, w, h, handle(`${id}:h`, w / 2 - Math.min(70, w / 4), h - 30, Math.min(140, w / 2))),
   });
   drawerBox(list, id, module, out, [opening[0] + 16, y + 14, z - depth + 40], [opening[1] - 32, h - 46, depth - 40], "z");
-  // una tira adentro, contra el frente, que sale con el cajón: al abrirlo se ve lo que hay
+  // una tira adentro, pegada al frente, que sale con el cajón: al abrirlo se ve lo que hay
   if (light) {
-    const p = piece(list, `${id}:led`, "Tira LED del cajón", "led", "led", [opening[0] + 40, y + h - 40, z - 24], [opening[1] - 80, 6, 10], { noCut: true });
+    const p = piece(list, `${id}:led`, "Tira LED del cajón", "led", "led", [opening[0] + 40, y + h - 40, z - STRIP[1]], [opening[1] - 80, STRIP[0], STRIP[1]], { noCut: true });
     p.module = module;
     p.openShift = out;
-    wash(list, `${id}:luz`, opening[0] + 31, opening[1] - 62, y + h - 40, y + 17, z - depth + 55, depth - 80, { module, openShift: out });
   }
 }
 
@@ -621,27 +620,21 @@ function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d
   }
 }
 
-/** tira LED: una línea de luz y, opcional, su resplandor sobre el piso */
-function led(list: Part[], id: string, x: number, y: number, z: number, length: number, pool?: { y: number; depth: number }) {
-  piece(list, id, "Tira LED", "led", "led", [x, y, z], [length, 6, 10], { noCut: true });
-  // el charco de luz es más grande que la tira: se abre y se apaga suave
-  if (pool) piece(list, `${id}:g`, "Luz", "glow", "glow", [x - 260, pool.y, z - pool.depth * 0.8], [length + 520, 2, pool.depth * 1.6], { geometry: "glow", glow: "y", noCut: true });
-}
+/**
+ * El perfil de una tira LED: cuánto asoma de la placa y cuánto mide de ancho,
+ * en mm. Es bajo a propósito: metido detrás del canto de una tapa, mirando
+ * desde arriba no asoma (asomando medio milímetro se vería una fila de puntos).
+ */
+const STRIP = [6, 14] as const;
 
 /**
- * La luz que tira una tira LED dentro de un hueco, para el 3D rápido: una
- * mancha que baja por el fondo desde la tira y otra en el piso del hueco (en
- * el modo foto no se ven: la luz de verdad la da la tira). `x` y `w`, el ancho
- * del hueco; `ledY`, la altura de la tira; `floorY`, el piso del hueco; `back`,
- * la cara del fondo; `depth`, cuánto entra la luz hacia adelante.
+ * Tira LED: un perfil con difusor pegado por abajo a la placa que lo lleva
+ * (`y` es 8 mm bajo esa placa). La luz que tira (sobre el estante de abajo, el
+ * fondo, los laterales o el piso de la habitación) se arma sola al final,
+ * mirando qué tiene alrededor: `lightUp` en `lib/led.ts`.
  */
-function wash(list: Part[], id: string, x: number, w: number, ledY: number, floorY: number, back: number, depth: number, move?: { module: number; openShift: Vec3 }) {
-  const gap = ledY - floorY;
-  if (gap <= 0 || w <= 0) return;
-  const card = Math.min(gap, 520);
-  const extra = { geometry: "glow" as const, noCut: true, ...(move ?? {}) };
-  if (!move) piece(list, `${id}:gb`, "Luz", "glow", "glow", [x, ledY - card, back + 0.6], [w, card, 1], { ...extra, glow: "z" });
-  if (gap <= 820) piece(list, `${id}:gp`, "Luz", "glow", "glow", [x, floorY + 0.6, back], [w, 1, depth], { ...extra, glow: "y" });
+function led(list: Part[], id: string, x: number, y: number, z: number, length: number) {
+  piece(list, id, "Tira LED", "led", "led", [x, y + 8 - STRIP[0], z], [length, STRIP[0], STRIP[1]], { noCut: true });
 }
 
 // ---- ambientación: lo que rodea al mueble para verlo en un lugar de verdad
@@ -904,7 +897,8 @@ const BUILDERS: Record<string, Builder> = {
       for (const [id, z] of [["f", d - inset - s / 2 - 9], ["b", inset + s / 2 - 9]] as const) piece(parts, `apron:${id}`, "Faldón", "divider", c.body, [a, under - 90, z], [w - 2 * a, 80, T]);
       for (const [id, x] of [["l", inset + s / 2 - 9], ["r", w - inset - s / 2 - 9]] as const) piece(parts, `apron:${id}`, "Faldón", "divider", c.body, [x, under - 90, a], [T, 80, d - 2 * a]);
     }
-    if (v.led) led(parts, "led", 120, under - 8, d - 150, w - 240, { y: 14, depth: d * 0.9 });
+    // bajo la tapa, detrás del faldón de adelante: no se ve la tira, se ve su luz en el piso
+    if (v.led) led(parts, "led", 120, under - 8, d - 190, w - 240);
     if (v.kind !== "escritorio") {
       // una mesa de comedor: al centro, un jarrón y un cuenco; un velador no va
       prop(parts, "deco:top:jarron", "Jarrón", "jarron-antiguo", w / 2 - 280, h, d / 2 - 128);
@@ -970,7 +964,7 @@ const BUILDERS: Record<string, Builder> = {
       piece(parts, "top", "Tapa", "top", c.front, [0, h - t, 0], [w, t, d], { band: { long: 2, short: 2 } });
       const bw = Math.max(80, Math.round(w * 0.1));
       for (const [id, x] of [["l", w * 0.16], ["r", w * 0.84 - bw]] as const) piece(parts, `base:${id}`, "Base", "plinth", c.body, [x, 0, d * 0.14], [bw, h - t, d * 0.72], { noCut: true });
-      if (v.led) led(parts, "led", w * 0.16 + bw, h - t - 8, d * 0.5, w * 0.68 - 2 * bw, { y: 14, depth: d * 0.8 });
+      if (v.led) led(parts, "led", w * 0.16 + bw, h - t - 8, d * 0.5, w * 0.68 - 2 * bw);
     } else if (v.style === "vidrio") {
       // marco de madera con la tapa de vidrio apoyada adentro y un estante abajo
       const s = 54;
@@ -1022,10 +1016,9 @@ const BUILDERS: Record<string, Builder> = {
         // si es de vidrio, una luz adentro deja ver lo que hay
         if (v.led) {
           led(parts, "led:in", T + 20, doorTop - 12, d - 70, w - 2 * T - 40);
-          wash(parts, "led:in", T, w - 2 * T, doorTop - 4, dh > 300 ? y0 + T + dh / 2 + T : y0 + T, 3, d - 40);
         }
       }
-      if (v.led) led(parts, "led", 40, y0 - 8, d * 0.5, w - 80, { y: 4, depth: d * 1.3 });
+      if (v.led) led(parts, "led", 40, y0 - 8, d * 0.5, w - 80);
     }
 
     const topY = lift + h;
@@ -1089,7 +1082,6 @@ const BUILDERS: Record<string, Builder> = {
       const [lx, ll] = span(T + 20, w - 2 * T - 40);
       if (v.led) {
         led(parts, "led:niche", lx, base + h - T - 8, d - 50, ll);
-        wash(parts, "led:niche", lx, ll, base + h - T, base + T + fh + T, 3, d - 30);
       }
     }
     piece(parts, "back", "Fondo", "back", "back", [T, base + T, 0], [w - 2 * T, h - 2 * T, 3]);
@@ -1119,10 +1111,8 @@ const BUILDERS: Record<string, Builder> = {
         if (v.led) {
           led(parts, `led:n${i}`, lx, base + h - T - 8, d - 70, ll);
           const mid = base + T + inner / 2;
-          wash(parts, `led:n${i}`, lx, ll, base + h - T, kind === "vidrio" ? mid + T : base + T, 3, d - 40);
           if (kind === "vidrio") {
             led(parts, `led:s${i}`, lx, mid - 8, d - 90, ll);
-            wash(parts, `led:s${i}`, lx, ll, mid, base + T, 3, d - 60);
           }
         }
       } else if (kind === "nicho-cajon") {
@@ -1133,7 +1123,6 @@ const BUILDERS: Record<string, Builder> = {
           piece(parts, `shelf:${i}`, "Estante", "fixed-shelf", c.body, [i * mw + T, base + T + fh, 0], [mw - T, T, d], { band: { long: 1, short: 0 }, module: i });
           if (v.led) {
             led(parts, `led:n${i}`, lx, base + h - T - 8, d - 50, ll);
-            wash(parts, `led:n${i}`, lx, ll, base + h - T, base + T + fh + T, 3, d - 30);
           }
         }
         if (i % 2 === 1) prop(parts, `deco:n${i}`, "Cuenco", "cuenco", i * mw + T + mw * 0.3, base + T + fh + T, d * 0.25);
@@ -1148,9 +1137,7 @@ const BUILDERS: Record<string, Builder> = {
         if (v.led) {
           const mid = base + T + inner / 2;
           led(parts, `led:n${i}`, lx, base + h - T - 8, d - 50, ll);
-          wash(parts, `led:n${i}`, lx, ll, base + h - T, mid + T, 3, d - 30);
           led(parts, `led:s${i}`, lx, mid - 8, d - 70, ll);
-          wash(parts, `led:s${i}`, lx, ll, mid, base + T, 3, d - 30);
         }
         // y adentro, unos libros acostados o una suculenta
         if (i % 2 === 0) prop(parts, `deco:n${i}`, "Suculenta", "suculenta", i * mw + T + mw * 0.35, base + T + inner / 2 + T, d * 0.3);
@@ -1170,7 +1157,7 @@ const BUILDERS: Record<string, Builder> = {
       }
     }
     // la luz de abajo es para el mueble colgado: con patas no tiene dónde rebotar
-    if (v.led && floating) led(parts, "led:under", 60, base - 8, d * 0.45, w - 120, { y: 4, depth: d * 1.5 });
+    if (v.led && floating) led(parts, "led:under", 60, base - 8, d * 0.45, w - 120);
     // la tele en la pared, y algo apoyado arriba
     const tw = Math.min(w * 0.72, 1650);
     piece(parts, "deco:tv", "Televisor", "back", "gloss:#0b0b0c", [(w - tw) / 2, base + h + 330, 20], [tw, tw * 0.57, 45], deco);
@@ -1363,7 +1350,8 @@ const BUILDERS: Record<string, Builder> = {
           piece(parts, `sd${side}${k}:f`, "Frente de cajón", "drawer-front", c.front, [X(w - T, T), fy, z], [T, fh, dl - 6], { front: true, module: mod + k, openShift: out, band: { long: 2, short: 2 }, details: [grip] });
           drawerBox(parts, `sd${side}${k}`, mod + k, out, [X(w - T - STORE_DEPTH + 20, STORE_DEPTH - 20), fy + 14, z + 12], [STORE_DEPTH - 20, fh - 46, dl - 30], "x");
           if (v.led) {
-            const l = piece(parts, `sd${side}${k}:led`, "Tira LED del cajón", "led", "led", [X(w - T - 50, 10), fh - 20, z + 40], [10, 6, dl - 86], { noCut: true });
+            // pegada al frente por adentro (a la izquierda, pasando el contrafrente del cajón)
+            const l = piece(parts, `sd${side}${k}:led`, "Tira LED del cajón", "led", "led", [right ? w - T - 10 : T + 15, fy + fh - 40, z + 40], [10, STRIP[0], dl - 86], { noCut: true });
             l.module = mod + k;
             l.openShift = out;
           }
@@ -1417,7 +1405,8 @@ const BUILDERS: Record<string, Builder> = {
       piece(parts, "plinth", "Zócalo", "plinth", "tint:#201812", [220, 0, z0 + 220], [w - 440, lift, len - 440], { noCut: true });
     }
     // luz abajo de la base cuando hay lugar entre la cama y el piso (con patas o flotante)
-    if (v.led && v.base !== "caja") led(parts, "led", 260, lift - 8, z0 + len * 0.5, w - 520, { y: 5, depth: len * 1.25 });
+    // pegada por adentro al larguero de los pies, a ras de su canto de abajo: la luz sale de abajo de la cama y se ve sobre el piso
+    if (v.led && v.base !== "caja") led(parts, "led", 260, lift - 2, z0 + len - t - STRIP[1], w - 520);
 
     // lo que la viste: colchón, acolchado y almohadas; una mesa de luz a cada lado
     const my = h - 50;
@@ -1654,6 +1643,8 @@ export type FurnitureBuild = { assembly: Assembly; parts: Part[]; doors: number;
 
 export function buildFurniture(config: FurnitureConfig): FurnitureBuild {
   const { parts, drawers, doors, center, gap, wall } = BUILDERS[config.family](config.values, config);
+  // cada tira, con la luz que tira sobre lo que tiene alrededor
+  lightUp(parts);
   // lo que va en el medio del ambiente se separa de la pared; lo demás queda apoyado contra ella
   const shift = center ? ROOM_CENTER : (gap ?? 0);
   if (shift)
