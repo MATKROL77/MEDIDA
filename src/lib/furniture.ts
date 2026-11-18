@@ -13,8 +13,8 @@
 import type { Assembly, Cut, Part, PartKind, Vec3 } from "./assembly.ts";
 import { catalog, materialById } from "./catalog.ts";
 import { lightUp } from "./led.ts";
-import { DECOR_MODELS, type DecorModel } from "./decor-models.ts";
 import type { DesignSummary } from "./designs.ts";
+import * as stage from "./staging.ts";
 
 export type Value = number | string | boolean;
 
@@ -460,20 +460,27 @@ function piece(list: Part[], id: string, label: string, kind: PartKind, material
   return part;
 }
 
-const handle = (id: string, x: number, y: number, w: number, vertical = false): Part => ({
-  id,
-  label: "Tirador",
-  kind: "handle",
-  material: "handle",
-  run: 0,
-  module: null,
-  // sobre la cara de adelante del frente
-  position: [x, y, T],
-  size: vertical ? [10, w, 22] : [w, 10, 22],
-  geometry: "box",
-  cut: null,
-  explode: [0, 0, 0],
-});
+/** cuánto se separa del frente la varilla de un tirador de barra */
+const STANDOFF = 16;
+const GRIP = { label: "Tirador", kind: "handle" as const, material: "handle", run: 0, module: null, geometry: "box" as const, cut: null, explode: [0, 0, 0] as Vec3 };
+
+/**
+ * Un tirador de barra: una varilla fina separada del frente por dos pies,
+ * como los de verdad (no un taco macizo pegado). `x`, `y`: su esquina sobre
+ * la cara de adelante del frente; `w`: el largo.
+ */
+const handle = (id: string, x: number, y: number, w: number, vertical = false): Part => {
+  const inset = Math.min(22, w * 0.16);
+  const foot = (k: number, at: number): Part => ({ ...GRIP, id: `${id}:p${k}`, position: vertical ? [1, at, -STANDOFF] : [at, 1, -STANDOFF], size: [8, 8, STANDOFF + 1] });
+  return { ...GRIP, id, position: [x, y, T + STANDOFF], size: vertical ? [10, w, 10] : [w, 10, 10], details: [foot(0, inset), foot(1, w - inset - 8)] };
+};
+
+/** el mismo tirador en un frente que mira al costado (los cajones laterales de una cama): la varilla corre en z y sale en x */
+const sideHandle = (id: string, right: boolean, y: number, z: number, w: number): Part => {
+  const inset = Math.min(22, w * 0.16);
+  const foot = (k: number, at: number): Part => ({ ...GRIP, id: `${id}:p${k}`, position: [right ? -STANDOFF : 9, 1, at], size: [STANDOFF + 1, 8, 8] });
+  return { ...GRIP, id, position: [right ? T + STANDOFF : -STANDOFF - 10, y, z], size: [10, 10, w], details: [foot(0, inset), foot(1, w - inset - 8)] };
+};
 
 /**
  * Un cajón completo, que sale hacia adelante al abrir: frente con tirador y una
@@ -490,7 +497,7 @@ export type Grip = "barra" | "unero" | "push";
 /** lo que lleva un frente para abrirlo, en coordenadas del frente */
 function gripFor(id: string, grip: Grip, w: number, h: number, bar: Part): Part[] {
   if (grip === "push") return [];
-  if (grip === "unero") return [{ ...bar, id: `${id}:u`, label: "Uñero", kind: "groove", material: "groove", position: [10, h - 26, T - 1.2], size: [w - 20, 12, 1.6] }];
+  if (grip === "unero") return [{ ...bar, details: undefined, id: `${id}:u`, label: "Uñero", kind: "groove", material: "groove", position: [10, h - 26, T - 1.2], size: [w - 20, 12, 1.6] }];
   return [bar];
 }
 
@@ -607,6 +614,12 @@ function casters(list: Part[], id: string, w: number, d: number, h: number) {
     }
 }
 
+/** el regatón de una pata de caño: el disco regulable que apoya en el piso, apenas más ancho que el caño (va con la pata: no es una pieza aparte) */
+function glide(leg: Part) {
+  const s = leg.size[0];
+  leg.details = [{ id: `${leg.id}:regaton`, label: "Regatón", kind: "plinth", material: "iron", run: 0, module: null, position: [-5, 0, -5], size: [s + 10, 5, s + 10], geometry: "cyl", cut: null, explode: [0, 0, 0] }];
+}
+
 /** cuatro patas en las esquinas de un rectángulo, metidas `inset` desde cada borde */
 function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d: number, h: number, kind: "recta" | "conica" | "hierro" | "metal", material: string, inset: number) {
   const s = kind === "hierro" ? 28 : kind === "metal" ? 30 : kind === "conica" ? 58 : 64;
@@ -616,7 +629,8 @@ function legs(list: Part[], prefix: string, x0: number, z0: number, w: number, d
     [x0 + inset, z0 + d - inset - s],
     [x0 + w - inset - s, z0 + d - inset - s],
   ].entries()) {
-    piece(list, `${prefix}:${i}`, "Pata", "plinth", kind === "hierro" || kind === "metal" ? "iron" : material, [x, 0, z], [s, h, s], { geometry: kind === "conica" ? "cone" : kind === "metal" ? "cyl" : "box", noCut: true });
+    const leg = piece(list, `${prefix}:${i}`, "Pata", "plinth", kind === "hierro" || kind === "metal" ? "iron" : material, [x, 0, z], [s, h, s], { geometry: kind === "conica" ? "cone" : kind === "metal" ? "cyl" : "box", noCut: true });
+    if (kind === "metal") glide(leg);
   }
 }
 
@@ -640,55 +654,59 @@ function led(list: Part[], id: string, x: number, y: number, z: number, length: 
 // ---- ambientación: lo que rodea al mueble para verlo en un lugar de verdad
 
 const deco = { decor: true, noCut: true } as const;
-const BOOKS = ["#7b2f2a", "#e8e1d2", "#2f3b4a", "#b98b3e", "#d8d2c6", "#3d4a3a", "#8a8a86", "#c9b79c"];
+/** cuántos huecos tiene el mueble que se está armando (por su lista de piezas): de ahí sale cuánto se llena cada uno */
+const crowding = new WeakMap<Part[], number>();
 
-/** libros parados, uno al lado del otro */
-function books(list: Part[], id: string, x: number, y: number, z: number, n: number, depth = 150) {
-  let cx = x;
-  for (let i = 0; i < n; i++) {
-    const t = 24 + ((i * 7) % 4) * 6;
-    const h = 190 + ((i * 5) % 4) * 14;
-    piece(list, `${id}:${i}`, "Libro", "shelf", `tint:${BOOKS[(i * 3 + n) % BOOKS.length]}`, [cx, y, z], [t, h, depth], deco);
-    cx += t + 1;
-  }
-}
 /**
- * Un objeto escaneado de verdad (public/models, de Poly Haven), apoyado con su
- * esquina mínima en (x, y, z) y a su medida real: no se estira.
+ * Lo que va en un hueco de estante, sobre el estante que termina en `y`: una
+ * hilera de libros con algo al lado, o lo que entre si el hueco es bajo (la
+ * composición la arma `staging.ts`). `z`: desde dónde, contra el fondo;
+ * `width`, el ancho libre; `space`, el alto libre. El fondo útil sale del
+ * estante en el que apoya.
  */
-function prop(list: Part[], id: string, label: string, model: DecorModel, x: number, y: number, z: number, scale = 1): Part {
-  const [w, h, d] = DECOR_MODELS[model].map((v) => v * scale);
-  const p = piece(list, id, label, "shelf", "none", [x, y, z], [w, h, d], { ...deco, geometry: "model" });
-  p.model = model;
-  return p;
-}
-
-/** lo que se apoya sobre una tapa: un jarrón de cerámica en la punta y un cuenco de madera al lado */
-function tabletop(list: Part[], id: string, x: number, y: number, z: number) {
-  prop(list, `${id}:jarron`, "Jarrón", "jarron-alto", x, y, z + 60);
-  prop(list, `${id}:cuenco`, "Cuenco", "cuenco", x + 160, y, z);
+function shelfDecor(list: Part[], id: string, x: number, y: number, z: number, width: number, space: number, seed: number, full = true) {
+  // en una biblioteca muy grande no todos los huecos llevan su hilera de libros: cada libro es
+  // una pieza más que dibujar, y con un centenar alcanza para que se vea llena
+  const cells = crowding.get(list) ?? 0;
+  const every = cells > 16 ? Math.round(1 / Math.min(1, Math.max(0.3, (240 / cells - 5.3) / 6.5))) : 1;
+  const [, column = 0, row = 0] = id.match(/(\d+):(\d+)$/) ?? [];
+  if ((Number(column) * 2 + Number(row)) % every !== 0) full = false;
+  const board = list.findLast((p) => !p.decor && p.kind !== "glow" && p.kind !== "led" && Math.abs(p.position[1] + p.size[1] - y) < 1 && p.position[0] <= x + 1 && p.position[0] + p.size[0] >= x + width - 1);
+  const depth = board ? board.position[2] + board.size[2] - z - 8 : 170;
+  // el nombre del hueco entra en la semilla: dos huecos vecinos no salen iguales
+  list.push(...stage.shelfScene(id, { x, y, z, w: width, h: space, d: depth }, stage.hash(id) + seed, full));
 }
 
 /**
- * Lo que va en un estante: si entra, una hilera de libros de verdad; si no,
- * un jarroncito o un portarretrato; en un hueco muy chico, libros simples.
+ * Los huecos de una columna de estantes que quedaron vacíos: se leen de las
+ * piezas (de la cara de arriba de cada apoyo a la de abajo del siguiente) y
+ * llevan algo más liviano que una hilera de libros, con alguno libre para que
+ * la biblioteca respire. `boards`: los apoyos de la columna; `skip`: los que
+ * no se visten (lo que queda detrás de una puerta de madera).
  */
-function shelfDecor(list: Part[], id: string, x: number, y: number, z: number, width: number, space: number, seed: number) {
-  const [lw, lh] = DECOR_MODELS.libros;
-  const [bw, bh] = DECOR_MODELS["jarron-bronce"];
-  const [, fh, fd] = DECOR_MODELS.portarretrato;
-  // los libros se achican enteros hasta entrar (hay libros de todos los tamaños), nunca menos del 75 %
-  const k = Math.min(1, (width - 10) / lw, (space - 15) / lh);
-  const kind = seed % 4;
-  if (kind !== 3 && k >= 0.75) prop(list, `${id}:libros`, "Libros", "libros", x + 5, y, z, k);
-  else if (kind === 3 && seed % 8 === 3 && width >= fd + 40 && space >= fh + 30) {
-    // el modelo viene parado de costado: se gira para que la foto mire al frente
-    const frame = prop(list, `${id}:foto`, "Portarretrato", "portarretrato", x + width * 0.3, y, z + 40);
-    frame.rotationY = -Math.PI / 2;
+function shelfRest(list: Part[], id: string, boards: Part[], inset: number, seed: number, skip: (y: number) => boolean = () => false) {
+  const sorted = [...boards].sort((p, q) => p.position[1] - q.position[1]);
+  // cuántos quedan libres: uno de cada cinco, y la mitad si la biblioteca es muy grande
+  const free = (crowding.get(list) ?? 0) > 20 ? 0.5 : 0.22;
+  for (let k = 0; k < sorted.length - 1; k++) {
+    const b = sorted[k];
+    const y = b.position[1] + b.size[1];
+    const space = sorted[k + 1].position[1] - y;
+    const x = b.position[0] + inset;
+    const width = b.size[0] - 2 * inset;
+    // ya tiene lo suyo, o es uno de los que se dejan libres
+    const taken = list.some((p) => p.decor && Math.abs(p.position[1] - y) < 1 && p.position[0] >= b.position[0] - 1 && p.position[0] < b.position[0] + b.size[0]);
+    if (taken || skip(y) || space < 60 || stage.rnd(seed + k, 9) < free) continue;
+    shelfDecor(list, `${id}:${k}`, x, y, 30, width, space, seed * 7 + k * 5 + 2, false);
   }
-  else if (width >= bw + 40 && space >= bh + 30) prop(list, `${id}:jarron`, "Jarrón", "jarron-bronce", x + width / 2 - bw / 2, y, z + 20);
-  else books(list, id, x, y, z, 4 + (seed % 3), 150);
 }
+/** al pie de una biblioteca, del lado de la luz: un canasto con una manta, si el mueble es alto */
+function floorDecor(list: Part[], w: number, d: number, h: number) {
+  if (h < 1200) return;
+  const size: Vec3 = [370, 300, 350];
+  list.push(stage.basket("deco:canasto", w + 310, 0, Math.max(d, 300) - 70, size, 1), stage.foldedThrow("deco:canasto:manta", w + 310, 205, Math.max(d, 300) - 70, "#b9ad98", [270, 120, 250], 0.3));
+}
+
 /**
  * Una esquina curva: MDF flexible (ranurado) cortado plano al largo del arco y
  * curvado sobre plantillas, enchapado como el resto. Une una tapa con un
@@ -765,6 +783,10 @@ function organicSofa(v: Record<string, Value>, c: FurnitureConfig): ReturnType<B
   // un almohadón redondo, apoyado cerca de la punta baja
   const ball = path[tableAtStart ? Math.round(steps * 0.78) : Math.round(steps * 0.22)];
   piece(parts, "deco:ball", "Almohadón redondo", "shelf", "fabric", [ball[0] - 130, lift + 420, ball[1] - d / 2 + 250], [260, 260, 260], { geometry: "knob", noCut: true, decor: true });
+  // una alfombra redonda que asoma por delante
+  const rw = L + pod + 560;
+  const rd = d + bow + 620;
+  parts.push(stage.rug("deco:rug", (L + pod) / 2 - rw / 2, d / 2 + bow * 0.05 + 180 - rd / 2, rw, rd, stage.rugFor(fabricById(c.fabric).color), true));
 
   if (table !== "no") {
     // la mesita: madera doblada en una vuelta (arriba, el lado del sillón y abajo), abierta hacia afuera, y una tapa de piedra
@@ -787,19 +809,10 @@ function organicSofa(v: Record<string, Value>, c: FurnitureConfig): ReturnType<B
     bendPiece(parts, "table:bend:b", c.body, cb, tableAtStart ? px + pw - r : px, 0, pz, r, pd, t);
     const stone = piece(parts, "table:stone", "Tapa de piedra", "top", "stone:#e6dfd3", [px - 50, H, pz - 40], [pw + 100, 30, pd + 80], { noCut: true });
     stone.plan = { ellipse: true };
-    prop(parts, "deco:table:jarron", "Jarrón", "jarron-alto", px + pw / 2 - 56, H + 30, pz + pd / 2 - 56);
+    // sobre la piedra: un jarrón y una vela
+    parts.push(stage.scanned("deco:table:jarron", "Jarrón", "jarron", px + pw / 2 - 40, H + 30, pz + pd / 2 - 60, 0.7), ...stage.candle("deco:table:vela", px + pw / 2 + 90, H + 30, pz + pd / 2 + 70, 70));
   }
   return { parts, drawers: 0, doors: 0, gap: 160 };
-}
-
-/** una lámpara de mesa: pie de cerámica (escaneado), cuello de bronce y pantalla de lino abierta */
-function lamp(list: Part[], id: string, x: number, y: number, z: number) {
-  const base = prop(list, `${id}:base`, "Lámpara", "jarron", x, y, z, 0.55);
-  const [bw, bh, bd] = base.size;
-  const cx = x + bw / 2;
-  const cz = z + bd / 2;
-  piece(list, `${id}:neck`, "Lámpara", "shelf", "gloss:#b9a27c", [cx - 8, y + bh - 6, cz - 8], [16, 80, 16], { ...deco, geometry: "cyl" });
-  piece(list, `${id}:shade`, "Lámpara", "shelf", "linen:#efe7d8", [cx - 150, y + bh + 40, cz - 150], [300, 210, 300], { ...deco, geometry: "shade" });
 }
 
 /** `wall`: el mueble va contra una pared (la tele, lo que se cuelga, lo que se apoya atrás) */
@@ -899,15 +912,8 @@ const BUILDERS: Record<string, Builder> = {
     }
     // bajo la tapa, detrás del faldón de adelante: no se ve la tira, se ve su luz en el piso
     if (v.led) led(parts, "led", 120, under - 8, d - 190, w - 240);
-    if (v.kind !== "escritorio") {
-      // una mesa de comedor: al centro, un jarrón y un cuenco; un velador no va
-      prop(parts, "deco:top:jarron", "Jarrón", "jarron-antiguo", w / 2 - 280, h, d / 2 - 128);
-      prop(parts, "deco:top:cuenco", "Cuenco", "cuenco", w / 2 + 10, h, d / 2 - 155);
-    } else {
-      // un escritorio: la lámpara en una punta y algo apoyado en la otra
-      tabletop(parts, "deco:top", w * 0.22, h, d * 0.36);
-      lamp(parts, "deco:lamp", w - 330, h, d * 0.25);
-    }
+    // una mesa de comedor puesta para la foto, o un escritorio en uso
+    parts.push(...(v.kind !== "escritorio" ? stage.diningScene(w, d, h, round) : stage.deskScene(w, d, h, round)));
     return { parts, drawers, doors: 0, center: true };
   },
 
@@ -1023,10 +1029,16 @@ const BUILDERS: Record<string, Builder> = {
 
     const topY = lift + h;
     if (bedside) {
-      lamp(parts, "deco:lamp", w * 0.5 - 55, topY, d * 0.3);
+      parts.push(...stage.bedsideScene(w, d, topY));
       return { parts, drawers, doors, wall: true };
     }
-    tabletop(parts, "deco:top", w * 0.18, topY, d * 0.3);
+    parts.push(...stage.coffeeScene(w, d, topY), stage.rug("deco:rug", -460, -380, w + 920, d + 760, stage.rugFor(materialById(c.front).color)));
+    // en el estante de abajo, si lo hay y queda a la vista
+    const low = parts.find((p) => p.id === "shelf" && p.position[1] < 120);
+    if (low) {
+      const above = Math.min(...parts.filter((p) => !p.decor && p.kind !== "led" && p.kind !== "glow" && p.position[1] > low.position[1] + low.size[1] && p.position[0] < low.position[0] + low.size[0] / 2 && p.position[0] + p.size[0] > low.position[0] + low.size[0] / 2).map((p) => p.position[1]));
+      parts.push(...stage.underScene({ x: low.position[0], y: low.position[1] + low.size[1], z: low.position[2], w: low.size[0], h: above - low.position[1] - low.size[1], d: low.size[2] }));
+    }
     return { parts, drawers, doors, center: true };
   },
 
@@ -1125,7 +1137,6 @@ const BUILDERS: Record<string, Builder> = {
             led(parts, `led:n${i}`, lx, base + h - T - 8, d - 50, ll);
           }
         }
-        if (i % 2 === 1) prop(parts, `deco:n${i}`, "Cuenco", "cuenco", i * mw + T + mw * 0.3, base + T + fh + T, d * 0.25);
       } else if (kind === "cajones") {
         const n = Math.min((own(i, "drawers") as number | undefined) ?? (inner > 380 ? 2 : 1), Math.max(1, Math.floor(inner / 110)));
         const dh = (inner - 4 * (n + 1)) / n;
@@ -1139,8 +1150,6 @@ const BUILDERS: Record<string, Builder> = {
           led(parts, `led:n${i}`, lx, base + h - T - 8, d - 50, ll);
           led(parts, `led:s${i}`, lx, mid - 8, d - 70, ll);
         }
-        // y adentro, unos libros acostados o una suculenta
-        if (i % 2 === 0) prop(parts, `deco:n${i}`, "Suculenta", "suculenta", i * mw + T + mw * 0.35, base + T + inner / 2 + T, d * 0.3);
       }
     }
     // con curvas, un frente de punta que llega arriba redondea su esquina de afuera como la curva de adentro
@@ -1158,16 +1167,27 @@ const BUILDERS: Record<string, Builder> = {
     }
     // la luz de abajo es para el mueble colgado: con patas no tiene dónde rebotar
     if (v.led && floating) led(parts, "led:under", 60, base - 8, d * 0.45, w - 120);
-    // la tele en la pared, y algo apoyado arriba
+    // la tele, colgada en la pared: un panel fino con su marco y la pantalla apagada
     const tw = Math.min(w * 0.72, 1650);
-    piece(parts, "deco:tv", "Televisor", "back", "gloss:#0b0b0c", [(w - tw) / 2, base + h + 330, 20], [tw, tw * 0.57, 45], deco);
-    // la barra de sonido, colgada justo debajo de la tele
-    const bw = Math.min(tw * 0.62, 950);
-    piece(parts, "deco:sound", "Barra de sonido", "back", "tint:#1a1a1b", [(w - bw) / 2, base + h + 330 - 75, 30], [bw, 62, 90], { ...deco, geometry: "cushion" }).radius = 18;
+    const th = Math.round(tw * 0.5625);
     const topY = base + h - T + (v.thick && !curved ? 40 : T);
-    // arriba, como en las fotos de catálogo: un jarrón y un cuenco en una punta, una suculenta en la otra
-    tabletop(parts, "deco:top", Math.max(w * 0.04, r + 20), topY, d * 0.25);
-    prop(parts, "deco:top:planta", "Suculenta", "suculenta", w * 0.9 - 168, topY, d * 0.3);
+    const ty = topY + 280;
+    piece(parts, "deco:tv", "Televisor", "back", "tint:#151516", [(w - tw) / 2, ty, 22], [tw, th, 34], deco);
+    piece(parts, "deco:tv:pantalla", "Televisor", "back", "gloss:#0a0b0d", [(w - tw) / 2 + 9, ty + 16, 56], [tw - 18, th - 25, 1.5], deco);
+    piece(parts, "deco:tv:soporte", "Soporte del televisor", "back", "tint:#151516", [w / 2 - 170, ty + th / 2 - 110, 0], [340, 220, 22], deco);
+    // arriba, como en las fotos de catálogo: la barra de sonido al centro y unos objetos en cada punta
+    parts.push(...stage.tvTopScene(w, d, topY, r, Math.min(tw * 0.62, 950)));
+    // y adentro, en lo que queda abierto o detrás de un vidrio
+    for (let i = 0; i < modules; i++) {
+      const x = i * mw + T + 20;
+      const cw = mw - T - 40;
+      if (kinds[i] === "nicho-cajon") parts.push(...stage.nicheScene(`deco:n${i}`, { x, y: base + T + fh + T, z: 12, w: cw, h: inner - fh - T, d: d - 30 }, i));
+      else if (kinds[i] === "abierto" || kinds[i] === "vidrio") {
+        const mid = base + T + inner / 2;
+        shelfDecor(parts, `deco:n${i}:a`, x, mid + T, 20, cw, inner / 2 - T, i * 3 + 1, false);
+        shelfDecor(parts, `deco:n${i}:b`, x, base + T, 20, cw, inner / 2, i * 3 + 2, false);
+      }
+    }
     return { parts, drawers, doors, wall: true };
   },
 
@@ -1180,6 +1200,7 @@ const BUILDERS: Record<string, Builder> = {
     const iron = v.structure === "hierro";
     const columns = Math.max(1, Math.ceil((w - T) / 820));
     let doors = 0;
+    crowding.set(parts, columns * (n + 1));
 
     if (iron) {
       // parantes de hierro adelante y atrás, con los estantes de madera pasando de lado a lado
@@ -1199,6 +1220,8 @@ const BUILDERS: Record<string, Builder> = {
         }
       }
       if (v.back) piece(parts, "back", "Fondo", "back", "back", [s, 120, 0], [w - 2 * s, h - 120, 3]);
+      for (let i = 0; i < columns; i++) shelfRest(parts, `deco:r${i}`, parts.filter((p) => p.id.startsWith(`shelf:${i}:`)), 20, i + 1);
+      floorDecor(parts, w, d, h);
       return { parts, drawers: 0, doors, wall: true };
     }
 
@@ -1246,6 +1269,12 @@ const BUILDERS: Record<string, Builder> = {
         }
       }
     }
+    // los huecos que quedaron vacíos (lo que tapa una puerta de madera no se viste)
+    for (let i = 0; i < columns; i++) {
+      const closed = colDoors[i] === "madera" ? plinth + T + Math.min(760, Math.round(h * 0.36)) : 0;
+      shelfRest(parts, `deco:r${i}`, parts.filter((p) => !p.decor && p.module === i && (p.kind === "shelf" || p.kind === "bottom" || p.kind === "top")), 20, i + 1, (y) => y < closed - 1);
+    }
+    floorDecor(parts, w, d, h);
     return { parts, drawers: 0, doors, wall: true };
   },
 
@@ -1346,7 +1375,7 @@ const BUILDERS: Record<string, Builder> = {
         piece(parts, `wall:side:${side}`, "Pared del guardado lateral", "divider", INSIDE, [X(w - t - STORE_DEPTH - T, T), yFloor + T, z0 + T], [T, inner, zEnd - z0 - T], { board: true });
         for (let k = 0; k < 2; k++) {
           const z = z0 + t + 3 + k * (dl + T);
-          const grip: Part = { id: `sd${side}${k}:h`, label: "Tirador", kind: "handle", material: "handle", run: 0, module: null, position: [right ? T : -26, fh - 30, dl / 2 - 70], size: [26, 10, 140], geometry: "box", cut: null, explode: [0, 0, 0] };
+          const grip = sideHandle(`sd${side}${k}:h`, right, fh - 30, dl / 2 - 70, 140);
           piece(parts, `sd${side}${k}:f`, "Frente de cajón", "drawer-front", c.front, [X(w - T, T), fy, z], [T, fh, dl - 6], { front: true, module: mod + k, openShift: out, band: { long: 2, short: 2 }, details: [grip] });
           drawerBox(parts, `sd${side}${k}`, mod + k, out, [X(w - T - STORE_DEPTH + 20, STORE_DEPTH - 20), fy + 14, z + 12], [STORE_DEPTH - 20, fh - 46, dl - 30], "x");
           if (v.led) {
@@ -1436,6 +1465,22 @@ const BUILDERS: Record<string, Builder> = {
     const fall = 160;
     c1("deco:throw", "Manta", "#a0927f", [t + mw / 2 - tw / 2 - fall, my + 281, z0 + ml + 38 - fold], [tw + 2 * fall, 26, fold + fall], 10, 7);
     parts[parts.length - 1].drape = { w: tw, d: fold, drop: 170 };
+    // delante de cada almohada, un almohadón de adorno recostado contra ella
+    const accents = ["#7d857c", "#9c8a78"];
+    for (let k = 0; k < pillows; k++) {
+      const cx = t + (mw / pillows) * (k + 0.5) + (pillows > 1 ? (k ? -70 : 70) : 0);
+      parts.push(stage.cushion(`deco:pillow:c${k}`, accents[k % 2], cx, my + 252, z0 + 545, k ? 400 : 440, k ? 380 : 420, 0.8, 140));
+    }
+    // los nichos del respaldo que quedaron vacíos y, sobre su tapa, una planta
+    if (v.head === "biblioteca") {
+      const hw = w + 120;
+      const cells = Math.max(2, Math.round(hw / 620));
+      const cw = (hw - T) / cells;
+      for (let k = 1; k < cells; k++) shelfDecor(parts, `deco:hb${k}`, -60 + k * cw + T + 20, h + 300 + T, 40, cw - T - 40, 620 - 300 - 2 * T, k * 7 + 2, k % 2 === 0);
+      parts.push(stage.scanned("deco:hb:planta", "Suculenta", "suculenta", -60 + hw * 0.86, h + 620, T + (head - T) / 2, Math.min(0.85, (head - T - 30) / 185)));
+    }
+    // una alfombra que asoma a los costados y a los pies
+    if (v.base !== "flotante") parts.push(stage.rug("deco:rug", -520, z0 + ml * 0.42, w + 1040, ml * 0.58 + t + 620, "#cfc8bb"));
     // con trampilla, el colchón y la ropa de cama suben con la tapa: van colgados de ella
     const lidPanel = parts.find((p) => p.id === "deck:0" && p.hinge === "lid");
     if (lidPanel) {
@@ -1522,7 +1567,10 @@ const BUILDERS: Record<string, Builder> = {
       let k = 0;
       for (let col = 0; col < cols; col++) {
         const lx = -w / 2 + 90 + ((w - 180) * col) / (cols - 1);
-        for (const dz of [-depth / 2 + 110, depth / 2 - 110]) put(f, `${id}:leg${k++}`, "Pata", "plinth", metal ? "iron" : c.body, lx, 0, lz + dz, [s, lift + 12, s], 2, { geometry: metal ? "cyl" : "cone" });
+        for (const dz of [-depth / 2 + 110, depth / 2 - 110]) {
+          const leg = put(f, `${id}:leg${k++}`, "Pata", "plinth", metal ? "iron" : c.body, lx, 0, lz + dz, [s, lift + 12, s], 2, { geometry: metal ? "cyl" : "cone" });
+          if (metal) glide(leg);
+        }
       }
     };
 
@@ -1627,13 +1675,31 @@ const BUILDERS: Record<string, Builder> = {
       supports(f, "sup:ott", ow, 640);
     }
 
-    // un almohadón de otro color, apoyado en el respaldo
-    if (!bubbles) {
-      const f = frame(0);
-      // de lino, relleno de pluma: fino en el borde, con las puntas pellizcadas y arrugado
-      const pillow = put(f, "deco:throw", "Almohadón", "shelf", `linen:${fabricById(c.fabric).id === "grafito" ? "#c9bba4" : "#4a4f55"}`, -sw / 2 + 250, lift + 400, -d / 2 + 420, [440, 420, 170], 45, { decor: true });
-      pillow.pinch = 0.16;
-      pillow.wrinkle = 5;
+    // almohadones de adorno recostados contra el respaldo: dos en una punta (uno delante del otro) y uno en la otra
+    {
+      const [tone, accent] = stage.cushionsFor(fabricById(c.fabric).color);
+      const seatY = lift + (bubbles ? 372 : 392);
+      // la cara de adelante del respaldo (o de sus almohadones)
+      const backZ = bubbles ? 322 : 418;
+      const lean = 0.3;
+      const at = (h: number) => backZ + h * Math.sin(lean);
+      // en las burbujas con apoyabrazos, el almohadón del brazo ocupa la punta del asiento
+      const x0 = bubbles ? (v.arms ? 300 : 40) : arm;
+      parts.push(stage.cushion("deco:cushion:0", tone, x0 + 265, seatY, at(460), 480, 460, lean));
+      parts.push(stage.cushion("deco:cushion:1", accent, x0 + 430, seatY, at(380) + 128, 400, 380, lean + 0.06, 130));
+      if (seats > 1) parts.push(stage.cushion("deco:cushion:2", accent === "#3f4650" ? tone : "#d9cdb8", total - x0 - 270, seatY, at(430), 440, 430, lean));
+      // una manta: sobre el apoyabrazos si lo hay (cae a los dos lados); si no, doblada en la punta del asiento
+      const wool = tone === "#4c5660" ? "#8b948f" : "#d9d0bf";
+      if (arm) {
+        const hang = 170;
+        const blanket = piece(parts, "deco:manta", "Manta", "shelf", `linen:${wool}`, [total - arm - hang + 6, lift + 562, d * 0.3], [arm + 2 * hang - 12, 14, 500], { ...deco, geometry: "cushion" });
+        blanket.radius = 7;
+        blanket.wrinkle = 6;
+        blanket.drape = { w: arm - 6, d: 600, drop: hang - 20 };
+      } else if (seats > 1) parts.push(stage.foldedThrow("deco:manta", total - x0 - 230, seatY - 6, d - 330, wool, [330, 78, 400]));
+      // la alfombra: toma las patas de adelante y sigue hasta pasar el puff
+      const reach = (v.ottoman || v.chaise !== "no" ? d + 640 : d) + 380;
+      parts.push(stage.rug("deco:rug", -280, d * 0.52, total + 560, reach - d * 0.52, stage.rugFor(fabricById(c.fabric).color)));
     }
     return { parts, drawers: 0, doors: 0, gap: 160 };
   },
