@@ -199,7 +199,7 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
         {/* cada módulo se edita solo: se avisa sobre el 3D, que es donde se toca */}
         {spec.modules && (
           <p aria-hidden={picked !== null || pickedOnce} className={`glass pointer-events-none absolute bottom-[4.7rem] left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium text-ink transition-opacity duration-500 ${ready && picked === null && !pickedOnce ? "opacity-100" : "opacity-0"}`}>
-            Tocá un {spec.modules.label.toLowerCase()} para editarlo
+            {touch(spec.modules.label)} para {fem(spec.modules.label) ? "editarla" : "editarlo"}
           </p>
         )}
 
@@ -405,6 +405,10 @@ export default function FurnitureConfigurator({ family }: { family: string }) {
  * con sus controles; lo demás del mueble no cambia. Sin módulo elegido, una
  * línea que explica que se puede.
  */
+/** "Columna" va en femenino y "Módulo" en masculino: el cartel concuerda con la palabra */
+const fem = (label: string) => label.toLowerCase().endsWith("a");
+const touch = (label: string) => `Tocá ${fem(label) ? "una" : "un"} ${label.toLowerCase()}`;
+
 function ModulePanel({ label, picked, controls, values, changed, onChange, onReset, onDone }: {
   label: string;
   picked: number | null;
@@ -415,7 +419,7 @@ function ModulePanel({ label, picked, controls, values, changed, onChange, onRes
   onReset: () => void;
   onDone: () => void;
 }) {
-  if (picked === null) return <p className="text-xs text-ink-2 lg:rounded-2xl lg:border lg:border-line lg:px-4 lg:py-3">Tocá un {label.toLowerCase()} en el 3D para cambiarlo solo.</p>;
+  if (picked === null) return <p className="text-xs text-ink-2 lg:rounded-2xl lg:border lg:border-line lg:px-4 lg:py-3">{touch(label)} en el 3D para {fem(label) ? "cambiarla sola" : "cambiarlo solo"}.</p>;
   return (
     <section className="space-y-4 rounded-2xl border border-navy/30 bg-paper/60 p-4" aria-label={`${label} ${picked + 1}`}>
       <div className="flex items-center justify-between gap-3">
