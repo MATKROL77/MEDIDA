@@ -1,6 +1,6 @@
 # MEDIDA — estado operativo compartido
 
-Actualizado: 2026-11-17 (Argentina).
+Actualizado: 2026-11-18 (Argentina).
 
 ## Verificado
 
@@ -77,6 +77,36 @@ horizontal a 390 y 1440 px;
 `npm test` (83 pruebas, dos nuevas sobre el encuadre), `typecheck`, `lint`
 y `build` sin errores. Falta probarlo en un teléfono real.
 
+**Realismo, segunda tanda (18/11/2026).** A pedido de Matías ("las
+texturas no se ven realistas… las luces de las tiras led no se ven como
+deberían"). Tres agentes en copias aisladas, integrado acá:
+- Texturas y materiales: chapas de roble y nogal de veta fina, armadas en
+  placas de 2 m con hojas sacadas de distintos lugares de la foto, así no se
+  repite el dibujo en una puerta alta; salen en su tono natural y ya no se
+  tiñen (eso las dejaba anaranjadas). Pisos de madera armados tabla por
+  tabla; el ambiente arranca con madera clara. Telas a escala real con la
+  trama apenas marcada. Pared mate. Espejo que devuelve una habitación clara
+  (pintada, no la escena real: eso solo lo hace el modo Realismo).
+- Tiras LED: perfil de aluminio con difusor que brilla, y luz calculada
+  sobre las caras del hueco (estante, fondo, laterales) y sobre lo que hay
+  adentro. Sin luces de verdad: no encarece el resto del mueble. Ahora
+  tienen luz tiras que antes no tiraban ninguna (bibliotecas, respaldo de
+  la cama, ratonas).
+- Decoración de las otras seis familias, puesta como en un catálogo: libros
+  en grupos, plantas, jarrones, notebook en el escritorio, almohadones y
+  manta, alfombras, la tele con su barra de sonido. Tiradores y regatones
+  más finos. El agente se cortó por el límite de uso antes de su
+  verificación final; lo que dejó guardado pasa las pruebas y se ve bien en
+  las capturas de las seis familias.
+Verificado: capturas en Chromium de las siete familias con todo integrado;
+`npm test` (132 pruebas), `typecheck`, `lint`, `build`; sin scroll
+horizontal a 390 y 1440 px; elegir un módulo sigue andando en el teléfono.
+Dudoso o sin verificar: fluidez en equipos reales (las fotos de 2048 px
+pesan más en memoria de video); con tiras de estante y perfiles laterales
+a la vez el interior queda algo durazno; no se capturaron placard en L con
+luz, techo inclinado ni los colores de luz neutra, fría y RGB; el tono de
+roble y nogal del 3D difiere apenas de la muestra de color de la interfaz.
+
 **Realismo, primera tanda (17/11/2026).** Matías pidió que el 3D de siempre
 se vea con la calidad del planificador PAX de IKEA. Hecho con tres agentes
 en copias aisladas del repo e integrado acá:
@@ -95,10 +125,7 @@ Verificado: capturas en Chromium de las siete familias y de las páginas
 reales del placard y los sillones; foto trazada de prueba a pocas muestras
 (la ropa sale con su color; a esa calidad no se puede juzgar el resultado
 final); `npm test` (110 pruebas), `typecheck`, `lint`, `build`; sin scroll
-horizontal a 390 y 1440 px. La decoración de las otras seis familias se
-perdió en un reinicio del entorno y se está rehaciendo junto con las
-texturas y las tiras LED (segunda tanda, en curso). Falta medir la fluidez
-en equipos reales.
+horizontal a 390 y 1440 px. Falta medir la fluidez en equipos reales.
 
 **Editar cada módulo, arreglado (17/11/2026).** Matías avisó que en las
 bibliotecas y los muebles de TV no se podía editar cada parte. La edición por

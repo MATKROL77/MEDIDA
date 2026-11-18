@@ -324,62 +324,8 @@ export function roomReflection(): THREE.Texture {
   return room;
 }
 
-/** degradés para las tarjetas de luz de los LED */
 /** vidrio fumé: deja ver el interior y las luces, pero se nota que hay vidrio */
 export const GLASS_OPACITY = 0.42;
-
-export function glowTexture(kind: "down" | "pool" | "fromLeft" | "fromRight"): THREE.Texture {
-  return cached(`glow-${kind}`, () => {
-    const size = 256;
-    const [c, ctx] = canvas(size);
-    if (kind === "pool") {
-      // charco de luz en el piso: fuerte bajo el mueble y apagándose parejo
-      // hacia todos lados, sin ningún borde recto
-      const img = ctx.createImageData(size, size);
-      const soft = (t: number, edge: number) => {
-        const k = Math.min(1, Math.min(t, 1 - t) / edge);
-        return k * k * (3 - 2 * k);
-      };
-      for (let y = 0; y < size; y++) {
-        const v = (y + 0.5) / size;
-        // a lo ancho del charco, una campana amplia: la luz se abre desde la tira y se apaga sin borde
-        const across = Math.exp(-Math.pow((v - 0.5) / 0.34, 2)) * soft(v, 0.34);
-        for (let x = 0; x < size; x++) {
-          const u = (x + 0.5) / size;
-          // a lo largo, parejo en el medio y difuminado en las puntas
-          const a = across * soft(u, 0.22);
-          const i = (y * size + x) * 4;
-          img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
-          img.data[i + 3] = Math.round(255 * a);
-        }
-      }
-      ctx.putImageData(img, 0, 0);
-      return toTexture(c, false);
-    }
-    let g: CanvasGradient;
-    if (kind === "down") g = ctx.createLinearGradient(0, 0, 0, size);
-    else if (kind === "fromLeft") g = ctx.createLinearGradient(0, 0, size, 0);
-    else g = ctx.createLinearGradient(size, 0, 0, 0);
-    // cae rápido cerca de la tira y después se estira, como la luz rasante sobre una placa
-    for (let i = 0; i <= 16; i++) {
-      const t = i / 16;
-      const a = Math.pow(1 - t, 2) / (1 + 5 * t);
-      g.addColorStop(t, `rgba(255,255,255,${a.toFixed(4)})`);
-    }
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, size, size);
-    // los bordes laterales se apagan: la luz no corta en seco contra el lateral
-    const edge = ctx.createLinearGradient(0, 0, kind === "down" ? size : 0, kind === "down" ? 0 : size);
-    edge.addColorStop(0, "rgba(0,0,0,1)");
-    edge.addColorStop(0.2, "rgba(0,0,0,0)");
-    edge.addColorStop(0.8, "rgba(0,0,0,0)");
-    edge.addColorStop(1, "rgba(0,0,0,1)");
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = edge;
-    ctx.fillRect(0, 0, size, size);
-    return toTexture(c, false);
-  });
-}
 
 export type MaterialKit = ReturnType<typeof createKit>;
 
@@ -433,13 +379,6 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     }),
     frame: new THREE.MeshStandardMaterial({ color: "#b8bcc1", metalness: 1, roughness: 0.3, transparent: true }),
     led: new THREE.MeshStandardMaterial({ color: "#e6e6e6", roughness: 0.4, emissive: "#000000", emissiveIntensity: 0 }),
-    glow: {
-      z: glowMaterial("down"),
-      y: glowMaterial("pool"),
-      // el plano mira a +x girado 90°: su U corre de adelante hacia atrás
-      "x+": glowMaterial("fromLeft"),
-      "x-": glowMaterial("fromRight"),
-    },
   };
   return kit;
 }
@@ -501,37 +440,13 @@ function leather(color: string) {
   );
 }
 
-function glowMaterial(kind: "down" | "pool" | "fromLeft" | "fromRight") {
-  // una mancha de luz pintada: en el modo foto la luz de verdad la dan los LED.
-  // No se suma encima como una niebla clara: multiplica lo que tiene debajo, como
-  // hace la luz de verdad. Un nogal alumbrado es un nogal más claro y más cálido,
-  // no una franja beige; una melamina blanca llega a brillar
-  const m = new THREE.MeshBasicMaterial({
-    map: glowTexture(kind),
-    transparent: true,
-    opacity: 0,
-    premultipliedAlpha: true,
-    blending: THREE.CustomBlending,
-    blendEquation: THREE.AddEquation,
-    blendSrc: THREE.DstColorFactor,
-    blendDst: THREE.OneFactor,
-    blendSrcAlpha: THREE.ZeroFactor,
-    blendDstAlpha: THREE.OneFactor,
-    depthWrite: false,
-    toneMapped: false,
-    side: THREE.DoubleSide,
-  });
-  m.userData.fake = true;
-  return m;
-}
-
 /** materiales de frente: los que se vuelven translúcidos con rayos X */
 export function frontMaterials(kit: MaterialKit): THREE.Material[] {
   return [kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.handle, kit.groove, kit.mirror, kit.frame];
 }
 
 export function disposeKit(kit: MaterialKit) {
-  const all = [kit.body.u, kit.body.v, kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.back, kit.metal, kit.handle, kit.groove, kit.mirror, kit.glass, kit.frame, kit.led, kit.fabric, kit.iron, ...Object.values(kit.glow)];
+  const all = [kit.body.u, kit.body.v, kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.back, kit.metal, kit.handle, kit.groove, kit.mirror, kit.glass, kit.frame, kit.led, kit.fabric, kit.iron];
   all.forEach((m) => m.dispose());
 }
 
