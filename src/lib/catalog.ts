@@ -107,6 +107,8 @@ export const catalog = {
     perModule: 28000,
     perDoor: 7500,
     perDrawer: 11000,
+    /** armado de una bandeja extraíble */
+    perTray: 6000,
     /** corte en ángulo para techo inclinado, por pieza */
     angledCut: 5500,
     /** corte curvo con router, por pieza */

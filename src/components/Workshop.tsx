@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { DoorsElevation, InteriorElevation } from "@/components/ElevationDrawing";
 import { PieceDrawing } from "@/components/PieceDrawing";
 import { Watermark } from "@/components/Watermark";
 import { catalog } from "@/lib/catalog";
@@ -178,6 +179,27 @@ export default function Workshop() {
         </section>
       </div>
 
+      {/* el plano de frente sale del tramo recto: en L, con altillo o con techo inclinado no alcanza para describirlo */}
+      {config.shape === "straight" && !config.slope.enabled && !config.topBox.enabled && (
+        <section className="card p-5">
+          <h2 className="font-display text-lg font-semibold">Plano del interior</h2>
+          <p className="mt-1 text-xs text-ink-2">Vista de frente sin las puertas: qué va en cada módulo y a qué altura.</p>
+          <div className="mt-4">
+            <InteriorElevation config={config} assembly={q.assembly} />
+          </div>
+        </section>
+      )}
+
+      {config.shape === "straight" && config.doors === "sliding" && !config.slope.enabled && !config.topBox.enabled && (
+        <section className="card p-5">
+          <h2 className="font-display text-lg font-semibold">Hojas corredizas</h2>
+          <p className="mt-1 text-xs text-ink-2">Vista de frente: el frente y la terminación de cada hoja, y en qué riel corre.</p>
+          <div className="mx-auto mt-4 max-w-3xl">
+            <DoorsElevation config={config} assembly={q.assembly} />
+          </div>
+        </section>
+      )}
+
       <section className="card p-5 text-sm">
         <h2 className="font-display text-lg font-semibold">Interior por módulo</h2>
         <ol className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -189,7 +211,8 @@ export default function Workshop() {
                 </span>{" "}
                 {LAYOUT_LABELS[m.layout]}
                 {m.drawers > 0 && `, ${m.drawers} cajones`}
-                {(m.layout === "shelves" || m.layout === "drawers-shelves") && `, ${m.shelves} estantes`}
+                {(m.layout === "shelves" || m.layout === "drawers-shelves") && `, ${m.shelves - m.trays} estantes`}
+                {m.trays > 0 && `, ${m.trays} bandejas extraíbles`}
                 {(m.ledShelves || m.ledSides) && ", con luz"}
               </li>
             )),

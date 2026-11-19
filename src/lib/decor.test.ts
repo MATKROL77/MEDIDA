@@ -6,7 +6,7 @@ import { dressed, undressed, HANGER, HUNG } from "./decor.ts";
 import { DEFAULT_CONFIG, normalize, type Layout, type ModuleConfig, type WardrobeConfig } from "./model.ts";
 import { quote } from "./quote.ts";
 
-const mod = (layout: Layout, extra: Partial<ModuleConfig> = {}): ModuleConfig => ({ layout, width: 800, shelves: 3, drawers: 2, ledShelves: false, ledSides: false, ...extra });
+const mod = (layout: Layout, extra: Partial<ModuleConfig> = {}): ModuleConfig => ({ layout, width: 800, shelves: 3, drawers: 2, trays: 0, ledShelves: false, ledSides: false, ...extra });
 const straight = (modules: ModuleConfig[], extra: Partial<WardrobeConfig> = {}): WardrobeConfig =>
   normalize({ ...DEFAULT_CONFIG, runs: [{ width: modules.reduce((s, m) => s + m.width, 0) + 100, modules }], ...extra });
 

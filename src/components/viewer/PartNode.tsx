@@ -960,6 +960,8 @@ function pickMaterial(kit: MaterialKit, p: Part): THREE.Material | null {
     case "iron":
       return kit.iron;
     default:
+      // una hoja con su propia terminación (una nogal entre dos blancas)
+      if (p.front && p.material !== kit.doorId && kit.leaves.has(p.material)) return kit.leaves.get(p.material)![along];
       if (p.front || (p.material === kit.doorId && p.kind !== "drawer-front")) return kit.door[along];
       return p.kind === "drawer-front" ? kit.bodyFront[along] : kit.body[along];
   }

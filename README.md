@@ -16,7 +16,7 @@ MEDIDA es el software. No fabrica ni vende muebles.
 | Parte | Estado |
 | --- | --- |
 | Landing, catálogo de configuradores y páginas de servicios | Funcionando |
-| Configurador de placares y vestidores | Demo funcionando: es el más completo, con despiece dibujado, plano de corte y PDF |
+| Configurador de placares y vestidores | Demo funcionando: es el más completo, con despiece dibujado, plano de corte y PDF. Suma bandejas extraíbles, frente y color por hoja corrediza y plano del interior para el taller |
 | Mesas y escritorios, ratonas y mesas de luz, muebles de TV, bibliotecas, sillones modulares | Demo funcionando: medidas, opciones, terminaciones, precio de muestra, guardar y consultar. Sin PDF ni plano de corte |
 | Los configuradores se abren como ventana sobre la página | Funcionando; el enlace directo sigue abriendo a pantalla completa |
 | Favoritos, carrito de consulta y guardado automático | Funcionando, en el dispositivo |

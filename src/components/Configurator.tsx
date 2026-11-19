@@ -41,6 +41,8 @@ import {
   moduleMin,
   normalize,
   allowsDrawers,
+  allowsTrays,
+  leafLook,
   cornerPair,
   runSpan,
   validModuleCounts,
@@ -695,7 +697,19 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                 {mod.drawers > 0 && (
                   <Stepper label="Cajones" value={mod.drawers} min={1} max={LIMITS.drawers.max} onChange={(drawers) => updateModule(sel.run, sel.module, { drawers })} />
                 )}
-                {mod.drawers > 0 && drawersStuck && (
+                {(mod.layout === "shelves" || mod.layout === "drawers-shelves") && allowsTrays(config, sel.run, sel.module) && mod.shelves > 0 && (
+                  <Stepper
+                    label="Bandejas extraíbles"
+                    value={Math.min(mod.trays, mod.shelves)}
+                    min={0}
+                    max={Math.min(LIMITS.trays.max, mod.shelves)}
+                    onChange={(trays) => {
+                      updateModule(sel.run, sel.module, { trays });
+                      if (trays > 0) setOpen(true);
+                    }}
+                  />
+                )}
+                {(mod.drawers > 0 || mod.trays > 0) && drawersStuck && (
                   <p className="fade-in rounded-xl bg-accent-soft px-3 py-2 text-xs leading-relaxed text-accent-strong">
                     Con estas corredizas, este módulo nunca queda libre entero y los cajones no pueden salir. Ponelos en otro módulo o cambiá
                     el ancho.
@@ -745,11 +759,59 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                         active={config.doorStyle === s}
                         disabled={s === "glass" && config.slope.enabled}
                         label={DOOR_STYLE_LABELS[s]}
-                        onClick={() => update({ doorStyle: s })}
+                        onClick={() => update({ doorStyle: s, leaves: config.leaves?.map((l) => (l ? { material: l.material } : null)) })}
                       >
                         <FrontPreview style={s} color={catalog.materials.find((m) => m.id === config.doorMaterial)?.color ?? "#ccc"} />
                       </OptionCard>
                     ))}
+                  </div>
+                </Section>
+              )}
+              {config.doors === "sliding" && config.shape === "straight" && (
+                <Section title="Combinar hojas" hint="Cada hoja puede llevar su propio frente y color">
+                  <div className="space-y-3">
+                    {config.runs[0].modules.map((_, k) => {
+                      const look = leafLook(config, k);
+                      const setLeaf = (patch: { style?: DoorStyle; material?: string }) => {
+                        const leaves = Array.from({ length: config.runs[0].modules.length }, (_, i) => ({ ...(config.leaves?.[i] ?? {}) }));
+                        leaves[k] = { ...leaves[k], ...patch };
+                        update({ leaves });
+                      };
+                      return (
+                        <div key={k} className="rounded-2xl bg-paper p-3">
+                          <p className="mb-2 text-sm font-medium">Hoja {k + 1}</p>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {(Object.keys(DOOR_STYLE_LABELS) as DoorStyle[]).map((st) => (
+                              <button
+                                key={st}
+                                type="button"
+                                aria-pressed={look.style === st}
+                                onClick={() => setLeaf({ style: st })}
+                                className={`option-card rounded-xl border px-1 py-2 text-[0.7rem] leading-tight ${look.style === st ? "border-accent bg-accent-soft text-accent-strong" : "border-line bg-surface text-ink-2"}`}
+                              >
+                                {st === "glass" ? "Vidrio" : DOOR_STYLE_LABELS[st]}
+                              </button>
+                            ))}
+                          </div>
+                          {look.style !== "mirror" && look.style !== "glass" && (
+                            <div className="mt-2.5 flex flex-wrap gap-2">
+                              {catalog.materials.map((m) => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  title={m.name}
+                                  aria-label={`Hoja ${k + 1}: ${m.name}`}
+                                  aria-pressed={look.material === m.id}
+                                  onClick={() => setLeaf({ material: m.id })}
+                                  className={`swatch size-7 rounded-full border-2 ${look.material === m.id ? "border-ink" : "border-surface ring-1 ring-line"}`}
+                                  style={{ background: m.color }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </Section>
               )}
@@ -874,7 +936,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                 <Swatches
                   label={config.doors === "none" ? "Frentes de cajón" : "Puertas"}
                   value={config.doorMaterial}
-                  onChange={(doorMaterial) => update({ doorMaterial })}
+                  onChange={(doorMaterial) => update({ doorMaterial, leaves: config.leaves?.map((l) => (l ? { style: l.style } : null)) })}
                 />
               </Section>
 

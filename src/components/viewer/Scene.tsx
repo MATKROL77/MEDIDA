@@ -698,7 +698,7 @@ function Sleeper({ keepAwake, still, onStill }: { keepAwake: boolean; still: boo
   const element = useThree((s) => s.gl.domElement);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const anim = useSceneAnim();
-  const state = useRef({ last: performance.now(), asleep: false, sharpAt: 0, still, seen: 0, quiet: 0 });
+  const state = useRef({ last: performance.now(), asleep: false, sharpAt: 0, sharpFrames: 0, still, seen: 0, quiet: 0 });
   const wake = useRef(() => {});
   wake.current = () => {
     state.current.last = performance.now();
@@ -733,6 +733,11 @@ function Sleeper({ keepAwake, still, onStill }: { keepAwake: boolean; still: boo
     for (const type of ["pointerdown", "pointermove", "wheel", "touchstart"] as const) host.addEventListener(type, on, opts);
     window.addEventListener("scroll", on, opts);
     window.addEventListener("keydown", on);
+    // volver a la pestaña o a la ventana: el navegador pudo haber dejado el lienzo a medio dibujar
+    const back = () => on();
+    document.addEventListener("visibilitychange", back);
+    window.addEventListener("focus", back);
+    window.addEventListener("pageshow", back);
     const onControls = () => wake.current();
     controls?.addEventListener("change", onControls);
     // lo que termina de bajar (texturas, la foto del estudio, la decoración) también despierta
@@ -751,6 +756,9 @@ function Sleeper({ keepAwake, still, onStill }: { keepAwake: boolean; still: boo
       for (const type of ["pointerdown", "pointermove", "wheel", "touchstart"] as const) host.removeEventListener(type, on);
       window.removeEventListener("scroll", on);
       window.removeEventListener("keydown", on);
+      document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("focus", back);
+      window.removeEventListener("pageshow", back);
       controls?.removeEventListener("change", onControls);
       manager.onLoad = prevLoad;
       manager.onProgress = prevProgress;
@@ -775,12 +783,23 @@ function Sleeper({ keepAwake, still, onStill }: { keepAwake: boolean; still: boo
     if (keepAwake || st.quiet < 8 || now - Math.max(st.last, anim.activeAt) < SLEEP_AFTER_MS) return;
     if (!st.sharpAt) {
       st.sharpAt = now;
+      st.sharpFrames = 0;
       onStill(true);
       return;
     }
-    if (now - st.sharpAt < SHARP_FRAMES_MS) return;
+    // el cuadro nítido tiene que haberse dibujado de verdad: en un equipo lento (o mientras
+    // todavía se decodifican texturas) 450 ms pueden no alcanzar para un solo cuadro, y el
+    // visor quedaba dormido con el dibujo a medio hacer, como si no hubiera terminado de cargar
+    st.sharpFrames++;
+    if (now - st.sharpAt < SHARP_FRAMES_MS || st.sharpFrames < 4) return;
     st.asleep = true;
     setFrameloop("demand");
+    // lo que termina de subir a la placa de video después de dormirse pide unos cuadros más
+    for (const ms of [500, 1600, 4000]) {
+      setTimeout(() => {
+        if (state.current.asleep) invalidate();
+      }, ms);
+    }
   });
   return null;
 }
@@ -848,7 +867,12 @@ function ViewZoom({ zoom }: { zoom?: { current: number } }) {
 export const STUDIO_HDRI = "/env/studio_small_09-1k.hdr";
 
 function SceneContents(props: ViewerProps & { hq: boolean; bus: PhotoBus; photoOn: boolean; mobile: boolean; awake: boolean; still: boolean; onStill: (still: boolean) => void }) {
-  const kit = useMemo(() => createKit(props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave), [props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave]);
+  // las terminaciones propias de alguna hoja, en una clave estable: el juego de materiales solo cambia si cambian ellas
+  const leafKey = [...new Set((props.config.leaves ?? []).map((l) => l?.material).filter((id): id is string => !!id))].sort().join(",");
+  const kit = useMemo(
+    () => createKit(props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave, leafKey ? leafKey.split(",") : []),
+    [props.config.bodyMaterial, props.config.doorMaterial, props.fabric, props.weave, leafKey],
+  );
   useEffect(() => () => disposeKit(kit), [kit]);
   const { min, max } = props.assembly.bounds;
   const span = Math.max(max[0] - min[0], max[2] - min[2], max[1]);

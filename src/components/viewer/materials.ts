@@ -350,8 +350,24 @@ export type MaterialKit = ReturnType<typeof createKit>;
  * Un juego de materiales por combinación de terminaciones. Los frentes tienen
  * su propia copia transparente para la vista de rayos X.
  */
-export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", weave = "lino") {
-  const surface = (id: string, along: "u" | "v", transparent = false) => {
+/**
+ * Las superficies de placa ya creadas, por papel y terminación. Cambiar de color
+ * y volver no vuelve a armar el material ni a subir sus texturas a la placa de
+ * video: se reutiliza el que ya está. Son pocas (seis terminaciones por cuatro
+ * papeles), así que no se liberan.
+ */
+const surfaces = new Map<string, THREE.MeshPhysicalMaterial>();
+
+export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", weave = "lino", leafIds: string[] = []) {
+  const surface = (id: string, along: "u" | "v", transparent = false, role = "body") => {
+    const key = `${role}|${id}|${along}`;
+    const cached = surfaces.get(key);
+    if (cached) return cached;
+    const made = build(id, along, transparent);
+    surfaces.set(key, made);
+    return made;
+  };
+  const build = (id: string, along: "u" | "v", transparent = false) => {
     const m = materialById(id);
     const photo = VENEERS[id];
     const material = new THREE.MeshPhysicalMaterial({
@@ -379,9 +395,11 @@ export function createKit(bodyId: string, doorId: string, fabric = "#cdbfa9", we
     /** hierro pintado de negro: marcos y patas */
     iron: new THREE.MeshStandardMaterial({ color: "#1d1c1b", metalness: 0.55, roughness: 0.48, envMapIntensity: 0.8 }),
     body: { v: surface(bodyId, "v"), u: surface(bodyId, "u") },
-    door: { v: surface(doorId, "v", true), u: surface(doorId, "u", true) },
+    door: { v: surface(doorId, "v", true, "door"), u: surface(doorId, "u", true, "door") },
+    /** hojas con una terminación distinta a la del resto de los frentes */
+    leaves: new Map(leafIds.map((id) => [id, { v: surface(id, "v", true, "door"), u: surface(id, "u", true, "door") }])),
     /** frentes de cajón con el color del cuerpo (van detrás de las puertas) */
-    bodyFront: { v: surface(bodyId, "v", true), u: surface(bodyId, "u", true) },
+    bodyFront: { v: surface(bodyId, "v", true, "front"), u: surface(bodyId, "u", true, "front") },
     back: backing(bodyId),
     metal: new THREE.MeshStandardMaterial({ color: "#c9ccd0", metalness: 1, roughness: 0.32 }),
     handle: new THREE.MeshStandardMaterial({ color: "#2a2a2a", metalness: 0.75, roughness: 0.28, transparent: true }),
@@ -459,11 +477,12 @@ function leather(color: string) {
 
 /** materiales de frente: los que se vuelven translúcidos con rayos X */
 export function frontMaterials(kit: MaterialKit): THREE.Material[] {
-  return [kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.handle, kit.groove, kit.mirror, kit.frame];
+  return [kit.door.u, kit.door.v, ...[...kit.leaves.values()].flatMap((l) => [l.u, l.v]), kit.bodyFront.u, kit.bodyFront.v, kit.handle, kit.groove, kit.mirror, kit.frame];
 }
 
 export function disposeKit(kit: MaterialKit) {
-  const all = [kit.body.u, kit.body.v, kit.door.u, kit.door.v, kit.bodyFront.u, kit.bodyFront.v, kit.back, kit.metal, kit.handle, kit.groove, kit.mirror, kit.glass, kit.frame, kit.led, kit.fabric, kit.iron];
+  // las superficies de placa son compartidas entre juegos (ver `surfaces`): no se liberan acá
+  const all = [kit.back, kit.metal, kit.handle, kit.groove, kit.mirror, kit.glass, kit.frame, kit.led, kit.fabric, kit.iron];
   all.forEach((m) => m.dispose());
 }
 

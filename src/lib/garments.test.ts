@@ -66,7 +66,7 @@ test("cada forma entra en su caja, es liviana y lleva lo que el visor y el traza
 });
 
 test("un placard grande vestido entra en el presupuesto de triángulos y comparte geometrías", () => {
-  const mod = (layout: Layout, extra: Partial<ModuleConfig> = {}): ModuleConfig => ({ layout, width: 1000, shelves: 3, drawers: 2, ledShelves: false, ledSides: false, ...extra });
+  const mod = (layout: Layout, extra: Partial<ModuleConfig> = {}): ModuleConfig => ({ layout, width: 1000, shelves: 3, drawers: 2, trays: 0, ledShelves: false, ledSides: false, ...extra });
   const big = normalize({
     ...DEFAULT_CONFIG,
     shape: "l-left",

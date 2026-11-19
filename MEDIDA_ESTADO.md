@@ -257,6 +257,35 @@ Evidencia, corrida en este repositorio:
   empresa, que el plan le ponga tope, y que el configurador embebido lleve su
   marca y su WhatsApp.
 
+### Placard: bandejas extraíbles y hojas combinadas (19/11/2026)
+
+Vienen del configurador de placares hecho para Randy Muebles
+(`MATKROL77/Randy-Muebles`, que no se tocó) y se sumaron sin sacar nada de lo
+que el placard de MEDIDA ya tenía.
+
+- **Bandejas extraíbles.** En los interiores con estantes ("Estantes" y
+  "Cajones y estantes") un contador convierte los estantes de más abajo en
+  bandejas sobre correderas, con su frente bajo. Entran en el 3D, el despiece,
+  los herrajes (un par de correderas por bandeja), el armado del presupuesto,
+  el resumen de la consulta y el enlace. No van en el módulo de esquina ni
+  puede haber más bandejas que estantes.
+- **Combinar hojas.** Con puertas corredizas y placard recto, cada hoja puede
+  llevar su propio frente (lisa, ranurada, espejo, vidrio) y su color. Cambiar
+  el frente o el color general conserva lo que cada hoja tenga de propio en lo
+  otro.
+- **Hoja del taller.** Suma el plano del interior (vista de frente sin
+  puertas, con la altura de cada estante, bandeja, cajón y barral) y, con
+  corredizas, el de las hojas con su frente, terminación y riel. Solo en
+  placares rectos sin altillo ni techo inclinado: el plano describe un tramo.
+- **Motor.** Las superficies de placa se reutilizan al cambiar de color y
+  volver, y el visor se despierta al volver a la pestaña.
+
+Verificado: 137 pruebas (cinco nuevas en `src/lib/trays.test.ts`), chequeo de
+tipos, lint y build; capturas del placard con bandejas, de tres hojas
+combinadas (blanca, espejo, nogal) y de la hoja del taller, a 1440 y 390 px sin
+desborde horizontal. No se pasó el "modo tienda" de Randy (carrito, lista de
+precios por renglones, reglas del comercio): es de esa integración.
+
 ## Hecho pero sin poder verificarlo en producción
 
 - **Acceso por email.** En producción no hay proveedor de email configurado:

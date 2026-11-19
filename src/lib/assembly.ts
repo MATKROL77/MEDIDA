@@ -21,6 +21,7 @@
 import { catalog } from "./catalog.ts";
 import { washPart, type Wash } from "./led.ts";
 import {
+  leafLook,
   CURVE_RADIUS,
   DRAWER_PITCH,
   PLINTH_HEIGHT,
@@ -252,7 +253,7 @@ export type RunAssembly = {
 export type Assembly = {
   runs: RunAssembly[];
   hardware: HardwareLine[];
-  counts: { modules: number; doors: number; drawers: number; angledCuts: number; curvedCuts: number };
+  counts: { modules: number; doors: number; drawers: number; trays: number; angledCuts: number; curvedCuts: number };
   ledMeters: number;
   /** caja que encierra todo el placard, en coordenadas de mundo (mm) */
   bounds: { min: Vec3; max: Vec3 };
@@ -819,12 +820,66 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
       return innerBottom + drawerZone(count);
     };
 
+    /** bandeja extraíble: un estante sobre correderas con un frente bajo. Sale como un cajón */
+    const tray = (key: string, y: number) => {
+      const slide = Math.max(250, Math.floor((shelfD - t - 10) / 50) * 50);
+      const inset = hinged ? 14 : sliding ? 40 : 13;
+      let fa = x0 + inset;
+      let fb = x0 + w - inset;
+      let unreachable = false;
+      if (slideGeo) {
+        let best: [number, number] | null = null;
+        for (const [a, b] of slidingOpenings(slideGeo.leaves, slideGeo.from, slideGeo.to)) {
+          const lo = Math.max(x0 + 13, a + SLIDING_DRAWER_CLEAR);
+          const hi = Math.min(x0 + w - 13, b - SLIDING_DRAWER_CLEAR);
+          if (hi - lo > (best ? best[1] - best[0] : 0)) best = [lo, hi];
+        }
+        if (best && best[1] - best[0] >= MIN_DRAWER_FRONT) [fa, fb] = best.map(Math.round) as [number, number];
+        else unreachable = true;
+      }
+      const tw = fb - fa;
+      const open: Vec3 = [0, 0, slide * 0.55];
+      const lip = 60;
+      add({
+        id: M(`${key}:front`),
+        label: "Frente de bandeja",
+        kind: "drawer-front",
+        material: config.bodyMaterial,
+        module: m,
+        position: [fa, y, back + shelfD - t],
+        size: [tw, lip, t],
+        geometry: "box",
+        cut: { length: tw, width: lip, thickness: t, band: { long: 2, short: 2 } },
+        openShift: open,
+        drawerBlocked: unreachable || undefined,
+        explode: [0, 0, 320],
+      });
+      add({
+        id: M(`${key}:base`),
+        label: "Bandeja extraíble",
+        kind: "drawer-end",
+        material: config.bodyMaterial,
+        module: m,
+        position: [fa, y, back + shelfD - t - slide],
+        size: [tw, t, slide],
+        geometry: "box",
+        cut: { length: tw, width: slide, thickness: t, band: { long: 0, short: 2 } },
+        openShift: open,
+        explode: [0, 0, 240],
+      });
+      ctx.hw.slidePair.qty += 1;
+      if (sliding) ctx.hw.slideSpacer.qty += 1;
+      ctx.counts.trays += 1;
+    };
+    /** los estantes libres del módulo: los `mod.trays` de más abajo salen como bandejas */
+    const freeShelf = (k: number, y: number) => (k <= (mod.trays ?? 0) ? tray(`t${k}`, y) : shelf(`s${k}`, y));
+
     const maletero = innerTop - TOP_SHELF_DROP;
 
     switch (mod.layout) {
       case "shelves": {
         const gap = (innerTop - innerBottom - mod.shelves * t) / (mod.shelves + 1);
-        for (let k = 1; k <= mod.shelves; k++) shelf(`s${k}`, innerBottom + k * gap + (k - 1) * t);
+        for (let k = 1; k <= mod.shelves; k++) freeShelf(k, innerBottom + k * gap + (k - 1) * t);
         break;
       }
       case "hanging": {
@@ -845,7 +900,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
         shelf("fs", top, true);
         const from = top + t;
         const gap = (innerTop - from - mod.shelves * t) / (mod.shelves + 1);
-        for (let k = 1; k <= mod.shelves; k++) shelf(`s${k}`, from + k * gap + (k - 1) * t);
+        for (let k = 1; k <= mod.shelves; k++) freeShelf(k, from + k * gap + (k - 1) * t);
         break;
       }
       case "drawers-hanging": {
@@ -1004,8 +1059,11 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
   if (slideGeo) {
     const { from, to, leaves } = slideGeo;
     const leafH = H - Z - 2 * t - 30;
-    const glass = config.doorStyle === "glass";
     leaves.forEach((leaf, k) => {
+      // cada hoja puede tener su estilo y su color (una espejada entre dos lisas)
+      const look = r === 0 ? leafLook(config, k) : { style: config.doorStyle, material: config.doorMaterial };
+      const leafCtx: Ctx = { ...ctx, config: { ...config, doorStyle: look.style, doorMaterial: look.material } };
+      const glass = look.style === "glass";
       const frontTrack = leaf.track === 0;
       const z = frontTrack ? bodyD - 25 - t : bodyD - 55 - t;
       const id = P(`slide${k}`);
@@ -1013,14 +1071,14 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
         id,
         label: "Hoja corrediza",
         kind: "sliding-door",
-        material: glass ? "none" : config.doorMaterial,
+        material: glass ? "none" : look.material,
         module: null,
         position: [leaf.left, Z + t + 15, z],
         size: [leaf.width, leafH, t],
         geometry: glass ? "none" : "box",
         cut: glass ? null : { length: leafH, width: leaf.width, thickness: t, band: { long: 2, short: 2 } },
         // en las de vidrio, los perfiles verticales de aluminio son el tirador
-        details: frontDetails(ctx, id, leaf.width, { left: leafH, right: leafH }, glass ? null : frontTrack ? "right" : "left", !frontTrack, true),
+        details: frontDetails(leafCtx, id, leaf.width, { left: leafH, right: leafH }, glass ? null : frontTrack ? "right" : "left", !frontTrack, true),
         slide: { track: leaf.track, index: k, home: leaf.left, width: leaf.width, from, to },
         explode: [0, 0, frontTrack ? 460 : 400],
         front: true,
@@ -1325,7 +1383,7 @@ export function buildAssembly(config: WardrobeConfig): Assembly {
       sensor: line("sensor", "Sensor de apertura", "u"),
       rgbController: line("rgbController", "Controlador RGB con control remoto", "u"),
     },
-    counts: { modules: 0, doors: 0, drawers: 0, angledCuts: 0, curvedCuts: 0 },
+    counts: { modules: 0, doors: 0, drawers: 0, trays: 0, angledCuts: 0, curvedCuts: 0 },
     ledMeters: 0,
     litModules: 0,
   };

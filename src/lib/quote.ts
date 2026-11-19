@@ -261,8 +261,8 @@ export function quote(config: WardrobeConfig, cat: Catalog = catalog): Quote {
     },
     {
       label: "Armado",
-      detail: `${counts.modules} módulos, ${counts.doors} puertas, ${counts.drawers} cajones`,
-      amount: counts.modules * cat.labor.perModule + counts.doors * cat.labor.perDoor + counts.drawers * cat.labor.perDrawer,
+      detail: `${counts.modules} módulos, ${counts.doors} puertas, ${counts.drawers} cajones${counts.trays ? `, ${counts.trays} bandejas` : ""}`,
+      amount: counts.modules * cat.labor.perModule + counts.doors * cat.labor.perDoor + counts.drawers * cat.labor.perDrawer + counts.trays * cat.labor.perTray,
     },
   ].filter((c) => c.amount > 0);
 

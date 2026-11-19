@@ -6,7 +6,7 @@
 import { fromBase64Url, toBase64Url } from "./base64url.ts";
 import { catalog, materialById } from "./catalog.ts";
 import type { DesignSummary } from "./designs.ts";
-import { DOOR_STYLE_LABELS, LAYOUT_LABELS, LED_COLORS, hasLeds, normalize, totalHeight, type WardrobeConfig } from "./model.ts";
+import { DOOR_STYLE_LABELS, LAYOUT_LABELS, LED_COLORS, hasLeds, leafLook, normalize, totalHeight, type WardrobeConfig } from "./model.ts";
 import { summaryByTitle, type CutRow } from "./quote.ts";
 
 export function encodeConfig(config: WardrobeConfig): string {
@@ -34,9 +34,10 @@ function runLines(config: WardrobeConfig): string {
       const name = config.runs.length > 1 ? (r === 0 ? "Frente" : "Lateral") : "Módulos";
       const modules = run.modules
         .map((m, i) => {
-          const extra = m.layout === "shelves" || m.layout === "drawers-shelves" ? `, ${m.shelves} estantes` : "";
+          const extra = m.layout === "shelves" || m.layout === "drawers-shelves" ? `, ${m.shelves - (m.trays ?? 0)} estantes` : "";
           const drawers = m.drawers ? `, ${m.drawers} cajones` : "";
-          return `  ${i + 1}. ${LAYOUT_LABELS[m.layout]} (${cm(m.width)})${drawers}${extra}`;
+          const trays = m.trays ? `, ${m.trays} ${m.trays === 1 ? "bandeja extraíble" : "bandejas extraíbles"}` : "";
+          return `  ${i + 1}. ${LAYOUT_LABELS[m.layout]} (${cm(m.width)})${drawers}${extra}${trays}`;
         })
         .join("\n");
       return `${name} (${cm(run.width)}):\n${modules}`;
@@ -68,9 +69,20 @@ export function configLines(config: WardrobeConfig): string[] {
     `Alto ${cm(totalHeight(config))} · profundidad ${cm(config.depth)}`,
     runLines(config),
     doors,
+    ...leafLines(config),
     ...extras,
     `Cuerpo: ${materialById(config.bodyMaterial).name}. Frentes: ${materialById(config.doorMaterial).name}`,
   ];
+}
+
+/** "Hoja 2: espejo · Hoja 3: liso, nogal" — solo las hojas que se apartan del resto */
+export function leafLines(config: WardrobeConfig): string[] {
+  if (config.doors !== "sliding" || !config.leaves) return [];
+  return config.leaves.flatMap((o, k) => {
+    if (!o) return [];
+    const look = leafLook(config, k);
+    return [`Hoja ${k + 1}: ${DOOR_STYLE_LABELS[look.style].toLowerCase()}${look.style === "mirror" || look.style === "glass" ? "" : `, ${materialById(look.material).name.toLowerCase()}`}`];
+  });
 }
 
 /** "240 × 240 × 60 cm"; en L, los dos tramos: "280 + 200 × 240 × 60 cm" */

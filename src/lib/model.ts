@@ -13,12 +13,16 @@ export type DoorStyle = "flat" | "grooved" | "mirror" | "glass";
 export type Shape = "straight" | "l-left" | "l-right";
 export type LedColor = "warm" | "neutral" | "cool" | "rgb";
 
+export type LeafOverride = { style?: DoorStyle; material?: string };
+
 export type ModuleConfig = {
   layout: Layout;
   /** estantes libres (en los layouts que los usan) */
   shelves: number;
   /** cajones al pie (en los layouts que los usan) */
   drawers: number;
+  /** bandejas extraíbles: cuántos de los estantes libres, de abajo hacia arriba, salen sobre correderas */
+  trays: number;
   /** ancho interior en mm */
   width: number;
   /** tira LED bajo cada estante y bajo el techo del módulo */
@@ -51,6 +55,12 @@ export type WardrobeConfig = {
   handle: HandleType;
   bodyMaterial: string;
   doorMaterial: string;
+  /**
+   * Hojas corredizas del frente que se apartan del estilo o del color general:
+   * una hoja espejada entre dos lisas, por ejemplo. Una entrada por hoja; null
+   * o ausente = como el resto.
+   */
+  leaves?: (LeafOverride | null)[];
   led: { color: LedColor; rgb: string; sensor: boolean };
 };
 
@@ -67,6 +77,7 @@ export const LIMITS = {
   moduleInner: { min: 350, max: 1000 },
   shelves: { min: 0, max: 6 },
   drawers: { min: 0, max: 4 },
+  trays: { min: 0, max: 3 },
   topBox: { min: 300, max: 600 },
   /** el lado bajo del techo inclinado */
   slopeLow: { min: 1400 },
@@ -89,7 +100,6 @@ export const CORNER_DOOR_MIN = 300;
  * tiene que medir por dentro al menos esto.
  */
 export const SLIDING_MODULE_MIN = 480;
-
 export const LAYOUT_LABELS: Record<Layout, string> = {
   shelves: "Estantes",
   hanging: "Para colgar",
@@ -115,6 +125,7 @@ const mod = (layout: Layout, extra: Partial<ModuleConfig> = {}): ModuleConfig =>
   layout,
   shelves: 0,
   drawers: 0,
+  trays: 0,
   width: 0,
   ledShelves: false,
   ledSides: false,
@@ -182,6 +193,11 @@ export function cornerPair(config: Pick<WardrobeConfig, "shape" | "runs">): { fr
 export function allowsDrawers(config: Pick<WardrobeConfig, "shape" | "runs">, run: number, index: number): boolean {
   const pair = cornerPair(config);
   return !pair || !((run === 0 && index === pair.front) || (run === 1 && index === pair.side));
+}
+
+/** las bandejas salen hacia adelante, como los cajones: en la esquina no van */
+export function allowsTrays(config: Pick<WardrobeConfig, "shape" | "runs">, run: number, index: number): boolean {
+  return allowsDrawers(config, run, index);
 }
 
 export function moduleMin(config: Pick<WardrobeConfig, "shape" | "depth" | "doors">, run: number, index: number, count: number): number {
@@ -311,6 +327,7 @@ function normalizeModule(m: Partial<ModuleConfig> | undefined, fallback: ModuleC
     layout: isLayout(src.layout) ? src.layout : "shelves",
     shelves: Math.round(clamp(Number(src.shelves) || 0, LIMITS.shelves.min, LIMITS.shelves.max)),
     drawers: Math.round(clamp(Number(src.drawers) || 0, LIMITS.drawers.min, LIMITS.drawers.max)),
+    trays: Math.round(clamp(Number(src.trays) || 0, LIMITS.trays.min, LIMITS.trays.max)),
     // Un exponente válido en JSON puede desbordar a Infinity. Acotar antes
     // del reparto evita NaN y sumas de pesos que desborden.
     width: Number.isFinite(Number(src.width)) ? clamp(Number(src.width), 0, LIMITS.moduleInner.max) : 0,
@@ -410,12 +427,28 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
     handle,
     bodyMaterial: materialIds.includes(String(input.bodyMaterial)) ? String(input.bodyMaterial) : base.bodyMaterial,
     doorMaterial: materialIds.includes(String(input.doorMaterial)) ? String(input.doorMaterial) : base.doorMaterial,
+    leaves: undefined,
     led: {
       color: ledIn.color === "neutral" || ledIn.color === "cool" || ledIn.color === "rgb" ? ledIn.color : "warm",
       rgb: /^#[0-9a-f]{6}$/i.test(String(ledIn.rgb)) ? String(ledIn.rgb) : base.led.rgb,
       sensor: typeof ledIn.sensor === "boolean" ? ledIn.sensor : base.led.sensor,
     },
   };
+
+  // combinaciones de hojas: solo con corredizas, una entrada por hoja del frente
+  if (doors === "sliding" && Array.isArray(input.leaves)) {
+    const n = runs[0].modules.length;
+    const leaves = Array.from({ length: n }, (_, k): LeafOverride | null => {
+      const raw = input.leaves![k];
+      if (!raw || typeof raw !== "object") return null;
+      const out: LeafOverride = {};
+      if (raw.style && Object.hasOwn(DOOR_STYLE_LABELS, raw.style) && raw.style !== doorStyle) out.style = raw.style;
+      if (raw.material && materialIds.includes(String(raw.material)) && raw.material !== config.doorMaterial) out.material = String(raw.material);
+      return out.style || out.material ? out : null;
+    });
+    if (leaves.some(Boolean)) config.leaves = leaves;
+  }
+  if (!config.leaves) delete config.leaves;
 
   // la esquina es un solo espacio: el módulo del lateral copia el interior
   // del de frente, y ahí no van cajones
@@ -446,6 +479,8 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
         while (m.drawers > 1 && !layoutFits(m.layout, interior, m.drawers)) m.drawers -= 1;
       }
       if (m.layout === "shelves") m.shelves = Math.max(1, m.shelves);
+      // una bandeja es un estante que sale: no puede haber más bandejas que estantes libres
+      m.trays = allowsTrays(config, r, i) && (m.layout === "shelves" || m.layout === "drawers-shelves") ? Math.min(m.trays, m.shelves) : 0;
     }),
   );
   if (pair) {
@@ -496,3 +531,9 @@ export function hasLeds(config: WardrobeConfig): boolean {
 
 /** la configuración de arranque, con los anchos de módulo ya repartidos */
 export const DEFAULT_CONFIG: WardrobeConfig = normalize(RAW_DEFAULT);
+
+/** estilo y color de una hoja corrediza del frente, con su excepción si la tiene */
+export function leafLook(config: Pick<WardrobeConfig, "doorStyle" | "doorMaterial" | "leaves">, k: number): { style: DoorStyle; material: string } {
+  const o = config.leaves?.[k];
+  return { style: o?.style ?? config.doorStyle, material: o?.material ?? config.doorMaterial };
+}

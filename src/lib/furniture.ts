@@ -1748,7 +1748,7 @@ export function buildFurniture(config: FurnitureConfig): FurnitureBuild {
   const assembly: Assembly = {
     runs: [{ index: 0, rotationY: 0, offset: [0, 0, 0], span: max[0] - min[0], parts }],
     hardware: [],
-    counts: { modules: 1, doors, drawers, angledCuts: 0, curvedCuts: 0 },
+    counts: { modules: 1, doors, drawers, trays: 0, angledCuts: 0, curvedCuts: 0 },
     ledMeters: own.filter((p) => p.kind === "led").reduce((m, p) => m + p.size[0] / 1000, 0),
     bounds: { min, max },
     room,
