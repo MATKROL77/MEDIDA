@@ -304,6 +304,11 @@ Randy, que no se tocó):
   hojas angostas los textos se pisaban, y con terminales curvos el plano no
   los dibujaba bien (ahí ya no se muestra).
 
+Aparte, los modelos de decoración (la planta del respaldo con estantes de la
+cama, por ejemplo) ahora entran y salen con la escala de su pieza: antes, al
+cambiar el respaldo, la planta quedaba flotando medio segundo y desaparecía de
+golpe. Verificado cuadro a cuadro en una grabación del cambio.
+
 Quedaron 142 pruebas. Los planos se volvieron a mirar con cuatro hojas de 60 cm
 (blanca, espejo, nogal, blanca), cajones, bandejas y luz, a 1440 y 390 px.
 
