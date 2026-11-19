@@ -1111,6 +1111,7 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
   const anim = useSceneAnim();
   const outer = useRef<THREE.Group>(null);
   const rot = useRef<THREE.Group>(null);
+  const model = useRef<THREE.Group>(null);
   const mesh = useRef<THREE.Mesh>(null);
   const details = useRef<THREE.Group>(null);
   // crece al aparecer, salvo en una escena que arranca ya armada
@@ -1249,6 +1250,9 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
     const os = part.openShift;
     const slideX = part.slide ? springFor(anim.leaves, part.id).v : 0;
     const a = Math.max(appear.current.v, 1e-4);
+    // los modelos de decoración (una planta, un florero) entran y salen con la misma escala que el resto:
+    // si no, al sacar la pieza que los lleva quedaban flotando hasta borrarse de golpe
+    if (model.current) model.current.scale.setScalar(a);
 
     // pivote: en las puertas, el canto de adelante del lado de la bisagra (así no
     // se mete en el lateral al girar); en lo demás, el centro
@@ -1376,7 +1380,11 @@ export function PartNode({ part, exiting, kit, delay, from = null, moduleAt, onS
           </mesh>
         )}
         {part.kind === "led" && <LedLight part={part} kit={kit} />}
-        {part.geometry === "model" && part.model && <DecorModel id={part.model} size={part.size} />}
+        {part.geometry === "model" && part.model && (
+          <group ref={model}>
+            <DecorModel id={part.model} size={part.size} />
+          </group>
+        )}
         {part.details && part.details.length > 0 && (
           <group ref={details}>
             <Presence parts={part.details}>
