@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { buildAssembly } from "./assembly.ts";
 import { DEFAULT_CONFIG, LIMITS, leafLook, normalize, type Layout, type ModuleConfig, type WardrobeConfig } from "./model.ts";
 import { quote } from "./quote.ts";
-import { configLines, decodeConfig, encodeConfig, leafLines } from "./share.ts";
+import { configLines, decodeConfig, designSummary, encodeConfig, leafLines } from "./share.ts";
 
 const mod = (layout: Layout, extra: Partial<ModuleConfig> = {}): ModuleConfig => ({ layout, width: 800, shelves: 3, drawers: 2, trays: 0, ledShelves: false, ledSides: false, ...extra });
 const straight = (modules: ModuleConfig[], extra: Partial<WardrobeConfig> = {}): WardrobeConfig =>
@@ -89,4 +89,55 @@ test("cada hoja corrediza puede llevar su frente y su color, y solo con corrediz
   assert.equal(raro.leaves, undefined);
   // viaja en el enlace
   assert.deepEqual(decodeConfig(encodeConfig(c))!.leaves, c.leaves);
+});
+
+test("un placard en L de frente angosto no rompe: el frente crece lo justo para que entren los módulos", () => {
+  for (const shape of ["l-left", "l-right"] as const)
+    for (const doors of ["hinged", "sliding", "none"] as const)
+      for (const width of [600, 800, 1000, 1200]) {
+        const c = normalize({ ...DEFAULT_CONFIG, shape, doors, depth: 600, runs: [{ width, modules: [] }, { width: 1800, modules: [] }] } as never);
+        assert.ok(c.runs[0].modules.length >= 1, `${shape} ${doors} ${width}`);
+        assert.ok(buildAssembly(c).runs.length === 2);
+      }
+});
+
+test("las hojas combinadas solo valen en el placard recto, y una hoja de espejo o vidrio no guarda color", () => {
+  const base = straight([mod("hanging"), mod("shelves"), mod("hanging")], { doors: "sliding", doorStyle: "flat", doorMaterial: "blanco" });
+  const c = normalize({ ...base, leaves: [null, { style: "mirror", material: "nogal" }, { style: "glass", material: "nogal" }] });
+  assert.deepEqual(c.leaves, [null, { style: "mirror" }, { style: "glass" }]);
+  // pasar a L borra las excepciones: ahí no hay dónde verlas ni cambiarlas
+  assert.equal(normalize({ ...c, shape: "l-left", runs: [{ width: 2400, modules: [] }, { width: 1800, modules: [] }] } as never).leaves, undefined);
+  // un estilo que no es texto (un enlace armado a mano) se descarta
+  assert.equal(normalize({ ...base, leaves: [null, { style: ["mirror"] as never }, null] }).leaves, undefined);
+  assert.equal(normalize({ ...base, doorStyle: ["mirror"] as never }).doorStyle, DEFAULT_CONFIG.doorStyle);
+});
+
+test("la luz del estante de arriba termina en la bandeja: no la atraviesa", () => {
+  const c = straight([mod("shelves", { shelves: 4, trays: 2, ledShelves: true }), mod("hanging")]);
+  const parts = partsOf(c);
+  const trays = parts.filter((p) => p.label === "Frente de bandeja");
+  const lights = parts.filter((p) => p.kind === "glow" && p.module === 0);
+  assert.ok(lights.length > 0);
+  for (const l of lights) for (const tr of trays) {
+    const lo = l.position[1], hi = l.position[1] + l.size[1];
+    assert.ok(!(lo < tr.position[1] && hi > tr.position[1] + tr.size[1]), `la luz ${l.id} atraviesa una bandeja`);
+  }
+  // y no hay tira debajo de una bandeja
+  assert.ok(!parts.some((p) => p.kind === "led" && /:t\d+:led$/.test(p.id)));
+});
+
+test("los resúmenes nombran las bandejas y las hojas, en singular cuando es una", () => {
+  const c = straight([mod("shelves", { shelves: 2, trays: 2 }), mod("hanging")]);
+  const text = configLines(c).join("\n");
+  assert.doesNotMatch(text, /0 estantes/);
+  assert.match(text, /2 bandejas extraíbles/);
+  const uno = quote(straight([mod("shelves", { shelves: 3, trays: 1 }), mod("hanging")]));
+  assert.match(uno.costs.find((x) => x.label === "Armado")!.detail, /1 bandeja(?!s)/);
+});
+
+test("el resumen guardado del diseño cuenta las bandejas y las hojas combinadas", () => {
+  const base = straight([mod("hanging"), mod("shelves", { shelves: 4, trays: 1 }), mod("hanging")], { doors: "sliding", doorStyle: "flat", doorMaterial: "blanco" });
+  const s = designSummary(normalize({ ...base, leaves: [null, { style: "mirror" }, null] }));
+  assert.match(s.lines[0], /1 bandeja(?!s)/);
+  assert.ok(s.lines.some((l) => /Hoja 2: espejo/.test(l)));
 });

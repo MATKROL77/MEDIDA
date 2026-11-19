@@ -179,8 +179,8 @@ export default function Workshop() {
         </section>
       </div>
 
-      {/* el plano de frente sale del tramo recto: en L, con altillo o con techo inclinado no alcanza para describirlo */}
-      {config.shape === "straight" && !config.slope.enabled && !config.topBox.enabled && (
+      {/* el plano de frente sale del tramo recto: en L, con altillo, techo inclinado o terminales curvos no alcanza para describirlo */}
+      {config.shape === "straight" && !config.slope.enabled && !config.topBox.enabled && !config.curved.left && !config.curved.right && (
         <section className="card p-5">
           <h2 className="font-display text-lg font-semibold">Plano del interior</h2>
           <p className="mt-1 text-xs text-ink-2">Vista de frente sin las puertas: qué va en cada módulo y a qué altura.</p>
@@ -211,8 +211,8 @@ export default function Workshop() {
                 </span>{" "}
                 {LAYOUT_LABELS[m.layout]}
                 {m.drawers > 0 && `, ${m.drawers} cajones`}
-                {(m.layout === "shelves" || m.layout === "drawers-shelves") && `, ${m.shelves - m.trays} estantes`}
-                {m.trays > 0 && `, ${m.trays} bandejas extraíbles`}
+                {(m.layout === "shelves" || m.layout === "drawers-shelves") && m.shelves - m.trays > 0 && `, ${m.shelves - m.trays} ${m.shelves - m.trays === 1 ? "estante" : "estantes"}`}
+                {m.trays > 0 && `, ${m.trays} ${m.trays === 1 ? "bandeja extraíble" : "bandejas extraíbles"}`}
                 {(m.ledShelves || m.ledSides) && ", con luz"}
               </li>
             )),

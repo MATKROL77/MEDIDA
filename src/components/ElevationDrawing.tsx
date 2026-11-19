@@ -48,14 +48,14 @@ export function InteriorElevation({ config, assembly }: { config: WardrobeConfig
   const pad = size * 6;
   const mods = config.runs[0].modules;
   const xs = moduleOffsets(mods);
-  const parts = run.parts.filter((p) => !isFront(p) && !p.decor && p.kind !== "glow" && p.kind !== "led" && p.kind !== "back" && p.geometry !== "none" && p.kind !== "drawer-side" && p.kind !== "drawer-bottom");
+  const parts = run.parts.filter((p) => !isFront(p) && !p.decor && p.kind !== "glow" && p.kind !== "led" && p.kind !== "back" && p.geometry !== "none" && p.kind !== "drawer-side" && p.kind !== "drawer-bottom" && p.label !== "Contrafrente de cajón");
   // un cajón o una bandeja se rotula una vez, en su frente
   const tagged = parts.filter((p) => TAG[p.kind] || p.kind === "drawer-front");
   const z = config.plinth ? PLINTH_HEIGHT : 0;
 
   return (
-    <svg viewBox={`${-pad * 1.4} ${-H - pad * 1.2} ${W + pad * 2.4} ${H + pad * 2.6}`} className="w-full" role="img" aria-label="Plano de frente del interior, con medidas">
-      <rect x={-pad * 1.4} y={-H - pad * 1.2} width={W + pad * 2.4} height={H + pad * 2.6} fill="#fff" />
+    <svg viewBox={`${-pad * 1.4} ${-H - pad * 1.2} ${W + pad * 2.4} ${H + pad * 2.8}`} className="w-full" role="img" aria-label="Plano de frente del interior, con medidas">
+      <rect x={-pad * 1.4} y={-H - pad * 1.2} width={W + pad * 2.4} height={H + pad * 2.8} fill="#fff" />
       {parts.map((p) => {
         const tray = p.label === "Frente de bandeja";
         const drawer = p.kind === "drawer-front" && !tray;
@@ -78,7 +78,7 @@ export function InteriorElevation({ config, assembly }: { config: WardrobeConfig
         const name = tray ? "Bandeja" : p.kind === "drawer-front" ? "Cajón" : TAG[p.kind]!;
         const y = p.position[1];
         return (
-          <text key={`t-${p.id}`} x={p.position[0] + p.size[0] / 2} y={-(y + p.size[1]) - size * 0.35} textAnchor="middle" fontSize={size * 0.8} fill={SOFT}>
+          <text key={`t-${p.id}`} x={p.position[0] + p.size[0] / 2} y={p.kind === "drawer-front" ? -(y + p.size[1] / 2) + size * 0.28 : -(y + p.size[1]) - size * 0.35} textAnchor="middle" fontSize={size * (p.kind === "drawer-front" && p.size[1] < size * 1.6 ? 0.62 : 0.8)} fill={SOFT}>
             {name} · {Math.round(y)}
           </text>
         );
@@ -96,7 +96,10 @@ export function InteriorElevation({ config, assembly }: { config: WardrobeConfig
         </text>
       )}
       <text x={0} y={size * 5.2} fontSize={size * 0.85} fill={SOFT}>
-        Medidas en mm. La cifra junto a cada pieza es su altura desde el piso. Profundidad total: {Math.round(config.depth)}.
+        Medidas en mm. La cifra junto a cada pieza es su altura desde el piso.
+      </text>
+      <text x={0} y={size * 6.3} fontSize={size * 0.85} fill={SOFT}>
+        Profundidad total: {Math.round(config.depth)}.
       </text>
     </svg>
   );
@@ -107,8 +110,10 @@ export function DoorsElevation({ config, assembly }: { config: WardrobeConfig; a
   const leaves = assembly.runs[0].parts.filter((p) => p.kind === "sliding-door");
   const W = config.runs[0].width;
   const H = config.height;
-  const size = Math.max(W, H) * 0.024;
-  const pad = size * 4;
+  // la letra se ajusta a la hoja más angosta: con hojas de 60 cm los textos de dos hojas vecinas no se pisan
+  const narrow = Math.min(...leaves.map((p) => p.size[0]), W);
+  const size = Math.min(Math.max(W, H) * 0.024, narrow / 13);
+  const pad = Math.max(W, H) * 0.024 * 4;
   return (
     <svg viewBox={`${-pad} ${-H - pad} ${W + pad * 2} ${H + pad * 2.4}`} className="w-full" role="img" aria-label="Frente con las hojas corredizas">
       <rect x={-pad} y={-H - pad} width={W + pad * 2} height={H + pad * 2.4} fill="#fff" />
@@ -130,7 +135,10 @@ export function DoorsElevation({ config, assembly }: { config: WardrobeConfig; a
               {special ? "" : ` · ${materialById(look.material).name}`}
             </text>
             <text x={cx} y={cy + size * 2.1} textAnchor="middle" fontSize={size * 0.8} fill={SOFT}>
-              {Math.round(p.size[0])} × {Math.round(p.size[1])} · riel {p.slide?.track === 0 ? "de adelante" : "de atrás"}
+              {Math.round(p.size[0])} × {Math.round(p.size[1])}
+            </text>
+            <text x={cx} y={cy + size * 3.1} textAnchor="middle" fontSize={size * 0.8} fill={SOFT}>
+              riel {p.slide?.track === 0 ? "de adelante" : "de atrás"}
             </text>
           </g>
         );

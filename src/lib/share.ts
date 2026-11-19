@@ -34,7 +34,8 @@ function runLines(config: WardrobeConfig): string {
       const name = config.runs.length > 1 ? (r === 0 ? "Frente" : "Lateral") : "Módulos";
       const modules = run.modules
         .map((m, i) => {
-          const extra = m.layout === "shelves" || m.layout === "drawers-shelves" ? `, ${m.shelves - (m.trays ?? 0)} estantes` : "";
+          const free = m.shelves - (m.trays ?? 0);
+          const extra = (m.layout === "shelves" || m.layout === "drawers-shelves") && free > 0 ? `, ${free} ${free === 1 ? "estante" : "estantes"}` : "";
           const drawers = m.drawers ? `, ${m.drawers} cajones` : "";
           const trays = m.trays ? `, ${m.trays} ${m.trays === 1 ? "bandeja extraíble" : "bandejas extraíbles"}` : "";
           return `  ${i + 1}. ${LAYOUT_LABELS[m.layout]} (${cm(m.width)})${drawers}${extra}${trays}`;
@@ -94,12 +95,14 @@ export function dimensionsLabel(config: WardrobeConfig): string {
 export function designSummary(config: WardrobeConfig): DesignSummary {
   const modules = config.runs.reduce((n, r) => n + r.modules.length, 0);
   const drawers = config.runs.reduce((n, r) => n + r.modules.reduce((m, mod) => m + mod.drawers, 0), 0);
+  const trays = config.runs.reduce((n, r) => n + r.modules.reduce((m, mod) => m + (mod.trays ?? 0), 0), 0);
   const extras = [config.topBox.enabled ? "altillo" : "", config.slope.enabled ? "techo inclinado" : "", config.curved.left || config.curved.right ? "terminal curvo" : ""].filter(Boolean);
   return {
     dimensions: dimensionsLabel(config),
     lines: [
-      `${SHAPE_LABELS[config.shape]} · ${modules} ${modules === 1 ? "módulo" : "módulos"}${drawers ? ` · ${drawers} ${drawers === 1 ? "cajón" : "cajones"}` : ""}`,
+      `${SHAPE_LABELS[config.shape]} · ${modules} ${modules === 1 ? "módulo" : "módulos"}${drawers ? ` · ${drawers} ${drawers === 1 ? "cajón" : "cajones"}` : ""}${trays ? ` · ${trays} ${trays === 1 ? "bandeja" : "bandejas"}` : ""}`,
       config.doors === "none" ? DOOR_LABELS.none : `${DOOR_LABELS[config.doors]}, frente ${DOOR_STYLE_LABELS[config.doorStyle].toLowerCase()}`,
+      ...leafLines(config),
       `Cuerpo ${materialById(config.bodyMaterial).name.toLowerCase()} · frentes ${materialById(config.doorMaterial).name.toLowerCase()}`,
       ...(hasLeds(config) ? [`Luz LED ${config.led.color === "rgb" ? "RGB" : LED_COLORS[config.led.color].label.toLowerCase()}`] : []),
       ...(extras.length ? [`Con ${extras.join(", ")}`] : []),

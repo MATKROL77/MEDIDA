@@ -711,8 +711,9 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                 )}
                 {(mod.drawers > 0 || mod.trays > 0) && drawersStuck && (
                   <p className="fade-in rounded-xl bg-accent-soft px-3 py-2 text-xs leading-relaxed text-accent-strong">
-                    Con estas corredizas, este módulo nunca queda libre entero y los cajones no pueden salir. Ponelos en otro módulo o cambiá
-                    el ancho.
+                    Con estas corredizas, este módulo nunca queda libre entero y{" "}
+                    {mod.drawers > 0 && mod.trays > 0 ? "los cajones y las bandejas no pueden salir. Ponelos" : mod.drawers > 0 ? "los cajones no pueden salir. Ponelos" : "las bandejas no pueden salir. Ponelas"} en otro
+                    módulo o cambiá el ancho.
                   </p>
                 )}
               </Section>
@@ -786,6 +787,7 @@ export default function Configurator({ workshop = null, initial, onInquiry }: {
                                 key={st}
                                 type="button"
                                 aria-pressed={look.style === st}
+                                aria-label={`Hoja ${k + 1}: ${st === "glass" ? "Vidrio" : DOOR_STYLE_LABELS[st]}`}
                                 onClick={() => setLeaf({ style: st })}
                                 className={`option-card rounded-xl border px-1 py-2 text-[0.7rem] leading-tight ${look.style === st ? "border-accent bg-accent-soft text-accent-strong" : "border-line bg-surface text-ink-2"}`}
                               >

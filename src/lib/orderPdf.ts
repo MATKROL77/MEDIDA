@@ -11,6 +11,7 @@ import { product } from "./product.ts";
 import { INK, fitDrawing, pieceDrawing, type Drawing } from "./drawings.ts";
 import { DOOR_STYLE_LABELS, LED_COLORS, hasLeds, totalHeight, type WardrobeConfig } from "./model.ts";
 import { decimal, money, summaryByTitle, type CutRow, type Quote } from "./quote.ts";
+import { leafLines } from "./share.ts";
 
 const PAGE_W = 1240;
 const PAGE_H = 1754;
@@ -160,6 +161,7 @@ function specLines(config: WardrobeConfig): string[] {
       ? "Sin puertas"
       : `Puertas ${config.doors === "hinged" ? "batientes" : "corredizas"}, frente ${DOOR_STYLE_LABELS[config.doorStyle].toLowerCase()}`,
   ];
+  lines.push(...leafLines(config));
   if (config.curved.left || config.curved.right) lines.push(`Terminal curvo ${config.curved.left && config.curved.right ? "en los dos extremos" : config.curved.left ? "a la izquierda" : "a la derecha"}`);
   if (hasLeds(config))
     lines.push(`Luz LED ${config.led.color === "rgb" ? `RGB ${config.led.rgb}` : LED_COLORS[config.led.color].label.toLowerCase()}${config.led.sensor && config.doors !== "none" ? ", con sensor al abrir" : ""}`);

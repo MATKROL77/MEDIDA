@@ -374,15 +374,21 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
 
   const doorsIn = input.doors === "none" || input.doors === "sliding" ? input.doors : input.doors === "hinged" ? "hinged" : base.doors;
   const runCount = shape === "straight" ? 1 : 2;
-  const buildRuns = (doorType: DoorType): RunConfig[] | null => {
+  // `grow`: si con ese ancho no entra ningún reparto válido (una L de frente angosto), se agranda lo justo
+  const buildRuns = (doorType: DoorType, grow = false): RunConfig[] | null => {
     const partial = { shape, depth, doors: doorType } as const;
     const out: RunConfig[] = [];
     for (let r = 0; r < runCount; r++) {
       const raw = rawRuns[r] ?? (r === 1 ? { width: Math.max(depth + 1200, 1500), modules: [base.runs[0].modules[0], base.runs[0].modules[2]] } : base.runs[0]);
       const minWidth = r === 1 ? depth + LIMITS.width.min : LIMITS.width.min;
-      const width = Math.round(clamp(Number(raw.width) || base.runs[0].width, minWidth, LIMITS.width.max));
-      const span = runSpan({ depth }, r, width);
-      const counts = validModuleCounts(partial, r, span);
+      let width = Math.round(clamp(Number(raw.width) || base.runs[0].width, minWidth, LIMITS.width.max));
+      let span = runSpan({ depth }, r, width);
+      let counts = validModuleCounts(partial, r, span);
+      while (grow && !counts.length && width < LIMITS.width.max) {
+        width = Math.min(LIMITS.width.max, width + 10);
+        span = runSpan({ depth }, r, width);
+        counts = validModuleCounts(partial, r, span);
+      }
       if (!counts.length) return null;
       const source = Array.isArray(raw.modules) && raw.modules.length ? raw.modules : base.runs[0].modules;
       const count = nearestCount(counts, source.length);
@@ -403,9 +409,9 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
   const wantsSliding = doorsIn === "sliding" && !slopeEnabled;
   const slidingRuns = wantsSliding ? buildRuns("sliding") : null;
   const doors: DoorType = wantsSliding ? (slidingRuns ? "sliding" : "hinged") : doorsIn === "sliding" ? "hinged" : doorsIn;
-  const runs = slidingRuns ?? buildRuns(doors)!;
+  const runs = slidingRuns ?? buildRuns(doors, true)!;
 
-  const styleIn: DoorStyle = input.doorStyle && Object.hasOwn(DOOR_STYLE_LABELS, input.doorStyle) ? input.doorStyle : base.doorStyle;
+  const styleIn: DoorStyle = typeof input.doorStyle === "string" && Object.hasOwn(DOOR_STYLE_LABELS, input.doorStyle) ? input.doorStyle : base.doorStyle;
   // el marco de aluminio es rectangular: con pendiente, la puerta va lisa
   const doorStyle: DoorStyle = slopeEnabled && styleIn === "glass" ? "flat" : styleIn;
   const handle: HandleType = input.handle === "knob" || input.handle === "none" ? input.handle : input.handle === "bar" ? "bar" : base.handle;
@@ -436,14 +442,17 @@ export function normalize(input: Partial<WardrobeConfig> & { width?: number; mod
   };
 
   // combinaciones de hojas: solo con corredizas, una entrada por hoja del frente
-  if (doors === "sliding" && Array.isArray(input.leaves)) {
+  // solo en el placard recto: en L no hay dónde verlas ni cambiarlas
+  if (doors === "sliding" && shape === "straight" && Array.isArray(input.leaves)) {
     const n = runs[0].modules.length;
     const leaves = Array.from({ length: n }, (_, k): LeafOverride | null => {
       const raw = input.leaves![k];
       if (!raw || typeof raw !== "object") return null;
       const out: LeafOverride = {};
-      if (raw.style && Object.hasOwn(DOOR_STYLE_LABELS, raw.style) && raw.style !== doorStyle) out.style = raw.style;
-      if (raw.material && materialIds.includes(String(raw.material)) && raw.material !== config.doorMaterial) out.material = String(raw.material);
+      if (typeof raw.style === "string" && Object.hasOwn(DOOR_STYLE_LABELS, raw.style) && raw.style !== doorStyle) out.style = raw.style;
+      // una hoja de espejo o de vidrio no muestra su color: no se guarda (ni se cobra) uno propio
+      const look = out.style ?? doorStyle;
+      if (look !== "mirror" && look !== "glass" && typeof raw.material === "string" && materialIds.includes(raw.material) && raw.material !== config.doorMaterial) out.material = raw.material;
       return out.style || out.material ? out : null;
     });
     if (leaves.some(Boolean)) config.leaves = leaves;

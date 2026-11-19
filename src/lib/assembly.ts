@@ -677,7 +677,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
     const innerBottom = Z + t;
     const innerTop = sloped ? Math.min(hL, hR) - t - 20 : H - t;
     /** superficies horizontales del módulo: dónde apoya la luz y dónde cuelga la tira */
-    const levels: { id: string; y: number }[] = [];
+    const levels: { id: string; y: number; tray?: boolean }[] = [];
 
     const joined = m === cornerEnd && joinAt !== null;
     const shelf = (key: string, y: number, fixed = false) => {
@@ -870,6 +870,8 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
       ctx.hw.slidePair.qty += 1;
       if (sliding) ctx.hw.slideSpacer.qty += 1;
       ctx.counts.trays += 1;
+      // la bandeja es el piso del hueco de arriba: la luz del estante de arriba termina en ella
+      levels.push({ id: M(key), y, tray: true });
     };
     /** los estantes libres del módulo: los `mod.trays` de más abajo salen como bandejas */
     const freeShelf = (k: number, y: number) => (k <= (mod.trays ?? 0) ? tray(`t${k}`, y) : shelf(`s${k}`, y));
@@ -922,7 +924,7 @@ function buildRun(ctx: Ctx, r: number): RunAssembly {
       const tops = [...levels].sort((a, b) => a.y - b.y);
       // el estante fijo de los cajones no lleva tira: alumbraría los frentes por dentro
       const hangers = [
-        ...tops.filter((l) => !l.id.endsWith(":fs")).map((l) => ({ id: l.id, under: l.y })),
+        ...tops.filter((l) => !l.id.endsWith(":fs") && !l.tray).map((l) => ({ id: l.id, under: l.y })),
         ...(sloped ? [] : [{ id: M("top"), under: H - t }]),
       ];
       hangers.forEach((lv) => {
