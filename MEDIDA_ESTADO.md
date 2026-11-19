@@ -286,6 +286,27 @@ combinadas (blanca, espejo, nogal) y de la hoja del taller, a 1440 y 390 px sin
 desborde horizontal. No se pasó el "modo tienda" de Randy (carrito, lista de
 precios por renglones, reglas del comercio): es de esa integración.
 
+Una revisión con tres miradas (motor, interfaz y regresiones), con cada
+hallazgo reproducido por un verificador, no encontró nada sacado de lo que el
+placard ya tenía, y sí estos defectos, ya arreglados (varios venían igual en
+Randy, que no se tocó):
+
+- **Venía de antes:** un placard en L de frente angosto rompía el
+  configurador. Ahora el frente crece lo justo para que entren los módulos.
+- Una hoja de espejo o de vidrio guardaba un color propio que no se veía y se
+  cobraba. Las hojas combinadas quedaban aplicadas al pasar a L, donde no se
+  pueden cambiar. Un enlace con un estilo que no es texto se leía mal.
+- La luz del estante de arriba atravesaba las bandejas.
+- El PDF de la orden y el resumen guardado no nombraban las hojas combinadas
+  ni las bandejas, y había plurales mal ("1 bandejas", "0 estantes").
+- En los planos del taller, los contrafrentes tapaban cada cajón, los rótulos
+  caían en el cajón de arriba y la leyenda se cortaba en placares angostos. Con
+  hojas angostas los textos se pisaban, y con terminales curvos el plano no
+  los dibujaba bien (ahí ya no se muestra).
+
+Quedaron 142 pruebas. Los planos se volvieron a mirar con cuatro hojas de 60 cm
+(blanca, espejo, nogal, blanca), cajones, bandejas y luz, a 1440 y 390 px.
+
 ## Hecho pero sin poder verificarlo en producción
 
 - **Acceso por email.** En producción no hay proveedor de email configurado:
